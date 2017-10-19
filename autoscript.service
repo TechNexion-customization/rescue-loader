@@ -1,0 +1,9 @@
+[Unit]
+Description=Auto Start Service
+
+[Service]
+ExecStart=/home/rescue/autostart.sh
+
+[Install]
+WantedBy=multi-user.target
+Alias=autoscript.service

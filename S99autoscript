@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# Auto Start Script
+#
+case "$1" in
+  start)
+	printf "Starting Auto Flash Script: "
+	/home/rescue/autostart.sh
+	;;
+  stop)
+	;;
+  restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start}"
+	exit 1
+esac
+
+exit $?
