@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tn-config>
+    <installer>
+        <dbus>
+            <busname>com.technexion.dbus.interface</busname>
+        </dbus>
+        <controller>
+            <srv_path>/com/technexion/dbus/controller</srv_path>
+        </controller>
+        <viewers>
+            <cli_path>/com/technexion/dbus/viewer/0</cli_path>
+            <gui_path>/com/technexion/dbus/viewer/1</gui_path>
+            <web_path>/com/technexion/dbus/viewer/2</web_path>
+        </viewers>
+        <rescue>
+            <host_protocol>http</host_protocol>
+            <host_name>rescue.technexion.net</host_name>
+        </rescue>
+    </installer>
+</tn-config>
+
