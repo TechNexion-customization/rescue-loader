@@ -1,0 +1,9 @@
+[Unit]
+Description=D-Bus (Session) Message Bus Socket
+Before=sockets.target
+
+[Socket]
+ListenStream=/var/run/dbus/session_bus_socket
+
+[Install]
+WantedBy=default.target
