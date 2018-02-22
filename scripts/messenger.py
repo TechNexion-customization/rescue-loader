@@ -6,8 +6,10 @@ import dbus
 import gobject
 #from gi.repository import GLib
 from dbus.service import Object as DBusSrvObject
-from dbus.mainloop.glib import DBusGMainLoop as GLib_DBusGMainLoop
-from dbus.mainloop.glib import threads_init as GLib_threads_init
+
+from dbus.mainloop.glib import DBusGMainLoop as DBusMainLoop
+#from dbus.mainloop.qt import DBusQtMainLoop as DBusMainLoop
+#from dbus.mainloop.glib import threads_init as GLib_threads_init
 
 _logger = logging.getLogger(__name__)
 
@@ -46,12 +48,10 @@ class BaseMessenger(object):
     """
     __metaclass__ = abc.ABCMeta
     
-    def __init__(self, config, cbhandle):
-        # super(BaseMessenger, self).__init__() # old python style
+    def __init__(self, config):
         super().__init__()
         self.mConfig = {}
         self.mConfig.update(config)
-        self.mCallbackHandler = cbhandle
 
     @abc.abstractmethod
     def sendMsg(self, msg):
@@ -70,13 +70,17 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
     
     __metaclass__ = MergeMeta
     
-    def __init__(self, config, cbhandle=None):
-        # BaseMessenger.__init__(self, config, cbhandle) # old python style
-        super().__init__(config, cbhandle)
+    def __init__(self, config, cbExecHdl=None, cbStatusHdl=None, cbResultHdl=None):
+        super().__init__(config)
         # set the dbus.mainloop.glib.DBusGMainLoop() as default event loop mechanism
         gobject.threads_init() # Must Do this first if use gobject.MainLoop()
-        GLib_threads_init()
-        GLib_DBusGMainLoop(set_as_default=True)
+        #GLib_threads_init() # Must Do this first if use GLib.MainLoop()
+        DBusMainLoop(set_as_default=True)
+        self.mCbExecHandler = cbExecHdl
+        self.mCbStatusHandler = cbStatusHdl
+        self.mCbResultHandler = cbResultHdl
+        self.mRetStatus = {}
+        self.mRetResult = {}
         self.mIsServer = self.mConfig['IS_SERVER'] if ('IS_SERVER' in self.mConfig.keys()) else False
         self.__initialize()
 
@@ -92,7 +96,8 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         self.mObjPath = self.mConfig['srv_path']
         # both client and server require an actual loop to handle events,
         # so, create a MainLoop() from PyGObject's GLib binding
-        self.mDBusLoop = gobject.MainLoop() #GLib.MainLoop()
+        self.mDBusLoop = gobject.MainLoop()
+        #self.mDBusLoop = GLib.MainLoop()
         if self.mIsServer:
             # call dbus.service.Object constructor with sessbus and obj path
             dbus.service.Object.__init__(self, self.mBusName, self.mObjPath)
@@ -102,7 +107,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             self.mSignal = self.mSessDBus.add_signal_receiver(handler_function=self.receiveMsg, \
                                                               signal_name='receive', \
                                                               path=self.mObjPath, \
-                                                              dbus_interface=self.mConfig['busname'])
+                                                              dbus_interface=self.mConfig['ifacename'])
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='a{sv}', out_signature='b')
     def send(self, request):
@@ -112,12 +117,25 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         _logger.debug('dbus send method: {}'.format(request))
         params = {}
         #called through the Dbus with request
-        if callable(self.mCallbackHandler):
+        if callable(self.mCbExecHandler):
             # parse the serialized second string back to dict
             params.update(request)
-            self.mCallbackHandler(params)
+            self.mCbExecHandler(params)
             return True
         return False
+
+    @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
+    def status(self):
+        if callable(self.mCbStatusHandler):
+            self.mRetStatus.update(self.mCbStatusHandler())
+        return self.mRetStatus
+
+    @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
+    def result(self):
+        self.mRetResult.clear()
+        if callable(self.mCbResultHandler):
+            self.mRetResult.update(self.mCbResultHandler())
+        return self.mRetResult
 
     @dbus.service.signal(dbus_interface="com.technexion.dbus.interface", signature='a{sv}')
     def receive(self, response):
@@ -145,7 +163,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
                 self.receive(msg) # call receive() to signal client with param
             else:
                 # called by the CLI/WEB/GUI viewer to send param to server
-                if self.mServerObj: 
+                if self.mServerObj:
                     self.mServerObj.send(msg)
                 else:
                     raise ReferenceError('Unable to access DBUS exported object')
@@ -158,12 +176,60 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         """
         params = {}
         #called through the Dbus with response
-        if callable(self.mCallbackHandler):
+        if callable(self.mCbExecHandler):
             # parse the serialized second string back to dict
             params.update(response)
-            self.mCallbackHandler(params)
-            return True
+            return self.mCbExecHandler(params)
         return False
+
+    def setStatus(self, status):
+        if self.mIsServer:
+            # called by the Installer server to set param to server
+            if isinstance(status, dict):
+                self.mRetStatus.clear()
+                #if 'status' not in self.mRetStatus.keys() or self.mRetStatus['status'] != status['status']:
+                self.mRetStatus.update(status)
+                self.sendMsg(self.mRetStatus)
+            else:
+                raise TypeError('Setting status must pass in a dictionary format')
+        else:
+            raise IOError("This method call is for dbus server only!")
+
+    def getStatus(self):
+        retStatus = {}
+        if not self.mIsServer:
+            # called by the CLI/WEB/GUI viewer to send param to server
+            if self.mServerObj:
+                retStatus.update(self.mServerObj.status())
+                return retStatus
+            else:
+                raise ReferenceError('Unable to access DBUS exported object')
+        else:
+            raise IOError("This method call is for dbus client only!")
+
+    def setResult(self, result):
+        self.mRetResult.clear()
+        if self.mIsServer:
+            # called by the Installer server to set param to server
+            if isinstance(result, dict):
+                self.mRetResult.update(result)
+                self.sendMsg(self.mRetResult)
+            else:
+                raise TypeError('Setting result must pass in a dictionary format')
+        else:
+            raise IOError("This method call is for dbus server only!")
+
+    def getResult(self):
+        retResult = {}
+        if not self.mIsServer:
+            # called by the CLI/WEB/GUI viewer to send param to server
+            if self.mServerObj:
+                retResult.update(self.mServerObj.result())
+                return retResult
+            else:
+                raise ReferenceError('Unable to access DBUS exported object')
+        else:
+            raise IOError("This method call is for dbus client only!")
 
 
 
@@ -173,7 +239,6 @@ class SocketMessenger(BaseMessenger):
     
     """
     def __init__(self, config, cbhandle):
-        # super(SocketMessenger, self).__init__(config, cbhandle) # old python style
         super().__init__(config, cbhandle)
 
     def sendMsg(self, msg):

@@ -59,9 +59,8 @@ class BaseActionModeller(object):
     __metaclass__ = abc.ABCMeta
     
     def __init__(self):
-        # super(BaseActionModeller, self).__init__() # old python style
         super().__init__()
-        self.mParam = None
+        self.mParam = {}
         self.mResult = {}
         self.mRecoverable = False
 
@@ -74,11 +73,14 @@ class BaseActionModeller(object):
     def setActionParam(self, param):
         if isinstance(param, dict):
             if len(param) > 0:
-                self.mParam = param
+                self.mParam.clear()
+                self.mParam.update(param)
+                _logger.debug('Model mParam: {}'.format(self.mParam))
         else:
             raise TypeError('Param must be a dictionary')
     
     def performAction(self):
+        self.mResult.clear()
         ret = False
         try:
             ret = self.__preAction()
@@ -120,7 +122,7 @@ class CopyBlockActionModeller(BaseActionModeller):
     """
 
     def __init__(self):
-        BaseActionModeller.__init__(self)
+        super().__init__()
         self.mIOs = []
         self.mOrigData = {}
     
@@ -243,7 +245,7 @@ class QueryFileActionModeller(BaseActionModeller):
     """
     
     def __init__(self):
-        BaseActionModeller.__init__(self)
+        super().__init__()
         self.mIO = None
 
     def recoverAction(self):
@@ -310,7 +312,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
     A wrapper class for pyudev to get block device info
     """
     def __init__(self):
-        BaseActionModeller.__init__(self)
+        super().__init__()
         self.mContext = pyudev.Context()
         self.mFound = []
         self.mCtrls = []
@@ -365,7 +367,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         if isinstance(dev, pyudev.Device):
             for att in dev.attributes.available_attributes:
                 data = dev.attributes.get(att)
-                ret.update({att:data.decode('utf-8').replace('\n', ' ') if data is not None else ''})
+                ret.update({att:data.decode('utf-8', 'ignore').replace('\n', ' ') if data is not None else ''})
         return ret
 
     def __gatherStorage(self):
@@ -456,7 +458,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
 
 class WebDownloadActionModeller(BaseActionModeller):
     def __init__(self):
-        BaseActionModeller.__init__(self)
+        super().__init__()
         self.mIOs = []
 
     def recoverAction(self):
@@ -551,7 +553,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
     """
 
     def __init__(self):
-        BaseActionModeller.__init__(self)
+        super().__init__()
         self.mIO = None
 
     def recoverAction(self):

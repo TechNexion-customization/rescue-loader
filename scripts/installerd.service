@@ -1,5 +1,5 @@
 [Unit]
-Description=Technexion Installer Daemon
+Description=TechNexion Installer Daemon
 After=network.target dbus.service dbus-sess.service
 
 [Service]

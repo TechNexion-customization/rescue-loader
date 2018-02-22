@@ -81,7 +81,7 @@ def crawlWeb(link, result):
 
 def loopResult(viewer, ev):
     while not ev.wait(1):
-        result = viewer.getResult()
+        result = viewer.queryResult()
         if 'total_uncompressed' in result and 'bytes_written'  in result:
             outstr = 'Processing: {}/{}'.format(int(result['bytes_written']), int(result['total_uncompressed']))
             print(outstr, end='\r')
@@ -126,7 +126,7 @@ def main():
     crawlWeb('/', menuResult) # /pico-imx7/pi-070/
 
     print('Find matching xz files for the target device...')
-    # step 2: find menu items that matches as cpu, form, and baseboard
+    # step 2: find menu items that matches as cpu, form, but not baseboard
     for k, v in sorted(menuResult.items()):
         if not (cpu[0:4].lower() in k.lower() or cpu.lower() in k.lower()):
             menuResult.pop(k)

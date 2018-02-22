@@ -23,16 +23,10 @@ class BaseViewer(object):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, confname):
-        super(BaseViewer, self).__init__() # old python style
-        # super().__init__()
-        self.mThread = None
-        self.mResponse = {}
+    def __init__(self, confname = ''):
+        super().__init__()
         self.mResponseEvent = Event()
         self.mDefConfig = DefConfig()
-        self.mMsger = None
-        self.mCmd = {}
-        self.mInputs = {}
         self.__initialize(confname)
 
     def __initialize(self, confname):
@@ -41,43 +35,10 @@ class BaseViewer(object):
             self.mDefConfig.loadConfig(confname)
         else:
             self.mDefConfig.loadConfig('/etc/installer.xml')
-        conf = self.mDefConfig.getSettings(flatten=True)
-        # check the DefConfig, and create mMsger as the dbus client
-        self.mMsger = DbusMessenger(conf, self.response)
 
-    def __run(self):
-        self.mThread = Thread(name='DBusThread', target=self.mMsger.run)
-        self.mThread.start()
-
+    @abc.abstractmethod
     def _mainExec(self):
-        try:
-            if isinstance(self.mCmd, dict):
-                # clear the event before sending message over to dbus
-                self.__clearEvent()
-                _logger.debug('send cmd via DBus')
-                self.mMsger.sendMsg(self.mCmd)
-                while True:
-                    # loop to wait for dbus response
-                    # wait for dbus server response for 25 seconds, same as DBus timeout
-                    self.__waitForEventTimeout(25)
-                    # handle what is received from the (dbus) server after Response Event is set
-                    if not self._parseResult():
-                        if len(self.mInputs):
-                            _logger.info('get more user inputs: {}'.format(self.mInputs))
-                            self.mMsger.sendMsg(self.mInputs)
-                        else:
-                            # keep query for status while in the processing state, i.e. no new user inputs
-                            _logger.debug('still processing, so send query_status')
-                            self.mMsger.sendMsg({'query_status': 'True'})
-                        continue
-                    else:
-                        break
-                return True
-            else:
-                raise TypeError('cmd must be in a dictionary format')
-        except Exception as ex:
-            _logger.info('Error: {}'.format(ex))
-        return False
+        pass
 
     @abc.abstractmethod
     def _preExec(self):
@@ -95,7 +56,7 @@ class BaseViewer(object):
     def _parseCmd(self, params):
         pass
 
-    def __waitForEventTimeout(self, t):
+    def _waitForEventTimeout(self, t):
         _logger.debug('Client Wait for Response Event Timeout {}s'.format(t))
         isSet = False
         while not self.mResponseEvent.isSet():
@@ -107,13 +68,169 @@ class BaseViewer(object):
                 break
         return isSet
 
-    def __setEvent(self):
+    def _setEvent(self):
         self.mResponseEvent.set()
         _logger.debug('Set Response Event')
 
-    def __clearEvent(self):
+    def _clearEvent(self):
         self.mResponseEvent.clear()
         _logger.debug('Clear Response Event')
+
+    def _unflatten(self, value):
+        ret = {}
+        for k, v in value.items():
+            keys = k.split('|')
+            d = ret
+            for key in keys[:-1]:
+                if key not in d:
+                    d[str(key)] = dict()
+                d = d[str(key)]
+            d[str(keys[-1])] = str(v)
+        return ret
+
+
+class CliViewer(BaseViewer):
+    def __init__(self, confname=''):
+        super().__init__(confname)
+        self.mThread = None
+        self.mCmd = {}
+        self.mInputs = {}
+        self.mResponse = {}
+        self.__setupMsger()
+
+    def __setupMsger(self):
+        # check the DefConfig, and create mMsger as the dbus client
+        conf = self.mDefConfig.getSettings(flatten=True)
+        self.mMsger = DbusMessenger(conf, self.response)
+
+    def __run(self):
+        self.mThread = Thread(name='DBusThread', target=self.mMsger.run)
+        self.mThread.start()
+
+    def _parseCmd(self, params):
+        # do the user commands checking here, and convert it into proper
+        # recognizable dictionary to send to the dbus server
+        self.mCmd.clear()
+
+        if 'cmd' in params.keys():
+            # FORMAT for server parsing dictionary
+            # {cmd: {options}}
+            if 'verbose' in params and params.pop('verbose'):
+                params.update({'verbose': 'True'})
+            else:
+                params.update({'verbose': 'False'})
+
+            if 'interactive' in params:
+                params.pop('interactive')
+                params.update({'interactive': 'True'})
+
+            if params['cmd'] is None:
+                params.pop('cmd')
+
+            #self.mCmd.update({params.pop('cmd'): params})
+            self.mCmd.update(params)
+        if len(self.mCmd) > 0:
+            return True
+        else:
+            return False
+
+    def _isStatusProcessing(self):
+        status ={}
+        status.update(self._unflatten(self.mMsger.getStatus()))
+        if status['status'] == 'processing':
+            return True
+        return False
+
+    def _parseResult(self, result = None):
+        if result:
+            self.__dump(result)
+        else:
+            self.__dump(self.mResponse)
+
+    def _preExec(self):
+        return True
+
+    def _mainExec(self):
+        try:
+            if isinstance(self.mCmd, dict):
+                # clear the event before sending message over to dbus
+                self._clearEvent()
+                _logger.debug('send cmd via DBus')
+                self.mMsger.sendMsg(self.mCmd)
+                return True
+            else:
+                raise TypeError('cmd must be in a dictionary format')
+        except Exception as ex:
+            _logger.info('Error: {}'.format(ex))
+        return False
+
+    def _postExec(self):
+        while True:
+            # loop to wait for dbus response
+            # wait for dbus server response for 25 seconds, same as DBus timeout
+            self._waitForEventTimeout(1)
+            if self.mResponseEvent.is_set():
+                # handle what is received from the (dbus) server after Response Event is set
+                # The server will signal a 'pending' response first.
+                # Then a 'processing' response
+                # and finally a 'success' or a 'failure' response
+                if 'user_request' in self.mResponse.keys():
+                    # if it is a user_request, then get user inputs,
+                    # pass them to the server again and return false
+                    self.mInputs.update({'user_response': self.__getUserInput(self.mResponse['user_request'])})
+                    self.mInput.update(self.mCmd)
+                    if len(self.mInputs) > 0:
+                        _logger.info('get more user inputs: {}'.format(self.mInputs))
+                        self.mMsger.sendMsg(self.mInputs)
+                    self._clearEvent()
+                    continue
+                elif 'status' in self.mResponse.keys():
+                    if self.mResponse['status'] == 'pending':
+                        # clear the event and wait until server send another response with status==processing
+                        self._clearEvent()
+                        continue
+                    elif self.mResponse['status'] == 'processing':
+                        # keep getting results after it becomes 'processing'
+                        # and until status in success or failure, so don't clear the event
+                        # but continue the loop to come back here again
+                        _logger.debug('event set, status just becomes processing')
+                        self._clearEvent()
+                        continue
+                    else:
+                        if self._isStatusProcessing():
+                            _logger.debug("event set but still processing")
+                            self._parseResult(self._unflatten(self.mMsger.getResult()))
+                            self._clearEvent()
+                            continue
+                        else:
+                            # get and parse the result, and break out of loop
+                            if self.mResponse['status'] == 'success':
+                                self._parseResult()
+                            else:
+                                self._parseResult(self._unflatten(self.mMsger.getResult()))
+                            break
+            else:
+                _logger.debug("Wait Timed Out")
+                if self.mResponse['status'] == 'processing':
+                    self._parseResult(self._unflatten(self.mMsger.getResult()))
+                self._clearEvent()
+                continue
+
+    def __dump(self, value):
+        for k in value.keys():
+            if isinstance(value[k], dict):
+                self.__dump(value[k])
+            else:
+                _logger.info('{:>24.24} {}'.format(k.strip(), value[k].strip().replace('\n', ' ')))
+
+    def __getUserInput(self, prompt):
+        return input(prompt)
+
+    def getResult(self):
+        return self.mResponse
+
+    def queryResult(self):
+        return self.mMsger.getResult()
 
     def request(self, arguments):
         """
@@ -132,124 +249,20 @@ class BaseViewer(object):
         self.mMsger.stop()
         self.mThread.join()
 
-    def response(self, status):
+    def response(self, response):
         """
         Callback to be called from the DBus Client's signal handler
         update the server response and set the response event before return out
         """
         self.mResponse.clear()
-        self.mResponse.update(self.__unflatten(status))
-        self.mStatus = status
-        self.__setEvent()
-
-    def __unflatten(self, value):
-        ret = {}
-        for k, v in value.items():
-            keys = k.split('|')
-            d = ret
-            for key in keys[:-1]:
-                if key not in d:
-                    d[str(key)] = dict()
-                d = d[str(key)]
-            d[str(keys[-1])] = str(v)
-        return ret
-
-
-
-class CliViewer(BaseViewer):
-    def __init__(self, confname=''):
-        super(CliViewer, self).__init__(confname) # old python style
-        #super().__init__()
-
-    def _parseCmd(self, params):
-        # do the user commands checking here, and convert it into proper
-        # recognizable dictionary to send to the dbus server
-        self.mCmd.clear()
-
-        if 'cmd' in params.keys():
-            # FORMAT for server parsing dictionary
-            # {cmd: {options}}
-            if 'verbose' in params and params.pop('verbose'):
-                params.update({'verbose': 'True'})
-            else:
-                params.update({'verbose': 'False'})
-            if 'interactive' in params:
-                params.pop('interactive')
-                params.update({'interactive': 'True'})
-            if params['cmd'] is None:
-                params.pop('cmd')
-            #self.mCmd.update({params.pop('cmd'): params})
-            self.mCmd.update(params)
-        if len(self.mCmd) > 0:
-            return True
-        else:
-            return False
-
-    def _parseResult(self):
-        _logger.debug('_parseResult: {}'.format(self.mResponse))
-        # extract the result, and parse the result from server
-        if isinstance(self.mResponse, dict):
-            if 'user_request' in self.mResponse.keys():
-                self.mInputs.clear()
-                # if it is a user_request, then get user inputs, 
-                # pass them to the server again and return false
-                self.mInputs = {'user_response': self.__getUserInput(self.mResponse['user_request'])}
-                return False
-            elif self.mResponse['status'] == 'processing':
-                # dump the still processing results
-                return False
-        # return true to break out of while loop in _mainExec
-        return True
-
-    def _preExec(self):
-        return True
-
-    def _postExec(self):
-        self.__dump(self.mStatus)
-        return True
-
-    def __dump(self, value):
-        for k in value.keys():
-            if isinstance(value[k], dict):
-                self.__dump(value[k])
-            else:
-                _logger.info('{:>24.24} {}'.format(k.strip(), value[k].strip().replace('\n', ' ')))
-
-    def __getUserInput(self, prompt):
-        return input(prompt)
-
-    def getResult(self):
-        return self.mResponse
-
-
-
-class GuiViewer(BaseViewer):
-    def __init__(self, confname=''):
-        super(GuiViewer, self).__init__(confname) # old python style
-        # super().__init__(confname)
-        self.mGuiElems = []
-
-    def _parseCmd(self, params):
-        pass
-
-    def _parseResult(self):
-        pass
-
-    def _preExec(self):
-        pass
-
-    def _postExec(self):
-        pass
-
-    def __getUserInput(self, prompt):
-        pass
+        self.mResponse.update(self._unflatten(response))
+        self._setEvent()
 
 
 
 class WebViewer(BaseViewer):
     def __init__(self, confname=''):
-        super(WebViewer, self).__init__(confname) # old python style
-        # super().__init__(confname)
+        super().__init__(confname)
         self.mPageTemplates = []
 
     def _parseCmd(self, params):

@@ -10,7 +10,9 @@
 # ============================================================
 
 import logging
-from threading import Event
+
+from queue import Queue
+from threading import Thread, Event, Lock
 from defconfig import DefConfig, SetupLogging
 from ophandle import FlashOperationHandler, \
                      InfoOperationHandler, \
@@ -21,6 +23,66 @@ from messenger import DbusMessenger, SocketMessenger
 SetupLogging('/tmp/installer_srv.log')
 # get the handler to the current module
 _logger = logging.getLogger(__name__)
+
+
+
+class Worker(object):
+
+    def __init__(self, cmd, handle, cbSetResult):
+        super().__init__()
+        self.mCmd = {}
+        self.mCmd.update(cmd)
+        self.mHandle = handle
+        self.mCbSetResult = cbSetResult
+
+    def doWork(self, workEvt):
+        _logger.info("worker: perform command: {}".format(self.mCmd))
+
+        result = {}
+        result.update(self.mCmd)
+        result.update({'status': 'processing'})
+        _logger.debug('worker: return status=processing as result: {}'.format(result))
+        self.mCbSetResult(result)
+
+        if callable(self.mHandle.performOperation):
+            self.mHandle.performOperation(self.mCmd)
+
+        if callable(self.mCbSetResult) and callable(self.mHandle.getStatus) and callable(self.mHandle.getResult):
+            result = {}
+            result.update(self.mCmd)
+            result.update(self.mHandle.getStatus())
+            result.update(self.mHandle.getResult())
+            _logger.debug('worker: return result: {}'.format(result))
+            self.mCbSetResult(result)
+
+        # set the work event
+        _logger.debug('worker: set Work Event to indicate work complete and return out')
+        workEvt.set()
+
+
+
+class WorkerThread(Thread):
+    def __init__(self, q):
+        super().__init__()
+        self.mQueue = q
+        self.mWorkEvent = Event()
+
+    def run(self):
+        while True:
+            try:
+                worker = self.mQueue.get()
+                self.mWorkEvent.clear()
+                worker.doWork(self.mWorkEvent)
+                while True:
+                    # wait for work complete
+                    if self.mWorkEvent.is_set():
+                        self.mQueue.task_done()
+                        break
+                    else:
+                        self.mWorkEvent.wait(1)
+            except Exception as ex:
+                print(ex)
+                pass
 
 
 
@@ -38,97 +100,120 @@ class OpController(object):
     
     """
     def __init__(self, conf):
-        # super(OpController, self).__init__() # older python style
         super().__init__()
         # initialize a DbusMessenger for sending and receiving messages
         setting = conf.getSettings(flatten=True)
         setting.update({'IS_SERVER': True})
-        self.mMsger = DbusMessenger(setting, self.__handleDBusMessage) 
+        self.mMsger = DbusMessenger(setting, self.__handleDBusMessage, self.__handleGetStatus, self.__handleGetResult)
         # initialize an array to hold BaseOpHandlers
         self.mOpHandlers = []
-        self.mRetStatus = {}
         self.mUserReqEvent = Event()
-        self.mStatusEvent = Event()
-        
+        self.mQueue = Queue()
+        self.mThread = WorkerThread(self.mQueue)
+        self.mThread.daemon = True # thread dies when main thread exits
+        self.mThread.start()
+
     def run(self):
         # setup Operation Handlers from the defconfig
-        self.mOpHandlers.append(FlashOperationHandler(self.__handleOpCallback))
-        self.mOpHandlers.append(InfoOperationHandler(self.__handleOpCallback))
-        self.mOpHandlers.append(DownloadOperationHandler(self.__handleOpCallback))
-        self.mOpHandlers.append(InteractiveOperationHandler(self.__handleOpCallback))
+        self.mOpHandlers.append(FlashOperationHandler(self.__handleUserRequest))
+        self.mOpHandlers.append(InfoOperationHandler(self.__handleUserRequest))
+        self.mOpHandlers.append(DownloadOperationHandler(self.__handleUserRequest))
+        self.mOpHandlers.append(InteractiveOperationHandler(self.__handleUserRequest))
 
         # finally run the dbusmessenger server, and dbus run is blocking
         self.mMsger.run()
-    
-    def __executeOperation(self, params):
-        self.mRetStatus.clear()
-        for hdle in self.mOpHandlers:
-            self.mCurrentHandler = hdle
-            if hdle.isOpSupported(params):
-                if (hdle.performOperation(params, self.mStatusEvent)):
-                    self.mRetStatus.update(hdle.getStatus())
-                    _logger.debug('handle.performOperation: {}'.format(self.mRetStatus))
-                    return True
-                # FIXME: if the ophandler is running with the thread
-                #        we need to wait for the thread to finish before
-                #        handling another command
-        return False
-    
+
+    def __findOpHandle(self, cmds):
+        # find the OpHandle for executing command
+        for ophdle in self.mOpHandlers:
+            if ophdle.isOpSupported(cmds):
+                return ophdle
+
+#     def __executeOperation(self, params):
+#         self.mRetStatus.clear()
+#         for hdle in self.mOpHandlers:
+#             self.mCurrentHandler = hdle
+#             if hdle.isOpSupported(params):
+#                 if (hdle.performOperation(params, self.mStatusEvent)):
+#                     self.mRetStatus.update(hdle.getStatus())
+#                     _logger.debug('handle.performOperation: {}'.format(self.mRetStatus))
+#                     return True
+#                 # FIXME: if the ophandler is running with the thread
+#                 #        we need to wait for the thread to finish before
+#                 #        handling another command
+#         return False
+
     def __handleDBusMessage(self, msg):
         if isinstance(msg, dict):
             # manage user commands from client/viewer
             if 'user_response' in msg.keys():
-                # need to find the correct OpHandler to update user response
-                _logger.info("handle dbus msg: user_response")
-                if self.mCurrentHandler:
+                _logger.info("handle dbus msg: user_response: {}".format(msg))
+                if callable(self.mCurrentHandler.updateUserResponse):
                     self.mCurrentHandler.updateUserResponse(msg)
-                    #self.mCurrentHandler = None
-                self.__setEvent(self.mUserReqEvent)
-                return False
-            elif 'query_status' in msg.keys():
-                _logger.info("handle dbus msg: query_status")
-                self.mRetStatus.clear()
-                self.__clearEvent(self.mStatusEvent)
-                # wait for a status event timeout
-                if not self.__waitForEventTimeout(self.mStatusEvent, 1):
-                    # if it is timed out, get the current status
-                    self.mRetStatus.update(self.mCurrentHandler.getStatus())
-                    _logger.debug('Waiting for Status Event Timed Out, status={}'.format(self.mRetStatus))
-                # else need to get the latest mRetStatus from the Op. callback
-                self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-                return False
+                    self.__setEvent(self.mUserReqEvent)
+#             elif 'query_status' in msg.keys():
+#                 _logger.info("handle dbus msg: query_status: {}".format(msg))
+#                 if callable(self.mCurrentHandler.getStatus):
+#                     self.mMsger.sendMsg(self.mCurrentHandler.getStatus())
             else:
-                _logger.info("handle dbus msg: else execute operation")
-                self.__clearEvent(self.mStatusEvent)
-                # FIXME: Should queue the DBusMessage commands here into a queue
-                # Otherwise second op job will override the first op job.
-                if not self.__executeOperation(msg):
-                    _logger.warning('Execute not finished or failed')
-                    self.mRetStatus.update(self.mCurrentHandler.getStatus())
-                    self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-                    return False
-        # execution success falls through here
-        self.mRetStatus.update(self.mCurrentHandler.getStatus())
-        self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-        return True
-    
-    def __handleOpCallback(self, status, handler):
+                # find the correct OpHandler
+                ophandle = self.__findOpHandle(msg)
+                if ophandle is not None:
+                    _logger.info("handle dbus msg: else queue the execute operation")
+                    self.mQueue.put(Worker(msg, ophandle, self.setRetResult))
+                    self.mCurrentHandler = ophandle
+                    status = {}
+                    status.update(msg)
+                    status.update({'status': 'pending'})
+                    self.mMsger.setStatus(self.__flatten(status))
+            return True
+        return False
+
+#                 self.__clearEvent(self.mStatusEvent)
+#                 # FIXME: Should queue the DBusMessage commands here into a queue
+#                 # Otherwise second op job will override the first op job.
+#                 if not self.__executeOperation(msg):
+#                     _logger.warning('Execute not finished or failed')
+#                     self.mRetStatus.update(self.mCurrentHandler.getStatus())
+#                     self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
+#                     return False
+#         
+#         # execution success falls through here
+#         self.mRetStatus.update(self.mCurrentHandler.getStatus())
+#         self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
+#         return True
+
+    def __handleGetResult(self):
+        _logger.debug('callback to get result from {}'.format(self.mCurrentHandler))
+        if self.mCurrentHandler and callable(self.mCurrentHandler.getResult):
+            return self.__flatten(self.mCurrentHandler.getResult())
+
+    def __handleGetStatus(self):
+        _logger.debug('callback to get status from {}'.format(self.mCurrentHandler))
+        if self.mCurrentHandler and callable(self.mCurrentHandler.getStatus):
+            return self.__flatten(self.mCurrentHandler.getStatus())
+
+    def __handleUserRequest(self, status, handler):
         """
         Handles requesting for more user inputs for the operations
         This function has to be blocking so the ophandler can continue afterwards.
         Here, the request for user input has to wait for DBusMessage from client
         """
-        self.mRetStatus.clear()
+        userReq = {}
         self.__clearEvent(self.mUserReqEvent)
-        if handler:
+        if self.mCurrentHandler != handler:
             self.mCurrentHandler = handler
         if isinstance(status, dict):
-            self.mRetStatus.update(status)
-            # call appropriate client/viewer to signal execution result or get user input
-            self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-            if 'user_request' in self.mRetStatus.keys():
+            userReq.update(status)
+            if 'user_request' in userReq.keys():
+                # call appropriate client/viewer to signal execution result or get user input
+                self.mMsger.sendMsg(self.__flatten(userReq))
                 # wait user response for 25 seconds, same as DBus timeout
                 self.__waitForEventTimeout(self.mUserReqEvent, 25)
+
+    def setRetResult(self, result):
+        if isinstance(result, dict):
+            self.mMsger.setResult(self.__flatten(result))
 
     def __waitForEventTimeout(self, ev, t):
         _logger.debug('Wait for event {} with timeout: {}s'.format(ev, t))
@@ -166,5 +251,4 @@ if __name__ == "__main__":
     conf = DefConfig()
     conf.loadConfig("/etc/installer.xml")
     srv = OpController(conf)
-    srv.run()
-    exit()
+    exit(srv.run())

@@ -22,10 +22,10 @@ class BaseOperationHandler(object):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cbUserRequest):
-        # super(BaseOperationHandler, self).__init__() # old python style
         super().__init__()
         self.mUseThread = False
         self.mThread = None
+        self.mResult = {}
         self.mStatus = {}
         self.mActionModellers = []
         self.mRecoverModellers = []
@@ -33,89 +33,88 @@ class BaseOperationHandler(object):
         self.mUserRequestHandler = cbUserRequest if callable(cbUserRequest) else None
         self.mUserInputs = {}
         self.mActionParam = {}
-        self.mRunningModel = None
+        self.mRunningModeller = None
+        self.mSuccessModeller = None
         self.mInteractive = False
 
     def getStatus(self):
-        if self.mRunningModel:
-            self.mStatus.update(self.mRunningModel.getResult())
+        _logger.info('return current status')
         return self.mStatus
 
-    def __run(self, StatusEvt):
+    def getResult(self):
+        if self.mSuccessModeller and callable(self.mSuccessModeller.getResult):
+            _logger.info('return success result from {}'.format(self.mSuccessModeller))
+            return self.mSuccessModeller.getResult()
+        elif self.mRunningModeller and callable(self.mRunningModeller.getResult):
+            _logger.info('return running result from {}'.format(self.mRunningModeller))
+            return self.mRunningModeller.getResult()
+        else:
+            _logger.info('return performed result')
+            return self.mResult
+
+    def __run(self):
+        # clear RunModel and RecoverModel references
+        self.mRunningModeller = None
+        self.mSuccessModeller = None
         self.mRecoverModellers = []
+        # set the status to failure first, it will be overridden if success
+        self.mStatus.update({'status': 'failure'})
+
         for model in self.mActionModellers:
-            self.mStatus.clear()
-            # assign the current running model
-            self.mRunningModel = model
+            # the running model
+            self.mRunningModeller = model
+
             # append the executed action models to the recover list
             self.mRecoverModellers.append(model)
             if (model.performAction()):
-                self.mStatus.update(model.getResult())
+                # update successful result
+                self.mResult.update(model.getResult())
                 self.mStatus.update({'status': 'success'})
                 _logger.info('call performAction success: {}'.format(self.mStatus))
-                if callable(self.mUserRequestHandler):
-                    # sent success status
-                    _logger.debug("Call User Request Handler to send success status")
-                    self.mUserRequestHandler(self.mStatus, self)
+                self.mSuccessModeller = model
+#                 # FIXME: Do we really need to call user request to pass the current Status?
+#                 if callable(self.mUserRequestHandler):
+#                     # sent success status
+#                     _logger.debug("Call User Request Handler to send success status")
+#                     self.mUserRequestHandler(self.mStatus, self)
             else:
-                self.mStatus.update(model.getResult())
+                self.mResult.update(model.getResult())
                 _logger.info('call performAction failed: {}'.format(self.mStatus))
-                if model.isRecoverable():
-                    self.mStatus.update({'is_recoverable': 'yes' if model.isRecoverable() else 'no'});
-                    self.mStatus.update({'user_request': 'Recover from failed operation? Y/N: '});
-                    # when there is a need for user request to get user inputs, send request
-                    if callable(self.mUserRequestHandler):
-                        # NOTE: blocking until a user response is returned from client/viewer
-                        # we sent both success status and user_request status through here
-                        _logger.debug("Call User Request Handler")
-                        self.mUserRequestHandler(self.mStatus, self)
-                        # after the user request returns, check the user input
-                        if self.__hasValidUserResponse(self.mUserInputs):
-                            _logger.debug("Has valid user inputs, so recover operation")
-                            # FIXME: Retry or Recover
-                            if self.__recoverOperation():
-                                self.mStatus.update({'status': 'success'})
-                            # else:
-                                # FIXME:
-                                # no or not valid User Input Response, continue for now
-                                #raise SyntaxError('Error in User Inputs')
-                                #self.mStatus.update({'error': 'Not valid user input'})
-                                #self.mStatus.update({'status': 'failure'})
-
-        # end of looping all ActionModels
-        self.mRunningModel = None
-        # set the status event whether using Thread or not
-        _logger.debug('Set Status Event and return out (thread or not)')
-        StatusEvt.set()
+                self.__handleRecoverable(model)
         return
 
-    def performOperation(self, OpParams, StatusEvt):
+    def performOperation(self, OpParams):
         try:
+            self.mActionParam.clear()
+            self.mResult.clear()
+            self.mStatus.clear()
+            self.mStatus.update(OpParams)
             # clear old action models for next command
             if len(self.mActionModellers):
-                self.mActionModellers = []
-                # del self.mActionModellers
+                #self.mActionModellers = []
+                del self.mActionModellers[:]
             # if successfully setup an action model, do the work
             if self.__setupActions(OpParams):
                 if all(isinstance(model, BaseActionModeller) for model in self.mActionModellers):
-                    if self.mUseThread:
-                        # use thread
-                        _logger.info('thread run')
-                        # join the previous finished thread first
-                        if isinstance(self.mThread, Thread) and not self.mThread.isAlive():
-                            self.mThread.join()
-                            del self.mThread
-                            self.mThread = None
-                        # start the thread to do work and continue
-                        if self.mThread == None:
-                            self.mThread = Thread(name='WorkThread', target=self.__run, args=(StatusEvt,))
-                            self.mThread.start()
-                        # set the status to processing
-                        self.mStatus.update({'status': 'processing'})
-                    else:
-                        # normal run
-                        _logger.info('normal run')
-                        self.__run(StatusEvt)
+#                     if self.mUseThread:
+#                         # use thread
+#                         _logger.info('thread run')
+#                         # join the previous finished thread first
+#                         if isinstance(self.mThread, Thread) and not self.mThread.isAlive():
+#                             self.mThread.join()
+#                             del self.mThread
+#                             self.mThread = None
+#                         # start the thread to do work and continue
+#                         if self.mThread == None:
+#                             self.mThread = Thread(name='WorkThread', target=self.__run, args=(workEvt,))
+#                             self.mThread.start()
+#                         # set the status to processing
+#                         self.mStatus.update({'status': 'processing'})
+#                     else:
+#                         # normal run
+                    _logger.info('normal run')
+                    self.__run()
+                    return True
                 else:
                     raise ReferenceError('Cannot reference all Action Models')
             else:
@@ -124,11 +123,33 @@ class BaseOperationHandler(object):
         except Exception as ex:
             _logger.error('performOperation exception: {}'.format(ex))
             # should handle all lower level exceptions here.
-            self.mStatus.update({'error': str(ex)})
-            self.mStatus.update({'status': 'failure'})
-            return False
+            self.mStatus.update({'status': 'failure', 'error': str(ex)})
+        return False
 
-        return True
+    def __handleRecoverable(self, model):
+        if model.isRecoverable():
+            # recoverable
+            # when there is a need for user request to get user inputs, send request
+            if callable(self.mUserRequestHandler):
+                # NOTE: blocking until a user response is returned from client/viewer
+                # we sent both success status and user_request status through here
+                _logger.debug("Call User Request Handler")
+                prompt = {}
+                prompt.update(self.mStatus)
+                prompt.update({'is_recoverable': 'yes' if model.isRecoverable() else 'no'});
+                prompt.update({'user_request': 'Recover from failed operation? Y/N: '});
+                self.mUserRequestHandler(prompt, self)
+                # after the user request returns, check the user input
+                if self.__hasValidUserResponse(self.mUserInputs):
+                    _logger.debug("Has valid user inputs, so recover operation")
+                    # FIXME: Retry or Recover
+                    if self.__recoverOperation():
+                        self.mStatus.update({'status': 'success'})
+                    else:
+                        self.mStatus.update({'status': 'failure', 'error': 'Recover failed'})
+                else:
+                    # no or not valid User Input Response, continue for now
+                    self.mStatus.update({'status': 'failure', 'error': 'Invalid user input'})
     
     def __recoverOperation(self):
         try:
@@ -169,7 +190,6 @@ class BaseOperationHandler(object):
 
 class FlashOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB, use_thread=True):
-        # super(FlashOperationHandler, self).__init__(UserRequestCB) # old python style
         super().__init__(UserRequestCB)
         self.mUseThread = use_thread
         self.mSrcFileOps = ['src_filename', 'tgt_filename']
@@ -225,7 +245,6 @@ class FlashOperationHandler(BaseOperationHandler):
 
 class InfoOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
-        # super(InfoOperationHandler, self).__init__(UserRequestCB) # old python style
         super().__init__(UserRequestCB)
         self.mOptions = ['target', 'location']
 
@@ -294,7 +313,7 @@ class InfoOperationHandler(BaseOperationHandler):
                     elif k=='location' and v.startswith('/') and v.endswith('xz'):
                         self.mActionParam['src_directory'] = v # directory/folder
                     elif k==i and v=='som':
-                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                        self.mActionParam['src_filename'] = '/proc/device-tree/model' # './model'
                         self.mActionParam['re_pattern'] = '\w+\ (\w+)-(imx\w+|IMX\w+).+\ (\w+)\ baseboard'
                     elif k==i and v=='cpu':
                         self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
@@ -321,7 +340,6 @@ class InfoOperationHandler(BaseOperationHandler):
 
 class DownloadOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB, use_thread=True):
-        # super(FlashOperationHandler, self).__init__(UserRequestCB) # old python style
         super().__init__(UserRequestCB)
         self.mUseThread = use_thread
         self.mDlFileOps = ['dl_module',  'dl_baseboard', 'dl_os', 'dl_version', \
@@ -401,7 +419,6 @@ class DownloadOperationHandler(BaseOperationHandler):
 
 class InteractiveOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB, use_thread=True):
-        # super(FlashOperationHandler, self).__init__(UserRequestCB) # old python style
         super().__init__(UserRequestCB)
         self.mUseThread = use_thread
 
@@ -438,7 +455,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
             self.mUserRequestHandler(self.mStatus, self)
         return
 
-    def performOperation(self, OpParams, StatusEvt):
+    def performOperation(self, OpParams, WorkEvt):
         """
         Override performOperation for interactive operations
         """
@@ -454,7 +471,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
             if self.mThread == None:
                 self.mThread = Thread(name='InteractiveThread', \
                                       target=self.__interactiveMode, \
-                                      args=(self.mActionParam, StatusEvt,))
+                                      args=(self.mActionParam, WorkEvt,))
                 self.mThread.start()
                 # set the status to processing
                 self.mStatus.update({'status': 'processing'})

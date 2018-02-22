@@ -20,6 +20,7 @@ class CompressedFile (object):
     mime_type = None
 
     def __init__(self, fname, mode):
+        super().__init__()
         # mFile is an open file or file like object
         if 'r' in mode :
             rwMode = 'r' + 'b' if ('b' in mode) else 't'
@@ -243,7 +244,6 @@ class BaseInputOutput(object):
     __metaclass__ = abc.ABCMeta
     
     def __init__(self, filename, mode='rb+'):
-        # super(BaseInputOutput, self).__init__() # old python style
         super().__init__()
         self.mHandle = None
         self.mFilename = filename
@@ -443,7 +443,6 @@ class BlockInputOutput(CompressInputOutput):
     
     """
     def __init__(self, chunksize, filename, mode='rb+'):
-        # super(BlockInputOutput, self).__init__(filename, mode) # old python style
         super().__init__(filename, mode)
         self.mChunkSize = chunksize
         _logger.debug('{} init() - chunksize:{}'.format(self.__class__, self.mChunkSize))
@@ -478,7 +477,6 @@ class FileInputOutput(BaseInputOutput):
     
     """
     def __init__(self, filename, mode='rt+'):
-        # super(FileInputOutput, self).__init__(filename, mode) # old python style
         super().__init__(filename, mode)
 
     def Write(self, lines, startline=0):

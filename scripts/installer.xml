@@ -1,21 +1,513 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tn-config>
-    <installer>
-        <dbus>
-            <busname>com.technexion.dbus.interface</busname>
-        </dbus>
-        <controller>
-            <srv_path>/com/technexion/dbus/controller</srv_path>
-        </controller>
-        <viewers>
-            <cli_path>/com/technexion/dbus/viewer/0</cli_path>
-            <gui_path>/com/technexion/dbus/viewer/1</gui_path>
-            <web_path>/com/technexion/dbus/viewer/2</web_path>
-        </viewers>
-        <rescue>
-            <host_protocol>http</host_protocol>
-            <host_name>rescue.technexion.net</host_name>
-        </rescue>
-    </installer>
+	<installer>
+	<rescue>
+		<host_protocol>http</host_protocol>
+		<host_name>rescue.technexion.net</host_name>
+	</rescue>
+	<dbus>
+		<busname>com.technexion.rescue</busname>
+		<ifacename>com.technexion.dbus.interface</ifacename>
+	</dbus>
+	<controller>
+		<srv_path>/com/technexion/dbus/controller</srv_path>
+	</controller>
+	<viewers>
+		<cli_path>/com/technexion/dbus/viewer/0</cli_path>
+		<gui_path>/com/technexion/dbus/viewer/1</gui_path>
+		<web_path>/com/technexion/dbus/viewer/2</web_path>
+	</viewers>
+	<gui_viewer>
+		<app_name>TechNexion Rescue System</app_name>
+		<ui version="4.0">
+			<class>tabWidget</class>
+			<widget class="QTabWidget" name="tabWidget">
+				<property name="geometry">
+					<rect>
+						<x>0</x>
+						<y>0</y>
+						<width>800</width>
+						<height>480</height>
+					</rect>
+				</property>
+				<property name="font">
+					<font>
+						<family>DejaVu Serif</family>
+						<pointsize>12</pointsize>
+						<weight>50</weight>
+						<italic>false</italic>
+						<bold>false</bold>
+					</font>
+				</property>
+				<property name="windowTitle">
+					<string>TechNexion Rescue System</string>
+				</property>
+				<property name="tabPosition">
+					<enum>QTabWidget::North</enum>
+				</property>
+				<property name="currentIndex">
+					<number>0</number>
+				</property>
+				<widget class="QWidget" name="tabRescue">
+					<property name="sizePolicy">
+						<sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+							<horstretch>0</horstretch>
+							<verstretch>0</verstretch>
+						</sizepolicy>
+					</property>
+					<attribute name="title">
+						<string>Rescue</string>
+					</attribute>
+					<layout class="QHBoxLayout" name="horizontalLayout">
+						<property name="sizeConstraint">
+							<enum>QLayout::SetDefaultConstraint</enum>
+						</property>
+						<property name="leftMargin">
+							<number>0</number>
+						</property>
+						<item>
+							<layout class="QVBoxLayout" name="verticalLayoutLeft">
+								<item>
+									<layout class="QHBoxLayout" name="horizontalLayoutTitle">
+										<item>
+											<widget class="QLabel" name="lblCpu">
+												<property name="text">
+													<string>Cpu</string>
+												</property>
+											</widget>
+										</item>
+										<item>
+											<widget class="QLabel" name="lblFormFactor">
+												<property name="text">
+													<string>Form Factor</string>
+												</property>
+											</widget>
+										</item>
+									</layout>
+								</item>
+								<item>
+									<widget class="QLabel" name="lblRescueServer">
+										<property name="text">
+											<string>TechNexion Rescue Server</string>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QLineEdit" name="lineRescueServer">
+										<property name="text">
+											<string>http://rescue.technexion.net/rescue/</string>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QLabel" name="lblDownloadFile">
+										<property name="text">
+											<string>Choose a Compressed Files to Download</string>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QTableWidget" name="tableRescueFiles">
+										<property name="selectionMode">
+											<enum>QAbstractItemView::SingleSelection</enum>
+										</property>
+										<property name="selectionBehavior">
+											<enum>QAbstractItemView::SelectRows</enum>
+										</property>
+										<property name="rowCount">
+											<number>0</number>
+										</property>
+										<property name="columnCount">
+											<number>0</number>
+										</property>
+									</widget>
+								</item>
+							</layout>
+						</item>
+						<item>
+							<layout class="QVBoxLayout" name="verticalLayoutRight">
+								<item>
+									<widget class="QLabel" name="lblTargetStorage">
+										<property name="text">
+											<string>Choose a Target Storage to Flash</string>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QTableWidget" name="tableTargetStorage">
+										<property name="selectionMode">
+											<enum>QAbstractItemView::SingleSelection</enum>
+										</property>
+										<property name="selectionBehavior">
+											<enum>QAbstractItemView::SelectRows</enum>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QPushButton" name="pushButtonCmd">
+										<property name="text">
+											<string>Download and Flash</string>
+										</property>
+										<property name="autoDefault">
+											<bool>false</bool>
+										</property>
+										<property name="default">
+											<bool>false</bool>
+										</property>
+										<property name="flat">
+											<bool>false</bool>
+										</property>
+									</widget>
+								</item>
+								<item>
+									<widget class="QProgressBar" name="progressBarStatus">
+										<property name="value">
+											<number>0</number>
+										</property>
+									</widget>
+								</item>
+							</layout>
+						</item>
+					</layout>
+					<widget class="QProcessSlot" name="detectDevice" native="true">
+						<property name="geometry">
+							<rect>
+								<x>0</x>
+								<y>0</y>
+								<width>0</width>
+								<height>0</height>
+							</rect>
+						</property>
+					</widget>
+					<widget class="QProcessSlot" name="crawlWeb" native="true">
+						<property name="geometry">
+							<rect>
+								<x>0</x>
+								<y>0</y>
+								<width>0</width>
+								<height>0</height>
+							</rect>
+						</property>
+					</widget>
+					<widget class="QProcessSlot" name="scanStorage" native="true">
+						<property name="geometry">
+							<rect>
+								<x>0</x>
+								<y>0</y>
+								<width>0</width>
+								<height>0</height>
+							</rect>
+						</property>
+					</widget>
+					<widget class="QProcessSlot" name="downloadImage" native="true">
+						<property name="geometry">
+							<rect>
+								<x>0</x>
+								<y>0</y>
+								<width>0</width>
+								<height>0</height>
+							</rect>
+						</property>
+					</widget>
+				</widget>
+				<widget class="QWidget" name="tabResult">
+					<attribute name="title">
+						<string>Result</string>
+					</attribute>
+					<layout class="QVBoxLayout" name="verticalLayout" stretch="0,0">
+						<item>
+							<widget class="QLabel" name="lblDisplayOutput">
+								<property name="text">
+									<string>Output</string>
+								</property>
+							</widget>
+						</item>
+						<item>
+							<widget class="QTextEdit" name="textOutput">
+								<property name="readOnly">
+									<bool>true</bool>
+								</property>
+							</widget>
+						</item>
+					</layout>
+				</widget>
+				<action name="actionCrawlWeb">
+					<property name="text">
+						<string>Open</string>
+					</property>
+					<property name="shortcut">
+						<string>Ctrl+O</string>
+					</property>
+				</action>
+				<action name="actionStorage">
+					<property name="text">
+						<string>Storage</string>
+					</property>
+					<property name="shortcut">
+						<string>Ctrl+T</string>
+					</property>
+				</action>
+			</widget>
+			<customwidgets>
+				<customwidget>
+					<class>QProcessSlot</class>
+					<extends>QWidget</extends>
+					<header>qprocessslot.h</header>
+					<container>1</container>
+					<slots>
+						<signal>success()</signal>
+						<signal>fail()</signal>
+						<slot>processSlot()</slot>
+					</slots>
+				</customwidget>
+			</customwidgets>
+			<resources />
+			<connections>
+				<connection>
+					<sender>tabWidget</sender>
+					<signal>initialised()</signal>
+					<receiver>detectDevice</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>detectDevice</sender>
+					<signal>success()</signal>
+					<receiver>textOutput</receiver>
+					<slot>insertPlainText()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>detectDevice</sender>
+					<signal>fail()</signal>
+					<receiver>textOutput</receiver>
+					<slot>insertPlainText()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>tabWidget</sender>
+					<signal>initialised()</signal>
+					<receiver>crawlWeb</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>crawlWeb</sender>
+					<signal>success()</signal>
+					<receiver>tableRescueFiles</receiver>
+					<slot>setItem()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>crawlWeb</sender>
+					<signal>fail()</signal>
+					<receiver>textOutput</receiver>
+					<slot>insertPlainText()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>tabWidget</sender>
+					<signal>initialised()</signal>
+					<receiver>scanStorage</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>scanStorage</sender>
+					<signal>success()</signal>
+					<receiver>tableTargetStorage</receiver>
+					<slot>setItem()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>scanStorage</sender>
+					<signal>fail()</signal>
+					<receiver>textOutput</receiver>
+					<slot>insertPlainText()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>11</x>
+							<y>69</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>tabWidget</sender>
+					<signal>initialised()</signal>
+					<receiver>downloadImage</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>downloadImage</sender>
+					<signal>success()</signal>
+					<receiver>progressBarStatus</receiver>
+					<slot>setValue()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>1</x>
+							<y>30</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>719</x>
+							<y>506</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>downloadImage</sender>
+					<signal>fail()</signal>
+					<receiver>textOutput</receiver>
+					<slot>insertPlainText()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>496</x>
+							<y>338</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>11</x>
+							<y>69</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>pushButtonCmd</sender>
+					<signal>clicked()</signal>
+					<receiver>downloadImage</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>576</x>
+							<y>427</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>665</x>
+							<y>423</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>tableRescueFiles</sender>
+					<signal>currentItemChanged()</signal>
+					<receiver>downloadImage</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>276</x>
+							<y>387</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>518</x>
+							<y>425</y>
+						</hint>
+					</hints>
+				</connection>
+				<connection>
+					<sender>tableTargetStorage</sender>
+					<signal>currentItemChanged()</signal>
+					<receiver>downloadImage</receiver>
+					<slot>processSlot()</slot>
+					<hints>
+						<hint type="sourcelabel">
+							<x>548</x>
+							<y>280</y>
+						</hint>
+						<hint type="destinationlabel">
+							<x>559</x>
+							<y>420</y>
+						</hint>
+					</hints>
+				</connection>
+			</connections>
+			<slots>
+				<signal>initialised()</signal>
+			</slots>
+		</ui>
+	</gui_viewer>
+	</installer>
 </tn-config>
-
