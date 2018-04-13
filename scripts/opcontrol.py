@@ -66,6 +66,7 @@ class WorkerThread(Thread):
         super().__init__()
         self.mQueue = q
         self.mWorkEvent = Event()
+        self.mQuitFlag = False
 
     def run(self):
         while True:
@@ -80,6 +81,8 @@ class WorkerThread(Thread):
                         break
                     else:
                         self.mWorkEvent.wait(1)
+                if self.mQuitFlag:
+                    raise Exception('Quit Gracefully')
             except Exception as ex:
                 print(ex)
                 pass
@@ -104,7 +107,11 @@ class OpController(object):
         # initialize a DbusMessenger for sending and receiving messages
         setting = conf.getSettings(flatten=True)
         setting.update({'IS_SERVER': True})
-        self.mMsger = DbusMessenger(setting, self.__handleDBusMessage, self.__handleGetStatus, self.__handleGetResult)
+        self.mMsger = DbusMessenger(setting, \
+                                    self.__handleDBusMessage, \
+                                    self.__handleGetStatus, \
+                                    self.__handleGetResult, \
+                                    self.__handleQuit)
         # initialize an array to hold BaseOpHandlers
         self.mOpHandlers = []
         self.mUserReqEvent = Event()
@@ -129,20 +136,6 @@ class OpController(object):
             if ophdle.isOpSupported(cmds):
                 return ophdle
 
-#     def __executeOperation(self, params):
-#         self.mRetStatus.clear()
-#         for hdle in self.mOpHandlers:
-#             self.mCurrentHandler = hdle
-#             if hdle.isOpSupported(params):
-#                 if (hdle.performOperation(params, self.mStatusEvent)):
-#                     self.mRetStatus.update(hdle.getStatus())
-#                     _logger.debug('handle.performOperation: {}'.format(self.mRetStatus))
-#                     return True
-#                 # FIXME: if the ophandler is running with the thread
-#                 #        we need to wait for the thread to finish before
-#                 #        handling another command
-#         return False
-
     def __handleDBusMessage(self, msg):
         if isinstance(msg, dict):
             # manage user commands from client/viewer
@@ -151,10 +144,6 @@ class OpController(object):
                 if callable(self.mCurrentHandler.updateUserResponse):
                     self.mCurrentHandler.updateUserResponse(msg)
                     self.__setEvent(self.mUserReqEvent)
-#             elif 'query_status' in msg.keys():
-#                 _logger.info("handle dbus msg: query_status: {}".format(msg))
-#                 if callable(self.mCurrentHandler.getStatus):
-#                     self.mMsger.sendMsg(self.mCurrentHandler.getStatus())
             else:
                 # find the correct OpHandler
                 ophandle = self.__findOpHandle(msg)
@@ -169,20 +158,6 @@ class OpController(object):
             return True
         return False
 
-#                 self.__clearEvent(self.mStatusEvent)
-#                 # FIXME: Should queue the DBusMessage commands here into a queue
-#                 # Otherwise second op job will override the first op job.
-#                 if not self.__executeOperation(msg):
-#                     _logger.warning('Execute not finished or failed')
-#                     self.mRetStatus.update(self.mCurrentHandler.getStatus())
-#                     self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-#                     return False
-#         
-#         # execution success falls through here
-#         self.mRetStatus.update(self.mCurrentHandler.getStatus())
-#         self.mMsger.sendMsg(self.__flatten(self.mRetStatus))
-#         return True
-
     def __handleGetResult(self):
         _logger.debug('callback to get result from {}'.format(self.mCurrentHandler))
         if self.mCurrentHandler and callable(self.mCurrentHandler.getResult):
@@ -192,6 +167,18 @@ class OpController(object):
         _logger.debug('callback to get status from {}'.format(self.mCurrentHandler))
         if self.mCurrentHandler and callable(self.mCurrentHandler.getStatus):
             return self.__flatten(self.mCurrentHandler.getStatus())
+
+    def __handleQuit(self):
+        _logger.debug('callback to quit gracefully...')
+        # stop / break out the thread.run()
+        self.mThread.mQuitFlag = True
+        # join the thread in 10 seconds
+        if self.mThread.join(10):
+            # clear up the queue
+            self.mQueue.clean()
+            return self.__flatten({'quit': 'success'})
+        else:
+            return self.__flatten({'quit': 'failure'})
 
     def __handleUserRequest(self, status, handler):
         """

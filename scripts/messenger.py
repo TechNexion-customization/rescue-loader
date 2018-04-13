@@ -70,7 +70,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
     
     __metaclass__ = MergeMeta
     
-    def __init__(self, config, cbExecHdl=None, cbStatusHdl=None, cbResultHdl=None):
+    def __init__(self, config, cbExecHdl=None, cbStatusHdl=None, cbResultHdl=None, cbQuitHdl=None):
         super().__init__(config)
         # set the dbus.mainloop.glib.DBusGMainLoop() as default event loop mechanism
         gobject.threads_init() # Must Do this first if use gobject.MainLoop()
@@ -79,6 +79,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         self.mCbExecHandler = cbExecHdl
         self.mCbStatusHandler = cbStatusHdl
         self.mCbResultHandler = cbResultHdl
+        self.mCbQuitHandler = cbQuitHdl
         self.mRetStatus = {}
         self.mRetResult = {}
         self.mIsServer = self.mConfig['IS_SERVER'] if ('IS_SERVER' in self.mConfig.keys()) else False
@@ -135,6 +136,13 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         self.mRetResult.clear()
         if callable(self.mCbResultHandler):
             self.mRetResult.update(self.mCbResultHandler())
+        return self.mRetResult
+
+    @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
+    def quit(self):
+        self.mResult.clear()
+        if callable(self.mCbQuitHandler):
+            self.mRetResult.update(self.mCbQuitHandler())
         return self.mRetResult
 
     @dbus.service.signal(dbus_interface="com.technexion.dbus.interface", signature='a{sv}')
