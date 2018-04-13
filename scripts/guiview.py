@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 import re
 import os
 import sys
@@ -12,6 +11,7 @@ from defconfig import DefConfig
 from messenger import BaseMessenger
 from view import BaseViewer
 
+from PyQt4 import QtNetwork
 from PyQt4 import QtCore, QtDBus, QtGui
 from PyQt4.QtCore import QObject
 
@@ -22,13 +22,13 @@ _logger = logging.getLogger(__name__)
 def _printSignatures(qobj):
     metaobject = qobj.metaObject()
     for i in range(metaobject.methodCount()):
-        _logger.debug(metaobject.method(i).signature())
+        _logger.warning('{} metaobject signature: {}'.format(qobj, metaobject.method(i).signature()))
 
 
 
 ###############################################################################
 #
-# GuiViewer
+# DBus
 #
 ###############################################################################
 
@@ -173,8 +173,12 @@ class QtDbusMessenger(QObject, BaseMessenger):
             self.mIface = MsgerInterface(self.mBusName, self.mObjPath, self.mIfaceName, self.mSessDBus, rootWidget)
             # add_signal_receiver(), equivalent in Qt is connect()
             ret = self.mSessDBus.connect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self.receiveMsg)
-            #ret = self.mSessDBus.connect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self, QtCore.SLOT('receiveMsg(dict)')) # not working
-            _logger.debug('mSessBus returns: {} mSessBus connected? {}'.format(ret, self.mSessDBus.isConnected()))
+            _logger.debug('mSessBus returns: {} mSessBus connected? {} mIface isValid: {}'.format(ret, self.mSessDBus.isConnected(), self.mIface.isValid()))
+
+    def hasValidDbusConn(self):
+        if self.mSessDBus.isConnected():
+            return self.mIface.isValid()
+        return False
 
     def sendMsg(self, msg):
         """
@@ -185,7 +189,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
                 self.mAdapter.receive.emit(msg) # call receive() to signal client with msg
             else:
                 # called by the CLI/WEB/GUI viewer to send param to server
-                if self.mIface: # and self.mIface.isValid():
+                if self.mIface and self.mIface.isValid():
                     return self.mIface.send(msg)
                 else:
                     raise ReferenceError('Unable to access DBUS exported object')
@@ -209,7 +213,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
         retStatus = {}
         if not self.mIsServer:
             # called by the CLI/WEB/GUI viewer to ask server for current status
-            if self.mIface: #self.mIface.isValid():
+            if self.mIface and self.mIface.isValid():
                 retStatus.update(self.mIface.status())
                 return retStatus
             else:
@@ -233,7 +237,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
         retResults = {}
         if not self.mIsServer:
             # called by the CLI/WEB/GUI viewer to ask server for current status
-            if self.mIface: #self.mIface.isValid():
+            if self.mIface and self.mIface.isValid():
                 retResults.update(self.mIface.result())
                 return retResults
             else:
@@ -249,6 +253,14 @@ class QtDbusMessenger(QObject, BaseMessenger):
                 raise TypeError('Setting result must pass in a dictionary format')
         else:
             raise IOError("This method call is for dbus server only!")
+
+
+
+###############################################################################
+#
+# GuiViewer
+#
+###############################################################################
 
 class GuiViewer(QObject, BaseViewer):
     """
@@ -277,7 +289,7 @@ class GuiViewer(QObject, BaseViewer):
         BaseViewer.__init__(self)
         self.mCmd = {}
         self.mMoreInputs = {}
-        self.mGuiRoot = None
+        self.mGuiRootWidget = None
         self.mGuiRootSignals = []
         if confname:
             self.mUiConfDict = ConvertXmlToDict(confname)
@@ -286,11 +298,14 @@ class GuiViewer(QObject, BaseViewer):
             self.mConfDict = self.mDefConfig.getSettings('gui_viewer')
             self.__parseConf(self.mConfDict['gui_viewer'])
         self.__setupMsger()
+        self.mNetMgr = QtNetwork.QNetworkAccessManager()
+        self.mNetMgr.finished.connect(self._networkResponse)
+        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
 
     def __setupMsger(self):
         # check the DefConfig, and create mMsger as the dbus client
         conf = self.mDefConfig.getSettings(flatten=True)
-        self.mMsger = QtDbusMessenger(conf, self.mGuiRoot, self.response)
+        self.mMsger = QtDbusMessenger(conf, self.mGuiRootWidget, self.response)
 
     ###########################################################################
     # PyQt GUI related
@@ -351,12 +366,12 @@ class GuiViewer(QObject, BaseViewer):
             customlist.append(confdict)
 
         for customconf in customlist:
-            if not all([self._checkCustomWidget(customconf)]):
+            if not all([self.__checkCustomWidget(customconf)]):
                 _logger.error('Not All Custom Widget Classes are supported')
                 return False
         return True
 
-    def _checkCustomWidget(self, customconf):
+    def __checkCustomWidget(self, customconf):
         def get_all_subclasses(c):
             all_subclasses = []
             for subclass in c.__subclasses__():
@@ -378,9 +393,9 @@ class GuiViewer(QObject, BaseViewer):
         if parent is None:
             # set the root Gui elem
             parent = GuiDraw.GenGuiDraw(confdict)
-            self.mGuiRoot = parent
+            self.mGuiRootWidget = parent
             # Window Additional Flags
-            self.mGuiRoot.setWindowFlags(QtCore.Qt.SplashScreen) # | QtCore.Qt.WindowStaysOnTopHint)
+            self.mGuiRootWidget.setWindowFlags(QtCore.Qt.SplashScreen) # | QtCore.Qt.WindowStaysOnTopHint)
         else:
             # takes the old parent, and return itself as the new parent
             parent = GuiDraw.GenGuiDraw(confdict, parent)
@@ -389,29 +404,46 @@ class GuiViewer(QObject, BaseViewer):
         for tag in ['widget', 'layout', 'item', 'action']:
             if tag in confdict.keys():
                 # ensure confdict[tag] into a list
-                taglist = []
+                entrylist = []
                 if isinstance(confdict[tag], XmlDict):
-                    taglist.append(confdict[tag])
+                    entrylist.append(confdict[tag])
                 elif isinstance(confdict[tag], list):
-                    taglist.extend(confdict[tag])
+                    entrylist.extend(confdict[tag])
 
-                # iterate each item and recursive call to create it
-                for entry in taglist:
+                # iterate each item entry and recursive call to create it
+                for entry in entrylist:
                     if tag == 'action':
                         # setup actions, i.e. QAction here
                         entry.update({'class': 'QAction'})
-                        self.__setupUI(entry, self.mGuiRoot)
+                        self.__setupUI(entry, self.mGuiRootWidget)
                     elif 'class' in entry.keys() and entry['class'] == 'QProcessSlot':
-                        # setup other cases, i.e. QProcessSlot, subclasses here
-                        self.__setupUI(entry, self.mGuiRoot)
+                        # setup other customized cases, i.e. QProcessSlot, subclasses here
+                        self.__setupUI(entry, self.mGuiRootWidget)
                     elif 'class' in entry.keys() and 'name' in entry.keys():
+                        # setup other GUI element where a class and a name is set
                         self.__setupUI(entry, parent)
+                    elif tag == 'item':
+                        # setup layout's item
+                        # DIRTY HACK!!! extract item's attributes and setup layout's item with it
+                        passparam = {}
+                        passparam.update(entry)
+                        if 'widget' in entry.keys():
+                            passparam.pop('widget', None)
+                            entry['widget'].update(passparam)
+                            self.__setupUI(entry['widget'], parent)
+                        elif 'layout' in entry.keys():
+                            passparam.pop('layout', None)
+                            entry['layout'].update(passparam)
+                            self.__setupUI(entry['layout'], parent)
                     else:
+                        # Other fall-through cases
                         for k in entry.keys():
-                            if 'class' in entry[k].keys() and 'name' in entry[k].keys():
+                            if isinstance(entry[k], XmlDict) and 'class' in entry[k].keys() and 'name' in entry[k].keys():
+                                _logger.warning('Setup fall through GUI XML entry[{}]: {}'.format(k, entry[k]))
                                 self.__setupUI(entry[k], parent)
                             else:
-                                raise RuntimeError('Error Parsing the GUI Xml')
+                                _logger.warning('Warning: parsing unrecognised GUI XML entry[{}]: {}'.format(k, entry[k]))
+                                # raise RuntimeError('Error Parsing the GUI Xml')
 
     def __validateSlots(self, confdict):
         # Validate that the root widget has the appropriate signal defined.
@@ -421,7 +453,7 @@ class GuiViewer(QObject, BaseViewer):
                     self.mGuiRootSignals.extend(v)
                 else:
                     self.mGuiRootSignals.append(v)
-        if all([hasattr(self.mGuiRoot, i.rstrip('()')) for i in self.mGuiRootSignals]):
+        if all([hasattr(self.mGuiRootWidget, i.rstrip('()')) for i in self.mGuiRootSignals]):
             return True
         else:
             return False
@@ -457,11 +489,11 @@ class GuiViewer(QObject, BaseViewer):
         #
         if isinstance(confdict, list):
             for conn in confdict:
-                self._setupSignals(conn)
+                self.__setupSignals(conn)
         elif isinstance(confdict, XmlDict):
-            self._setupSignals(confdict)
+            self.__setupSignals(confdict)
 
-    def _setupSignals(self, confdict):
+    def __setupSignals(self, confdict):
         if confdict['sender'] in GuiDraw.clsGuiDraws.keys():
             sender = GuiDraw.clsGuiDraws[confdict['sender']]
             signalName = re.sub('\(.*\)', '', confdict['signal'])
@@ -477,18 +509,63 @@ class GuiViewer(QObject, BaseViewer):
                         getattr(sender, signalName).connect(getattr(self.__module__, slotName))
                         _logger.info("connect {}.{} to {}.{}".format(sender.objectName(), signalName, self.__module__, slotName))
 
-    def show(self):
-        # Show the Widgets
-        if isinstance(self.mGuiRoot, QtGui.QWidget):
-            self.mGuiRoot.show()
+    def __checkNetwork(self):
+        url = 'http://rescue.technexion.net'
+        req = QtNetwork.QNetworkRequest(QtCore.QUrl(url))
+        self.mNetMgr.get(req)
 
-        # Emit the signals defined for the root gui element, allowing
-        # the connections to be setup to start the web crawling and storage discovery
+    def _networkResponse(self, reply):
+
+        # Check whether network connect is active and correct
+        if reply.error() != QtNetwork.QNetworkReply.NoError:
+            _logger.error("Network Access Manager Error occured: {}, {}", reply.error(), reply.errorString())
+            # the system does not have a valid network interface and connection
+            ret = QtGui.QMessageBox.critical(self.mGuiRootWidget, 'TechNexion Rescue System', 'Internet not available!!!', QtGui.QMessageBox.Reset|QtGui.QMessageBox.Retry, QtGui.QMessageBox.Retry)
+            if ret == QtGui.QMessageBox.Reset:
+                # reset/reboot the system
+                _logger.critical('Internet not available!!!')
+                sys.exit(1)
+            elif ret == QtGui.QMessageBox.Retry:
+                QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                return
+
+        # Check whether the dbus connection and interface is valid
+        if not self.mMsger.hasValidDbusConn():
+            # the system does not have a valid DBus Session or dbus interface
+            ret = QtGui.QMessageBox.critical(self.mGuiRootWidget, 'TechNexion Rescue System', 'DBus session bus or installer dbus server not available!!!', QtGui.QMessageBox.Reset, QtGui.QMessageBox.Reset)
+            if ret == QtGui.QMessageBox.Reset:
+                # reset/reboot the system
+                _logger.critical('DBus session bus or installer dbus server not available!!!')
+                sys.exit(1)
+
+        # Finally, emit the signals defined for the root gui element, passing
+        # the viewer reference to the QProcessSlots, allowing them to
+        # to setup their request signal to viewer's request. As well as start
+        # the web crawling and storage discovery
         for s in self.mGuiRootSignals:
             signalName = re.sub('\(.*\)', '', s)
-            if hasattr(self.mGuiRoot, signalName):
-                getattr(self.mGuiRoot, signalName)[dict].emit({'viewer': self})
-                _logger.info("emit {}.{}, #slots:{}".format(self.mGuiRoot.objectName(), signalName, self.mGuiRoot.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
+            if hasattr(self.mGuiRootWidget, signalName):
+                getattr(self.mGuiRootWidget, signalName)[dict].emit({'viewer': self})
+                _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
+
+    def setResponseSlot(self, senderSlot):
+        """
+        setup responseSignal to connect back to sender's slot allowing
+        results to go back to sender when response comes back from QtDBus
+        """
+        try:
+            # self.responseSignal.connect(self.sender().resultSlot)
+            self.responseSignal.connect(senderSlot)
+            _logger.info("connect responseSignal to {}.resultSlot.".format(senderSlot))
+        except:
+            _logger.warning("connect responseSignal to {}.resultSlot failed".format(senderSlot))
+
+    def show(self):
+        if isinstance(self.mGuiRootWidget, QtGui.QWidget):
+            self.mGuiRootWidget.show()
+            # Hide additional Widgets
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'textOutput').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
 
     ###########################################################################
     # BaseViewer related
@@ -520,12 +597,8 @@ class GuiViewer(QObject, BaseViewer):
             return False
 
     def _preExec(self):
-        """
-        handles checking slot's sender
-        also have to ensure results goes back to sender when response comes back from QtDBus
-        """
-        _logger.debug("connect responseSignal to {}.resultSlot".format(self.sender().objectName()))
-        self.responseSignal.connect(self.sender().resultSlot)
+#         print('receivers count: {}'.format(self.receivers(QtCore.SIGNAL("responseSignal(PyQt_PyObject)"))))
+#         _printSignatures(self)
         return True
 
     def _mainExec(self):
@@ -556,9 +629,7 @@ class GuiViewer(QObject, BaseViewer):
         A slot called by QProcessSlot's signals to handles command requests which then goes to QtDBus
         1. update the arguments dictionary
         2. parse the command params
-        3. pre-execute the command,
-           check slot's sender, have to ensure results goes back to sender
-           when response comes back from QtDBus
+        3. pre-execute the command, ensure results goes back to sender when response comes back from QtDBus
         4. execute the command
         5. post-exectue if execute command was successful
         """
@@ -573,7 +644,7 @@ class GuiViewer(QObject, BaseViewer):
     @QtCore.pyqtSlot(dict)
     def response(self, result):
         """
-        A slot handles all the dbus receive signal messages from QtDbus
+        This slot handles all the dbus receive signal messages from QtDbus
 
         Check what has come back from the server, and distribute the results
         to appropriate GUI elements / ProcessSlot accordingly
@@ -586,24 +657,6 @@ class GuiViewer(QObject, BaseViewer):
         else:
             pass
 
-            # status == processing or has user_request
-#                 while True:
-#                     # loop to wait for dbus response
-#                     # wait for dbus server response for 25 seconds, same as DBus timeout
-#                     self._waitForEventTimeout(25)
-#                     # handle what is received from the (dbus) server after Response Event is set
-#                     if not self._parseResult():
-#                         if len(self.mMoreInputs):
-#                             _logger.info('get more user inputs: {}'.format(self.mMoreInputs))
-#                             self.mMsger.sendMsg(self.mMoreInputs)
-#                         else:
-#                             # keep query for status while in the processing state, i.e. no new user inputs
-#                             _logger.debug('still processing, so send query_status')
-#                             self.mMsger.sendMsg({'query_status': 'True'})
-#                         continue
-#                     else:
-#                         break
-
     def _parseResult(self, response):
         # do the result parsing here, and convert it into proper
         # recognizable dictionary to send to the receiving slots
@@ -614,12 +667,12 @@ class GuiViewer(QObject, BaseViewer):
                 # if it is a user_request, then get user inputs using GUI objects
                 self._getUserInput(response.pop('user_request'))
                 return False
+            # still processings, and allow the QProcessSlot to decide what to do next
             elif response['status'] == 'processing':
-                # still processings, and allow the QProcessSlot to decide what to do next
-                #response.pop('status')
                 return True
             elif response['status'] == 'success':
-                #response.pop('status')
+                return True
+            elif response['status'] == 'failure':
                 return True
         return False
 
@@ -636,13 +689,10 @@ class GuiViewer(QObject, BaseViewer):
 
 if __name__ == '__main__':
     app = QtGui.QApplication(sys.argv)
-
-    if not QtDBus.QDBusConnection.sessionBus().isConnected():
-        sys.stderr.write("Cannot connect to the D-Bus session bus.\n"
-                "Please check your system settings and try again.\n")
-        sys.exit(1)
-
-    view = GuiViewer('installer.ui' if os.path.isfile('./installer.ui') else '')
+    uifile = ''
+    if os.path.isfile(sys.argv[-1]):
+        uifile = sys.argv[-1]
+    view = GuiViewer(uifile)
     view.show()
 
     sys.exit(app.exec_())
