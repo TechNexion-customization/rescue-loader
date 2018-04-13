@@ -664,8 +664,8 @@ class WebInputOutput(BaseInputOutput):
             endmatter = response.read()
             _logger.debug("Retrieved from {} data size: {} bytes in range {}".format(self.mUrl, len(endmatter), range))
 
-        if self.mCFHandle:
-            return self.mCFHandle.calcRec(endmatter)
+            if self.mCFHandle:
+                return self.mCFHandle.calcRec(endmatter)
         return 0
 
 
