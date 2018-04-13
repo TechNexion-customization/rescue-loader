@@ -1,0 +1,11 @@
+[Unit]
+Description=TechNexion Gui Client Start Up
+After=dbus.service dbus-sess.service installerd.service network-online.target systemd-networkd-wait-online.service systemd-resolved.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/systemd/guiclientd.conf
+ExecStart=/bin/python3 /home/rescue/guiview.py $ARG $UI
+
+[Install]
+WantedBy=multi-user.target
