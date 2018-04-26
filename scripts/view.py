@@ -4,6 +4,7 @@ import abc
 import logging
 from urllib.parse import urlparse
 
+from os import uname
 from os.path import isfile
 from threading import Thread, Event
 #from ConfigParser import ConfigParser # read/write config files
@@ -308,6 +309,10 @@ if __name__ == "__main__":
             return tgtstr
         else:
             if CheckUrl(tgtstr):
+                # --target can be a valid URL host
+                return tgtstr
+            elif tgtstr == uname()[1]:
+                # --target can be the hostname of the local machine
                 return tgtstr
             else:
                 raise argparse.ArgumentTypeError('Invalid Host URL')

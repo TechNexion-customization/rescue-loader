@@ -2,6 +2,8 @@
 
 import abc
 import re
+import os
+import psutil
 import pyudev
 import logging
 from argparse import ArgumentTypeError
@@ -379,9 +381,8 @@ class QueryBlockDevActionModeller(BaseActionModeller):
 #         if len(self.mDisks) > 0:
 #             self.mCtrls = list(set([d.parent for d in self.mDisks if d.parent]))
 #         else:
-        self.mCtrls = list(set([d.parent for d in \
-                               self.mContext.list_devices(subsystem='block', DEVTYPE='disk') \
-                               if (d.find_parent('mmc') or d.find_parent('scsi'))]))
+        self.mCtrls.extend(list(set( [d.parent for d in self.mContext.list_devices(subsystem='block', DEVTYPE='disk') \
+                                     if (d.find_parent('mmc') or d.find_parent('scsi'))] )))
             # self.mCtrls = list(set([d for d in self.context.list_devices(subsystem='mmc')]))
             # self.mCtrls.append(d for d in list(set([d for d in self.context.list_devices(subsystem='scsi')])))
 
@@ -389,11 +390,11 @@ class QueryBlockDevActionModeller(BaseActionModeller):
 #         if len(self.mPartitions) > 0:
 #             self.mDisks = list(set([p.parent for p in self.mPartitions if p.parent]))
 #         else:
-        self.mDisks = list(set([d for d in self.mContext.list_devices(subsystem='block', DEVTYPE='disk') \
-                                   if (d.find_parent('mmc') or d.find_parent('scsi'))]))
+        self.mDisks.extend(list(set( [d for d in self.mContext.list_devices(subsystem='block', DEVTYPE='disk') \
+                                     if (d.find_parent('mmc') or d.find_parent('scsi'))] )))
 
     def __gatherPartitions(self):
-        self.mPartitions = list(d for d in self.mContext.list_devices(subsystem='block', DEVTYPE='partition'))
+        self.mPartitions.extend(list(d for d in self.mContext.list_devices(subsystem='block', DEVTYPE='partition')))
 
     def __extract_info(self, cdev):
         partsinfo = {}
@@ -427,9 +428,13 @@ class QueryBlockDevActionModeller(BaseActionModeller):
                                                'sys_name': d.sys_name, \
                                                'sys_number': d.sys_number, \
                                                'sys_path': d.sys_path, \
-                                               'attributes': self.__getDevAttributes(d)}})
+                                               'attributes': self.__getDevAttributes(d), \
+                                               'id_bus': d.get('ID_BUS'), \
+                                               'id_serial': d.get('ID_SERIAL'), \
+                                               'id_model': d.get('ID_MODEL')}})
                 for p in self.mPartitions:
                     if p.parent == d:
+                        mpt = [m.mountpoint for m in psutil.disk_partitions() if m.device == p.device_node]
                         partsinfo.update({p.sys_name: {'device_node': p.device_node, \
                                                        'device_number': p.device_number, \
                                                        'device_path': p.device_path, \
@@ -439,7 +444,9 @@ class QueryBlockDevActionModeller(BaseActionModeller):
                                                        'sys_name': p.sys_name, \
                                                        'sys_number': p.sys_number, \
                                                        'sys_path': p.sys_path, \
-                                                       'attributes': self.__getDevAttributes(p)}})
+                                                       'attributes': self.__getDevAttributes(p), \
+                                                       'mount_point': mpt[0] if (len(mpt) == 1) else None}})
+
         if 'partitions' in self.mResult.keys() and isinstance(self.mResult['partitions'], dict):
             self.mResult['partitions'].update(partsinfo)
         else:
@@ -563,8 +570,8 @@ class QueryWebFileActionModeller(BaseActionModeller):
     def _BaseActionModeller__preAction(self):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
-        if any(s in self.mParam for s in ['host_name', 'src_directory']):
-            if ('host_name' in self.mParam):
+        if all(s in self.mParam for s in ['host_name', 'src_directory']):
+            if ('host_name' in self.mParam) and self.mParam['host_name'].lower().startswith('http'):
                 self.mWebHost = self.mParam['host_name']
             else:
                 self.mWebHost = 'http://rescue.technexion.net'
@@ -595,9 +602,9 @@ class QueryWebFileActionModeller(BaseActionModeller):
             if 'html' in self.mIO.getFileType():
                 webpage = self.mIO.Read(0, 0)
                 # parse the web pages
-                lstFiles = self.__parseWebPage(webpage)
-                if len(lstFiles) > 0:
-                    self.mResult['file_list'] = lstFiles
+                dctFiles = self.__parseWebPage(webpage)
+                if len(dctFiles) > 0:
+                    self.mResult['file_list'] = dctFiles
                     self.mResult['lines_read'] += len(webpage)
                     return True
             elif 'xz' in self.mIO.getFileType():
@@ -632,6 +639,60 @@ class QueryWebFileActionModeller(BaseActionModeller):
         parser.feed(strPage)
         ret.update(parser.mData)
         return ret
+
+class QueryLocalFileActionModeller(BaseActionModeller):
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+
+    def recoverAction(self):
+        # no need to recover
+        return False
+
+    def _BaseActionModeller__preAction(self):
+        self.mResult['file_list'] = {}
+        if all(s in self.mParam for s in ['local_fs', 'src_directory']):
+            if ('src_directory' in self.mParam):
+                self.mSrcPath = self.mParam['src_directory']
+            else:
+                self.mSrcPath = '/'
+            # search xz files from self.mSrcPath
+            _logger.debug('QueryLocalFile: self.mSrcPath: {}'.format(self.mSrcPath))
+            return True
+        else:
+            return False
+
+    def _BaseActionModeller__mainAction(self):
+        try:
+            for dirpath, dirnames, filenames in os.walk(self.mSrcPath):
+                for file in filenames:
+                    if file.endswith(".xz"):
+                        # setup the web input output
+                        if self.mIO is None:
+                            try:
+                                self.mIO = BlockInputOutput(65535, os.path.join(dirpath, file))
+                                if self.mIO and 'xz' in self.mIO.getFileType():
+                                    self.mResult['file_list'].update({file: {'file_name': file, \
+                                                                             'file_path': os.path.join(dirpath, file), \
+                                                                             'total_size': self.mIO.getFileSize(), \
+                                                                             'total_uncompressed': self.mIO.getUncompressedSize()}})
+                                    del self.mIO
+                                    self.mIO = None
+                                else:
+                                    self.mResult['file_list'].update({file: {'file_name': file, \
+                                                                             'file_path': os.path.join(dirpath, file)}})
+                            except Exception:
+                                _logger.error('Cannot create BlockInputOutput with {}'.format(self.mSrcPath))
+                                raise
+                        _logger.debug('QueryLocalFile: {}: {}'.format(file, os.path.join(dirpath, file)))
+            return True
+        except Exception as ex:
+            _logger.error('Exception: {}'.format(ex))
+            raise
+        return False
+
+    def _BaseActionModeller__postAction(self):
+        return True
 
 
 

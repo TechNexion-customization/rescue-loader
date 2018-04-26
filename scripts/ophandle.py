@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import abc
 import logging
 from threading import Thread, Event
@@ -9,6 +10,7 @@ from model import CopyBlockActionModeller, \
                   QueryBlockDevActionModeller, \
                   WebDownloadActionModeller, \
                   QueryWebFileActionModeller, \
+                  QueryLocalFileActionModeller, \
                   BaseActionModeller
 import urllib.parse
 
@@ -215,7 +217,7 @@ class FlashOperationHandler(BaseOperationHandler):
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         else:
-            raise SyntaxError('Invalid Operation Parameters')
+            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
         _logger.debug('__parseParam: {}'.format(OpParams))
@@ -273,9 +275,11 @@ class InfoOperationHandler(BaseOperationHandler):
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(QueryFileActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
+            self.mActionModellers.append(QueryLocalFileActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         else:
-            raise SyntaxError('Invalid Operation Parameters')
+            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
         _logger.debug('__parseParam: OpParam:{}'.format(OpParams))
@@ -296,8 +300,10 @@ class InfoOperationHandler(BaseOperationHandler):
                     elif k==i and v=='hd':
                         # check for the correct /dev/sd[x] path and set it
                         self.mActionParam['tgt_type'] = 'sd'
-                    elif k=='target' and v.startswith('http'):
+                    elif k==i and v.startswith('http'):
                         self.mActionParam['host_name'] = v # web host address
+                    elif k==i and v == os.uname()[1]:
+                        self.mActionParam['local_fs'] = v # local file system
                     elif k==i and v=='spl':
                         self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
                     elif k==i and v=='bootloader':
@@ -328,6 +334,9 @@ class InfoOperationHandler(BaseOperationHandler):
             _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
             return True
         elif all(s in self.mActionParam.keys() for s in ['host_name', 'src_directory']):
+            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            return True
+        elif all(s in self.mActionParam.keys() for s in ['local_fs', 'src_directory']):
             _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
             return True
         elif all(s in self.mActionParam.keys() for s in ['src_filename', 're_pattern']):
@@ -367,7 +376,7 @@ class DownloadOperationHandler(BaseOperationHandler):
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         else:
-            raise SyntaxError('Invalid Operation Parameters')
+            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
         _logger.debug('__parseParam: {}'.format(OpParams))
@@ -562,6 +571,11 @@ if __name__ == "__main__":
     webparam = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
     if (infoobj.isOpSupported(webparam)):
         infoobj.performOperation(webparam, Event())
+
+    fsparam = {'cmd': 'info', 'target': 'PoMachine', 'location': '/home/po/Downloads/'} #dwarf-hdmi/'}
+    if (infoobj.isOpSupported(fsparam)):
+        infoobj.performOperation(fsparam) #, Event())
+    print(infoobj.getStatus())
 
     dlobj = DownloadOperationHandler(opcb)
     # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
