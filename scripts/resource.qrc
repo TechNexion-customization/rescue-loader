@@ -1,11 +1,20 @@
 <RCC>
   <qresource prefix="res/">
-    <file>images/NewTux.png</file>
-    <file>images/micro_sd_recover.png</file>
-    <file>images/android.png</file>
+    <file>images/storage_ata.svg</file>
+    <file>images/storage_usb.svg</file>
+    <file>images/storage_emmc.svg</file>
+    <file>images/storage_sd.svg</file>
+    <file>images/display.svg</file>
+    <file>images/board_dwarf.svg</file>
+    <file>images/board_hobbit.svg</file>
+    <file>images/board_nymph.svg</file>
+    <file>images/board_pi.svg</file>
+    <file>images/os_android.svg</file>
+    <file>images/os_androidthings.svg</file>
+    <file>images/os_tux.svg</file>
+    <file>images/os_ubuntu.svg</file>
+    <file>images/os_yocto.svg</file>
     <file>images/company_name_small.png</file>
     <file>images/did_you_know1.png</file>
-    <file>images/ubuntu.png</file>
-    <file>images/yocto.png</file>
   </qresource>
 </RCC>
