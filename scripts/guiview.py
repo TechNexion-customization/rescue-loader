@@ -5,9 +5,9 @@ import os
 import sys
 import logging
 import defconfig
-from gui import GuiDraw
+from guidraw import GuiDraw
 from xmldict import XmlDict, ConvertXmlToDict
-from defconfig import DefConfig
+from defconfig import DefConfig, SetupLogging
 from messenger import BaseMessenger
 from view import BaseViewer
 
@@ -16,13 +16,9 @@ from PyQt4 import QtCore, QtDBus, QtGui
 from PyQt4.QtCore import QObject
 
 # get the handler to the current module, and setup logging options
+SetupLogging('/tmp/installer_gui.log')
 _logger = logging.getLogger(__name__)
-
-
-def _printSignatures(qobj):
-    metaobject = qobj.metaObject()
-    for i in range(metaobject.methodCount()):
-        _logger.warning('{} metaobject signature: {}'.format(qobj, metaobject.method(i).signature()))
+_logger.setLevel(logging.DEBUG)
 
 
 
@@ -298,8 +294,12 @@ class GuiViewer(QObject, BaseViewer):
             self.mConfDict = self.mDefConfig.getSettings('gui_viewer')
             self.__parseConf(self.mConfDict['gui_viewer'])
         self.__setupMsger()
+
+        # for checking network connectivity
         self.mNetMgr = QtNetwork.QNetworkAccessManager()
+        # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
         self.mNetMgr.finished.connect(self._networkResponse)
+        # signal once after 1000ms to check network connectivity
         QtCore.QTimer.singleShot(1000, self.__checkNetwork)
 
     def __setupMsger(self):
@@ -354,6 +354,23 @@ class GuiViewer(QObject, BaseViewer):
         # slots = defines the signal name and slot method for the custom class,
         #         we must check if these signals/slots are available in our python class
         #
+        def check_custom_widget(cconf):
+            def get_all_subclasses(c):
+                all_subclasses = []
+                for subclass in c.__subclasses__():
+                    all_subclasses.append(subclass)
+                    all_subclasses.extend(get_all_subclasses(subclass))
+                return all_subclasses
+
+            for subcls in get_all_subclasses(QtGui.QWidget):
+                if cconf['class'] == subcls.__name__:
+                    subcls = subcls
+                    slotlist = cconf['slots']['slot'] if isinstance(cconf['slots']['slot'], list) \
+                                                            else [cconf['slots']['slot']]
+                    if all([hasattr(subcls, slot.rstrip('()')) for slot in slotlist]):
+                        return True
+            return False
+
         customlist = []
         if isinstance(confdict, list):
             # loop through each customwidget to see if we have them supported
@@ -366,27 +383,10 @@ class GuiViewer(QObject, BaseViewer):
             customlist.append(confdict)
 
         for customconf in customlist:
-            if not all([self.__checkCustomWidget(customconf)]):
+            if not all([check_custom_widget(customconf)]):
                 _logger.error('Not All Custom Widget Classes are supported')
                 return False
         return True
-
-    def __checkCustomWidget(self, customconf):
-        def get_all_subclasses(c):
-            all_subclasses = []
-            for subclass in c.__subclasses__():
-                all_subclasses.append(subclass)
-                all_subclasses.extend(get_all_subclasses(subclass))
-            return all_subclasses
-
-        for subcls in get_all_subclasses(QtGui.QWidget):
-            if customconf['class'] == subcls.__name__:
-                subcls = subcls
-                slotlist = customconf['slots']['slot'] if isinstance(customconf['slots']['slot'], list) \
-                                                        else [customconf['slots']['slot']]
-                if all([hasattr(subcls, slot.rstrip('()')) for slot in slotlist]):
-                    return True
-        return False
 
     def __setupUI(self, confdict, parent=None):
         # if root element, ie. no parent, setup specific way
@@ -487,35 +487,42 @@ class GuiViewer(QObject, BaseViewer):
         # slot = the actual method name
         # hints are for QtDesigner graphics and are ignored here
         #
+        def setup_signals(cfdict):
+            if cfdict['sender'] in GuiDraw.clsGuiDraws.keys():
+                sender = GuiDraw.clsGuiDraws[cfdict['sender']]
+                signalName = re.sub('\(.*\)', '', cfdict['signal'])
+                slotName = re.sub('\(.*\)', '', cfdict['slot'])
+                if hasattr(sender, signalName):
+                    if cfdict['receiver'] in GuiDraw.clsGuiDraws.keys():
+                        receiver = GuiDraw.clsGuiDraws[cfdict['receiver']]
+                        if hasattr(receiver, slotName):
+                            getattr(sender, signalName).connect(getattr(receiver, slotName))
+                            _logger.info("connect {}.{} to {}.{}".format(sender.objectName(), signalName, receiver.objectName(), slotName))
+                    else:
+                        if hasattr(self.__module__, slotName):
+                            getattr(sender, signalName).connect(getattr(self.__module__, slotName))
+                            _logger.info("connect {}.{} to {}.{}".format(sender.objectName(), signalName, self.__module__, slotName))
+
         if isinstance(confdict, list):
             for conn in confdict:
-                self.__setupSignals(conn)
+                setup_signals(conn)
         elif isinstance(confdict, XmlDict):
-            self.__setupSignals(confdict)
+            setup_signals(confdict)
 
-    def __setupSignals(self, confdict):
-        if confdict['sender'] in GuiDraw.clsGuiDraws.keys():
-            sender = GuiDraw.clsGuiDraws[confdict['sender']]
-            signalName = re.sub('\(.*\)', '', confdict['signal'])
-            slotName = re.sub('\(.*\)', '', confdict['slot'])
-            if hasattr(sender, signalName):
-                if confdict['receiver'] in GuiDraw.clsGuiDraws.keys():
-                    receiver = GuiDraw.clsGuiDraws[confdict['receiver']]
-                    if hasattr(receiver, slotName):
-                        getattr(sender, signalName).connect(getattr(receiver, slotName))
-                        _logger.info("connect {}.{} to {}.{}".format(sender.objectName(), signalName, receiver.objectName(), slotName))
-                else:
-                    if hasattr(self.__module__, slotName):
-                        getattr(sender, signalName).connect(getattr(self.__module__, slotName))
-                        _logger.info("connect {}.{} to {}.{}".format(sender.objectName(), signalName, self.__module__, slotName))
 
+
+    ###########################################################################
+    # GuiViewer flow control related
+    ###########################################################################
     def __checkNetwork(self):
+        # use QtNetwork NAMger to send a request to technexion's rescue server
+        # when the request is finished, NAMger will signal its "finish" signal
+        # which calls back to self._networkResponse() with reply
         url = 'http://rescue.technexion.net'
         req = QtNetwork.QNetworkRequest(QtCore.QUrl(url))
         self.mNetMgr.get(req)
 
     def _networkResponse(self, reply):
-
         # Check whether network connect is active and correct
         if reply.error() != QtNetwork.QNetworkReply.NoError:
             _logger.error("Network Access Manager Error occured: {}, {}", reply.error(), reply.errorString())
@@ -545,6 +552,7 @@ class GuiViewer(QObject, BaseViewer):
         for s in self.mGuiRootSignals:
             signalName = re.sub('\(.*\)', '', s)
             if hasattr(self.mGuiRootWidget, signalName):
+                # root widget's initialised.emit() signal passing {'viewer': self} to all QProcessSlots
                 getattr(self.mGuiRootWidget, signalName)[dict].emit({'viewer': self})
                 _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
 
@@ -552,6 +560,7 @@ class GuiViewer(QObject, BaseViewer):
         """
         setup responseSignal to connect back to sender's slot allowing
         results to go back to sender when response comes back from QtDBus
+        called by QProcessSlot's processSlot() slot
         """
         try:
             # self.responseSignal.connect(self.sender().resultSlot)
@@ -564,7 +573,10 @@ class GuiViewer(QObject, BaseViewer):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
             self.mGuiRootWidget.show()
             # Hide additional Widgets
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lineRescueServer').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'textOutput').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabRescue').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
 
     ###########################################################################
