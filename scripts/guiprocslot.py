@@ -797,7 +797,7 @@ class chooseImageSlot(QProcessSlot):
         # so, check for valid storage to flash selected Url file here
         if self.mUrl and isinstance(self.mUrl, str):
             for item in self.mResults:
-                if self.mUrl in item['url']:
+                if self.mUrl.replace('/', '_') in item['url'] or self.mUrl in item['url']:
                     _logger.warning('validateResult found matched download URL: {}'.format(item['url']))
                     self.success.emit(item)
                     self._findChildWidget('tabChoose').hide()
@@ -982,7 +982,7 @@ class downloadImageSlot(QProcessSlot):
             self.mFlashFlag = False
 
     def validateResult(self):
-        print('validateResult: {}'.format(self.mResults))
+        _logger.debug('validateResult: {}'.format(self.mResults))
         # Check for flash complete
         # Check for available storage disk in the self.mResult list
         if isinstance(self.mResults, dict) and (self.mResults['status'] == 'success' or self.mResults['status'] == 'failure'):

@@ -569,8 +569,15 @@ class GuiViewer(QObject, BaseViewer):
         except:
             _logger.warning("connect responseSignal to {}.resultSlot failed".format(senderSlot))
 
-    def show(self):
+    def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
+            self.mGuiRootWidget.setGeometry(scnRect)
+            if (scnRect.width() / 4) > 100 and (scnRect.height() / 4) > 100:
+                # 100x100 pixels are the icon default size
+                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
+                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
+                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
+                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
             self.mGuiRootWidget.show()
             # Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lineRescueServer').hide()
@@ -705,6 +712,6 @@ if __name__ == '__main__':
     if os.path.isfile(sys.argv[-1]):
         uifile = sys.argv[-1]
     view = GuiViewer(uifile)
-    view.show()
+    view.show(app.desktop().screenGeometry())
 
     sys.exit(app.exec_())
