@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="res/">
+    <file>images/tn_logo.svg</file>
+    <file>images/tn_bar.svg</file>
     <file>images/os_rescue.svg</file>
     <file>images/storage_ata.svg</file>
     <file>images/storage_usb.svg</file>
@@ -15,7 +17,6 @@
     <file>images/os_tux.svg</file>
     <file>images/os_ubuntu.svg</file>
     <file>images/os_yocto.svg</file>
-    <file>images/company_name_small.png</file>
     <file>images/did_you_know1.png</file>
   </qresource>
 </RCC>
