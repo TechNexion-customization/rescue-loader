@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import pdb
+
 from view import CliViewer
-from guiprocslot import QProcessSlot
+from guiprocslot import QProcessSlot, QWaitingIndicator
 from PyQt4 import QtGui, QtCore
 
 # import our resource.py with all the pretty images/icons
@@ -79,6 +81,11 @@ class GuiDraw(object):
                     # create the QProcessSlot's sub class object
                     _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
                     cls.clsGuiDraws.update({confdict['name']: QProcessSlot.GenSlot(confdict, parent)})
+
+                elif confdict['class'] == 'QWaitingIndicator':
+                    # create the QProcessSlot's sub class object
+                    _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
+                    cls.clsGuiDraws.update({confdict['name']: QWaitingIndicator(confdict, parent)})
 
                 elif hasattr(QtGui, confdict['class']) or confdict['class'] == 'Line':
                     # DIRTY HACK for drawing h/v line in QtDesigner with condition checking confdict['class'] == 'Line'
@@ -247,7 +254,7 @@ class GuiDraw(object):
                 elif prop['name'] == 'pixmap':
                     # Icon in QLabel
                     if isinstance(prop['pixmap'], dict):
-                        qobj.setPixmap(QtGui.QPixmap(prop['pixmap']['_text']))
+                        qobj.setPixmap(QtGui.QPixmap(QtGui.QImage(prop['pixmap']['_text'])))
                     else:
                         qobj.setPixmap(QtGui.QPixmap(prop['pixmap']))
                 elif prop['name'] == 'alignment':
@@ -360,6 +367,14 @@ class GuiDraw(object):
                     font.setItalic(False if ('italic' in prop['font'] and prop['font']['italic'] == 'false') else True)
                     font.setBold(False if ('bold' in prop['font'] and prop['font']['bold'] == 'false') else True)
                     qobj.setFont(font)
+
+                # QWaitingIndicator
+                elif prop['name'] == 'nodeCount':
+                    qobj.setNodeCount(int(prop['number']))
+                elif prop['name'] == 'nodeSize':
+                    qobj.setNodeSize(int(prop['number']))
+                elif prop['name'] == 'radius':
+                    qobj.setRadius(int(prop['number']))
 
                 # QTableWidget
                 elif prop['name'] == 'rowCount':

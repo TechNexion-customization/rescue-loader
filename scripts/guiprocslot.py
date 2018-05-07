@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import pdb
+
 import re
 import os
-from math import log
+import math
 from urllib.parse import urlparse
 from PyQt4 import QtGui, QtCore, QtSvg
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -19,7 +21,7 @@ def _printSignatures(qobj):
         _logger.warning('{} metaobject signature: {}'.format(qobj, metaobject.method(i).signature()))
 
 def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
-    r,f=min(int(log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
+    r,f=min(int(math.log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
     return (f%(abs(r%(-r-1)),pre[r],u)).format(n*b**pow/b**float(r))
 
 def _insertToContainer(lstResult, qContainer, qSignal):
@@ -171,6 +173,8 @@ def _insertToContainer(lstResult, qContainer, qSignal):
         qContainer.show()
 
     return True
+
+
 
 ###############################################################################
 #
@@ -996,3 +1000,73 @@ class downloadImageSlot(QProcessSlot):
             if ret == QtGui.QMessageBox.Reset:
                 # reset/reboot the system
                 os.system("reboot")
+
+
+class QWaitingIndicator(QtGui.QWidget):
+    def __init__(self, confdict, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+
+        palette = QtGui.QPalette(self.palette())
+        palette.setColor(palette.Background, QtCore.Qt.transparent)
+        self.setPalette(palette)
+        self.mNodeCnt = 6
+        self.mNodeSize = 10
+        self.mRadius = 30
+        self.mInterval = 100
+
+    def nodeCount(self):
+        return self.mNodeCnt
+
+    def setNodeCount(self, nodeCount):
+        self.mNodeCnt = nodeCount if (nodeCount > 0) else 6
+
+    def nodeSize(self):
+        return self.mNodeSize
+
+    def setNodeSize(self, pxSize):
+        self.mNodeSize = pxSize if (pxSize > 0) else 10
+
+    def radius(self):
+        return self.mRadius
+
+    def setRadius(self, pxRadius):
+        self.mRadius = pxRadius if (pxRadius > 0) else 30
+
+    def interval(self):
+        return self.mInterval
+
+    def setInterval(self, msInterval):
+        self.mInterval = msInterval if (msInterval > 0) else 100
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.fillRect(event.rect(), QtGui.QBrush(QtGui.QColor(63, 63, 63, 127)))
+        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+
+        for i in range(self.mNodeCnt):
+            if (self.mCounter % self.mNodeCnt) == i:
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 63, 63)))
+            else:
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(63, 63, 63)))
+
+            painter.drawEllipse(self.width() / 2 + (self.mRadius * math.cos(2 * math.pi * i / self.mNodeCnt) - 10), \
+                                self.height() / 2 + (self.mRadius * math.sin(2 * math.pi * i / self.mNodeCnt) - 10), \
+                                self.mNodeSize, \
+                                self.mNodeSize)
+
+        painter.end()
+
+    def showEvent(self, event):
+        if self.parent():
+            self.setGeometry(0, 0, self.parent().width(), self.parent().height())
+        self.timer = self.startTimer(self.mInterval)
+        self.mCounter = 0
+
+    def hideEvent(self, event):
+        self.killTimer(self.timer)
+
+    def timerEvent(self, event):
+        self.mCounter += 1
+        self.update() # cause re-painting

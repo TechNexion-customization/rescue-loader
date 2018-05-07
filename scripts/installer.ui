@@ -118,7 +118,7 @@
        </widget>
       </item>
       <item row="0" column="2">
-       <widget class="QListWidget" name="lstWgtOS">
+       <widget class="QListWidget" name="lstWgtDisplay">
         <property name="styleSheet">
          <string notr="true">background: transparent</string>
         </property>
@@ -149,7 +149,7 @@
        </widget>
       </item>
       <item row="0" column="4">
-       <widget class="QListWidget" name="lstWgtDisplay">
+       <widget class="QListWidget" name="lstWgtOS">
         <property name="styleSheet">
          <string notr="true">background: transparent</string>
         </property>
@@ -391,6 +391,25 @@
     </rect>
    </property>
   </widget>
+  <widget class="QWaitingIndicator" name="waitingIndicator" native="true">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>300</width>
+     <height>300</height>
+    </rect>
+   </property>
+   <property name="nodeCount">
+    <number>18</number>
+   </property>
+   <property name="nodeSize">
+    <number>20</number>
+   </property>
+   <property name="radius">
+    <number>80</number>
+   </property>
+  </widget>
  </widget>
  <customwidgets>
   <customwidget>
@@ -403,6 +422,12 @@
     <signal>fail()</signal>
     <slot>processSlot()</slot>
    </slots>
+  </customwidget>
+  <customwidget>
+   <class>QWaitingIndicator</class>
+   <extends>QWidget</extends>
+   <header>qwaitingindicator.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>
@@ -606,6 +631,22 @@
    <signal>success()</signal>
    <receiver>chooseImage</receiver>
    <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlWeb</sender>
+   <signal>success()</signal>
+   <receiver>waitingIndicator</receiver>
+   <slot>hide()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>49</x>

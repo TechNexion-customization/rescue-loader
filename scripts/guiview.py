@@ -365,9 +365,11 @@ class GuiViewer(QObject, BaseViewer):
             for subcls in get_all_subclasses(QtGui.QWidget):
                 if cconf['class'] == subcls.__name__:
                     subcls = subcls
-                    slotlist = cconf['slots']['slot'] if isinstance(cconf['slots']['slot'], list) \
-                                                            else [cconf['slots']['slot']]
-                    if all([hasattr(subcls, slot.rstrip('()')) for slot in slotlist]):
+                    if 'slots' in cconf:
+                        slotlist = cconf['slots']['slot'] if isinstance(cconf['slots']['slot'], list) else [cconf['slots']['slot']]
+                        if all([hasattr(subcls, slot.rstrip('()')) for slot in slotlist]):
+                            return True
+                    else:
                         return True
             return False
 
