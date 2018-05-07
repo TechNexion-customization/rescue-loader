@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="res/">
+    <file>images/os_rescue.svg</file>
     <file>images/storage_ata.svg</file>
     <file>images/storage_usb.svg</file>
     <file>images/storage_emmc.svg</file>
