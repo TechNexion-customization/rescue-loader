@@ -765,6 +765,7 @@ class chooseImageSlot(QProcessSlot):
         return lstReturn
 
     def __disableList(self, filteredList):
+        _logger.debug('filtered list: {}'.format(filteredList))
         for ui in self.mBoardList:
             if len(filteredList) and all(ui['board'] not in dlfile.values() for dlfile in filteredList):
                 ui['disable'] = True
@@ -780,6 +781,11 @@ class chooseImageSlot(QProcessSlot):
                 ui['disable'] = True
             else:
                 ui['disable'] = False
+            if len(filteredList) and all(ui['ver'] not in dlfile.values() for dlfile in filteredList):
+                ui['disable'] = True
+            else:
+                ui['disable'] = False
+
 
     def __updateUI(self):
         # update the UI display according to the parsed board/os/ver/display selections from lists of download files
