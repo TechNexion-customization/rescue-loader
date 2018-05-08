@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+#----------------------------------------------------------
+# Gui Viewer
+#
+# Gui Viewer that runs rescue/install GUI program on your
+# target device
+#
+#----------------------------------------------------------
+
 import re
 import os
 import sys
@@ -12,13 +21,13 @@ from messenger import BaseMessenger
 from view import BaseViewer
 
 from PyQt4 import QtNetwork
-from PyQt4 import QtCore, QtDBus, QtGui
+from PyQt4 import QtCore, QtDBus, QtGui, QtSvg
 from PyQt4.QtCore import QObject
 
 # get the handler to the current module, and setup logging options
 SetupLogging('/tmp/installer_gui.log')
 _logger = logging.getLogger(__name__)
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 
 
@@ -43,6 +52,9 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
         '    <signal name="receive">\n'
         '      <arg direction="out" type="a{sv}" name="response"/>\n'
         '    </signal>\n'
+        '    <method name="quit">\n'
+        '      <arg direction="out" type="a{sv}" name="quit"/>\n'
+        '    </method>\n'
         '  </interface>\n'
         '')
 
@@ -132,6 +144,15 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
             return reply.value()
         else:
             return None
+
+    def quit(self):
+        ret = self.asyncCall('quit') # or self.call()
+        reply = QtDBus.QDBusReply(ret)
+        if reply.isValid():
+            return reply.value()
+        else:
+            return None
+
 
 
 class QtDbusMessenger(QObject, BaseMessenger):
@@ -560,7 +581,7 @@ class GuiViewer(QObject, BaseViewer):
 
     def setResponseSlot(self, senderSlot):
         """
-        setup responseSignal to connect back to sender's slot allowing
+        setup responseSignal to connect back to sender's resultSlot() allowing
         results to go back to sender when response comes back from QtDBus
         called by QProcessSlot's processSlot() slot
         """
@@ -573,19 +594,70 @@ class GuiViewer(QObject, BaseViewer):
 
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
+
+            palette = QtGui.QPalette(self.mGuiRootWidget.palette())
+            pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 2, scnRect.height() * 2))
+            brush = QtGui.QBrush(pixmap.scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio))
+            palette.setBrush(QtGui.QPalette.Background, brush)
+            self.mGuiRootWidget.setPalette(palette)
             self.mGuiRootWidget.setGeometry(scnRect)
-            if (scnRect.width() / 4) > 100 and (scnRect.height() / 4) > 100:
-                # 100x100 pixels are the icon default size
-                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
-                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
-                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
-                self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setIconSize(QtCore.QSize(scnRect.width() / 4, scnRect.height() / 4))
+
+            # set the tabTitle widget so that the layout can then be calculated automatically.
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabTitle').setFixedHeight(int(scnRect.height() / 4))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabSpace').setFixedHeight(int(scnRect.height() / 24))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
+            #self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
             self.mGuiRootWidget.show()
-            # Hide additional Widgets
+
+            # setup the icon size for QListWidgets
+            w = scnRect.width() / 3.5 if (scnRect.width() / 3.5) > 100 else 100
+            h = scnRect.height() / 3.5 if (scnRect.height() / 3.5) > 100 else 100
+            # 100x100 pixels are the icon default size
+            iconsize = QtCore.QSize(w, w) if w < h else QtCore.QSize(h, h)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setSpacing(iconsize.width()/4)
+
+            # draw logo according to scale
+            iconLogo = QtGui.QIcon(':/res/images/tn_logo.svg')
+            iconSize = iconLogo.actualSize(QtCore.QSize(100, 100))
+            sizeLogo = QtCore.QSize(self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').size())
+            logoH = int(scnRect.height() / 4) if (scnRect.height() / sizeLogo.height()) < 4 else sizeLogo.height()
+            logoW = int(iconSize.width() * (logoH / iconSize.height()))
+            if (logoW / scnRect.width()) < 3:
+                logoW = int(scnRect.width() / 3)
+                logoH = int(iconSize.height() * (logoW / iconSize.width()))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').setPixmap(iconLogo.pixmap(logoW, logoH))
+
+            # work out the proportion to the selection icons
+            sizeSelect = self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').size()
+            sh = int(scnRect.height() / 4 * 0.8) if (scnRect.height() / sizeSelect.height()) < 4 else sizeSelect.height()
+            if (sh / scnRect.width()) < 10:
+                sh = int(scnRect.width() / 10)
+            smalliconsize = QtCore.QSize(sh, sh)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
+
+            # Show/Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lineRescueServer').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'textOutput').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabRescue').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDoYouKnow').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnNext').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
 
     ###########################################################################

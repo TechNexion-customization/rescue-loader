@@ -1,5 +1,8 @@
 <RCC>
   <qresource prefix="res/">
+    <file>images/tn_arrow.svg</file>
+    <file>images/NoImage.svg</file>
+    <file>images/tn_bg.svg</file>
     <file>images/tn_logo.svg</file>
     <file>images/tn_bar.svg</file>
     <file>images/os_rescue.svg</file>
@@ -8,6 +11,12 @@
     <file>images/storage_emmc.svg</file>
     <file>images/storage_sd.svg</file>
     <file>images/display.svg</file>
+    <file>images/display_hdmi.svg</file>
+    <file>images/display_ttl.svg</file>
+    <file>images/display_lvds.svg</file>
+    <file>images/display_dsi.svg</file>
+    <file>images/display_dpi.svg</file>
+    <file>images/display_vga.svg</file>
     <file>images/board_dwarf.svg</file>
     <file>images/board_hobbit.svg</file>
     <file>images/board_nymph.svg</file>

@@ -9,15 +9,15 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="225.77777mm"
-   height="5.6444416mm"
-   viewBox="0 0 799.99998 19.99999"
-   id="svg4267"
+   width="800"
+   height="480"
+   viewBox="0 0 800.00001 480.00001"
+   id="svg4272"
    version="1.1"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="tn_bar.svg">
+   sodipodi:docname="tn_bg.svg">
   <defs
-     id="defs4269" />
+     id="defs4274" />
   <sodipodi:namedview
      id="base"
      pagecolor="#ffffff"
@@ -25,23 +25,20 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.35"
-     inkscape:cx="273.5714"
-     inkscape:cy="-210"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="240.66799"
+     inkscape:cy="249.00464"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
-     fit-margin-top="0"
-     fit-margin-left="0"
-     fit-margin-right="0"
-     fit-margin-bottom="0"
+     units="px"
      inkscape:window-width="1855"
      inkscape:window-height="1056"
      inkscape:window-x="65"
      inkscape:window-y="24"
      inkscape:window-maximized="1" />
   <metadata
-     id="metadata4272">
+     id="metadata4277">
     <rdf:RDF>
       <cc:Work
          rdf:about="">
@@ -56,18 +53,29 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(597.14283,-302.36221)">
-    <path
-       style="fill:#103770;fill-rule:evenodd;stroke:none;stroke-width:28.22200012;stroke-linejoin:round"
-       inkscape:connector-curvature="0"
-       id="path58"
-       d="m -331.3989,322.3622 -265.74393,0 0,-19.99999 274.51209,0 z"
-       sodipodi:nodetypes="ccccc" />
-    <path
-       style="fill:#b81c22;fill-rule:evenodd;stroke:none;stroke-width:28.22200012;stroke-linejoin:round"
-       inkscape:connector-curvature="0"
-       id="path65"
-       d="m 202.85712,302.36221 0,19.99999 -531.48786,0 8.76817,-19.99999 z"
-       sodipodi:nodetypes="ccccc" />
+     transform="translate(0,-572.36216)">
+    <rect
+       style="opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.58700001;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect4866"
+       width="799"
+       height="479"
+       x="0.5"
+       y="572.86218" />
+    <g
+       style=""
+       id="g4851">
+      <path
+         sodipodi:nodetypes="ccccc"
+         d="m 262.26804,713.36216 -262.26804,0 0,-20 271,0 z"
+         id="path58"
+         inkscape:connector-curvature="0"
+         style="fill:#103770;stroke:none" />
+      <path
+         sodipodi:nodetypes="ccccc"
+         d="m 800,693.36216 0,20 -535,0 8.78646,-20 z"
+         id="path65"
+         inkscape:connector-curvature="0"
+         style="fill:#b81c22;stroke:none" />
+    </g>
   </g>
 </svg>

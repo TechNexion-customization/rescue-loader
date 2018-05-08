@@ -5,7 +5,7 @@ import pdb
 
 from view import CliViewer
 from guiprocslot import QProcessSlot, QWaitingIndicator
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui, QtCore, QtSvg
 
 # import our resource.py with all the pretty images/icons
 import resource
@@ -37,6 +37,31 @@ def _convertList(prop):
         plist.append(prop)
     return plist
 
+def _getAlignment(strAlign):
+    align = QtCore.Qt.AlignLeft
+    if 'AlignLeft' in strAlign or 'AlignLeading' in strAlign:
+        align = QtCore.Qt.AlignLeft
+    elif 'AlignRight' in strAlign or 'AlignTrailing' in strAlign:
+        align = QtCore.Qt.AlignRight
+    elif 'AlignHCenter' in strAlign:
+        align = QtCore.Qt.AlignHCenter
+    elif 'AlignJustify' in strAlign:
+        align = QtCore.Qt.AlignJustify
+    if 'AlignTop' in strAlign:
+        align |= QtCore.Qt.AlignTop
+    elif 'AlignBottom' in strAlign:
+        align |= QtCore.Qt.AlignBottom
+    elif 'AlignVCenter' in strAlign:
+        align |= QtCore.Qt.AlignVCenter
+    if 'AlignCenter' in strAlign:
+        align = QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter
+    if 'AlignAbsolute' in strAlign:
+        align = QtCore.Qt.AlignAbsolute
+    if 'AlignHorizontal_Mask' in strAlign:
+        align = QtCore.Qt.AlignLeft | QtCore.Qt.AlignRight | QtCore.Qt.AlignHCenter | QtCore.Qt.AlignJustify | QtCore.Qt.AlignAbsolute
+    if 'AlignVertical_Mask' in strAlign:
+        align = QtCore.Qt.AlignTop | QtCore.Qt.AlignBottom | QtCore.Qt.AlignVCenter
+    return align
 
 
 ###############################################################################
@@ -83,16 +108,18 @@ class GuiDraw(object):
                     cls.clsGuiDraws.update({confdict['name']: QProcessSlot.GenSlot(confdict, parent)})
 
                 elif confdict['class'] == 'QWaitingIndicator':
-                    # create the QProcessSlot's sub class object
+                    # create the QWaitingIndicator's sub class object
                     _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
                     cls.clsGuiDraws.update({confdict['name']: QWaitingIndicator(confdict, parent)})
 
-                elif hasattr(QtGui, confdict['class']) or confdict['class'] == 'Line':
+                elif hasattr(QtGui, confdict['class']) or hasattr(QtSvg, confdict['class']) or confdict['class'] == 'Line':
                     # DIRTY HACK for drawing h/v line in QtDesigner with condition checking confdict['class'] == 'Line'
 
                     if parent is None:
                         # dynamically add additional class variable, 'initialised' to the root gui class using build-in type()
                         subcls = type(confdict['class'], (getattr(QtGui, confdict['class']),), dict(initialised = QtCore.pyqtSignal([dict])))
+                    elif hasattr(QtSvg, confdict['class']):
+                        subcls = getattr(QtSvg, confdict['class'])
                     else:
                         # get the sub class type from QtGui
                         if confdict['class'] == 'Line':
@@ -146,7 +173,10 @@ class GuiDraw(object):
                                 cs = int(confdict['colspan']) if 'colspan' in confdict else 1
                                 r = int(confdict['row']) if 'row' in confdict else 0
                                 c = int(confdict['column']) if 'column' in confdict else 0
-                                parent.addLayout(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
+                                if 'alignment' in confdict:
+                                    parent.addLayout(cls.clsGuiDraws[confdict['name']], r, c, rs, cs, _getAlignment(confdict['alignment']))
+                                else:
+                                    parent.addLayout(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
                             elif isinstance(parent, QtGui.QBoxLayout):
                                 parent.addLayout(cls.clsGuiDraws[confdict['name']])
 
@@ -161,7 +191,10 @@ class GuiDraw(object):
                                 cs = int(confdict['colspan']) if 'colspan' in confdict else 1
                                 r = int(confdict['row']) if 'row' in confdict else 0
                                 c = int(confdict['column']) if 'column' in confdict else 0
-                                parent.addWidget(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
+                                if 'alignment' in confdict:
+                                    parent.addWidget(cls.clsGuiDraws[confdict['name']], r, c, rs, cs, _getAlignment(confdict['alignment']))
+                                else:
+                                    parent.addWidget(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
                             elif isinstance(parent, QtGui.QBoxLayout):
                                 parent.addWidget(cls.clsGuiDraws[confdict['name']])
 
@@ -189,6 +222,10 @@ class GuiDraw(object):
                 _logger.info('call setupConfig for GUI class:{}'.format(confdict['class']))
                 # setup the widget's configuration
                 cls.setupConfig(cls.clsGuiDraws[confdict['name']], confdict, parent)
+
+                # setup additional items within the Gui Element, e.g. QListWidget, QTreeWidget
+                if 'item' in confdict.keys() and isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QAbstractItemView):
+                    cls.setupItem(cls.clsGuiDraws[confdict['name']], confdict['item'], parent)
 
                 # attribute are for the parent class to set
                 if 'attribute' in confdict.keys() and parent is not None and isinstance(parent, QtGui.QTabWidget):
@@ -218,16 +255,17 @@ class GuiDraw(object):
         Setting up the GUI Element qobj
         """
         def _setupProperty(proplist, parent):
-            _logger.debug('_setupProperty: {}'.format(proplist))
             for prop in proplist:
                 # 2. actual configurations for all UI types in this giant method
-                if prop['name'] == 'sizepolicy':
+
+                # QWidget
+                if prop['name'] == 'sizePolicy':
                     # size policy
                     sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
                     sizePolicy.setHorizontalStretch(0)
                     sizePolicy.setVerticalStretch(0)
-                    sizePolicy.setHeightForWidth(parent.sizePolicy().hasHeightForWidth())
-                    qobj.tabRescue.setSizePolicy(sizePolicy)
+                    #sizePolicy.setHeightForWidth(parent.sizePolicy().hasHeightForWidth())
+                    qobj.setSizePolicy(sizePolicy)
                 elif prop['name'] == 'geometry':
                     # Window Widget Dimension
                     if 'rect' in prop.keys():
@@ -242,10 +280,13 @@ class GuiDraw(object):
                             qobj.setGeometry(QtGui.QDesktopWidget().availableGeometry())
                 elif prop['name'] == 'sizeConstraint':
                     qobj.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
-
                 elif prop['name'] == 'styleSheet':
                     if 'string' in prop.keys():
                         qobj.setStyleSheet(_fromUtf8(prop['string']['_text']))
+                elif prop['name'] == 'autoFillBackground':
+                    qobj.setAutoFillBackground(True if prop['bool'] == 'true' else False)
+                elif prop['name'] == 'toolTip':
+                    qobj.setToolTip(_fromUtf8(prop['string']) if 'string' in prop.keys() else 'No Tip')
 
                 # QLabel
                 elif prop['name'] == 'text':
@@ -253,42 +294,31 @@ class GuiDraw(object):
                     qobj.setText(_fromUtf8(prop['string']) if 'string' in prop.keys() else 'No Text')
                 elif prop['name'] == 'pixmap':
                     # Icon in QLabel
-                    if isinstance(prop['pixmap'], dict):
+                    if isinstance(prop['pixmap'], dict) and '_text' in prop['pixmap'] and prop['pixmap']['_text'].startswith(':/res'):
                         qobj.setPixmap(QtGui.QPixmap(QtGui.QImage(prop['pixmap']['_text'])))
                     else:
                         qobj.setPixmap(QtGui.QPixmap(prop['pixmap']))
+                elif prop['name'] == 'scaledContents':
+                    qobj.setScaledContents(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'alignment':
-                    # Alignment in QLabel
-                    align = QtCore.Qt.AlignLeft
-                    if 'AlignLeading' in prop['set']:
-                        align = QtCore.Qt.AlignLeft
-                    elif 'AlignRight' in prop['set'] or 'AlignTrailing' in prop['set']:
-                        align = QtCore.Qt.AlignRight
-                    elif 'AlignHCenter' in prop['set']:
-                        align = QtCore.Qt.AlignHCenter
-                    elif 'AlignJustify' in prop['set']:
-                        align = QtCore.Qt.AlignJustify
-                    if 'AlignTop' in prop['set']:
-                        align |= QtCore.Qt.AlignTop
-                    elif 'AlignBottom' in prop['set']:
-                        align |= QtCore.Qt.AlignBottom
-                    elif 'AlignVCenter' in prop['set']:
-                        align |= QtCore.Qt.AlignVCenter
-                    if 'AlignAbsolute' in prop['set']:
-                        align = 0x0010
-                    if 'AlignCenter' in prop['set']:
-                        align = QtCore.Qt.AlignVCenter | QtCore.Qt.AlignHCenter
-                    if 'AlignHorizontal_Mask' in prop['set']:
-                        align = QtCore.Qt.AlignLeft | QtCore.Qt.AlignRight | QtCore.Qt.AlignHCenter | QtCore.Qt.AlignJustify | QtCore.Qt.AlignAbsolute
-                    if 'AlignVertical_Mask' in prop['set']:
-                        align = QtCore.Qt.AlignTop | QtCore.Qt.AlignBottom | QtCore.Qt.AlignVCenter
-                    qobj.setAlignment(align)
+                    # Alignment
+                    qobj.setAlignment(_getAlignment(prop['set']))
                 elif prop['name'] == 'readOnly':
                     qobj.setReadOnly(True if prop['bool'] == 'true' else False)
+
                 elif prop['name'] == 'icon':
-                    qobj.setIcon(QtGui.QIcon(QtGui.QPixmap(prop['icon'])))
-                elif prop['name'] == 'toolTip':
-                    qobj.setToolTip(_fromUtf8(prop['string']) if 'string' in prop.keys() else 'No Tip')
+                    if 'normalon' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['normalon']))
+                    if 'normaloff' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['normaloff']))
+                    if 'selectedon' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['selectedon']))
+                    if 'selectedoff' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['selectedoff']))
+                    if 'disabledon' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['disabledon']))
+                    if 'disabledoff' in prop['iconset'].keys():
+                        qobj.setIcon(QtGui.QIcon(prop['iconset']['disabledoff']))
                 elif prop['name'] == 'checkable':
                     qobj.setCheckable(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'editable':
@@ -302,7 +332,7 @@ class GuiDraw(object):
                 elif prop['name'] == 'pageStep':
                     pass
                 elif prop['name'] == 'orientation':
-                    if 'Horitzontal' in prop['enum']:
+                    if 'Horizontal' in prop['enum']:
                         qobj.setOrientation(QtCore.Qt.Horizontal)
                     else:
                         qobj.setOrientation(QtCore.Qt.Vertical)
@@ -368,14 +398,6 @@ class GuiDraw(object):
                     font.setBold(False if ('bold' in prop['font'] and prop['font']['bold'] == 'false') else True)
                     qobj.setFont(font)
 
-                # QWaitingIndicator
-                elif prop['name'] == 'nodeCount':
-                    qobj.setNodeCount(int(prop['number']))
-                elif prop['name'] == 'nodeSize':
-                    qobj.setNodeSize(int(prop['number']))
-                elif prop['name'] == 'radius':
-                    qobj.setRadius(int(prop['number']))
-
                 # QTableWidget
                 elif prop['name'] == 'rowCount':
                     qobj.setRowCount(int(prop['number']))
@@ -427,6 +449,8 @@ class GuiDraw(object):
                         qobj.setFrameShape(QtGui.QFrame.WinPanel)
 
                 # QListView
+                elif prop['name'] == 'uniformItemSizes':
+                    qobj.setUniformItemSizes(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'viewMode':
                     if 'IconMode' in prop['enum']:
                         qobj.setViewMode(QtGui.QListView.IconMode)
@@ -456,6 +480,9 @@ class GuiDraw(object):
                         qobj.setFlow(QtGui.QListView.TopToBottom)
                 elif prop['name'] == 'iconSize':
                     qobj.setIconSize(QtCore.QSize(int(prop['size']['width']), int(prop['size']['height'])))
+                elif prop['name'] == 'flat':
+                    qobj.setFlat(True if prop['bool'] == 'true' else False)
+
                 elif prop['name'] == 'gridSize':
                     qobj.setGridSize(QtCore.QSize(int(prop['size']['width']), int(prop['size']['height'])))
                 elif prop['name'] == 'editTriggers':
@@ -489,6 +516,14 @@ class GuiDraw(object):
                 elif prop['name'] == 'sortingEnabled':
                     qobj.setSortingEnabled(True if prop['bool'] == 'true' else False)
 
+                # QWaitingIndicator
+                elif prop['name'] == 'nodeCount':
+                    qobj.setNodeCount(int(prop['number']))
+                elif prop['name'] == 'nodeSize':
+                    qobj.setNodeSize(int(prop['number']))
+                elif prop['name'] == 'radius':
+                    qobj.setRadius(int(prop['number']))
+
         # 1. setup name (common to all Qt widgets)
         if 'name' in confdict:
             qobj.setObjectName(_fromUtf8(confdict['name']))
@@ -497,6 +532,65 @@ class GuiDraw(object):
         if 'property' in confdict:
             # 2. setup GUI element's properties
             _setupProperty(_convertList(confdict['property']), parent)
+
+    @classmethod
+    def setupItem(cls, qobj, confdict, parent=None):
+        """
+        Sets up items for Container, i.e. QListWidget, QTreeWidget, etc
+        """
+        for prop in confdict:
+            lstItem = QtGui.QListWidgetItem()
+            for item in prop['property']:
+                if item['name'] == 'text':
+                    if qobj.objectName() == 'lstWgtSelection':
+                        lstItem.setData(QtCore.Qt.UserRole, item['string'])
+                    else:
+                        lstItem.setText(item['string'])
+                elif item['name'] == 'icon':
+                    if 'normalon' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['normalon']))
+                    elif 'normaloff' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['normaloff']))
+                    elif 'selectedon' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['selectedon']))
+                    elif 'selectedoff' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['selectedoff']))
+                    elif 'disabledon' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['disabledon']))
+                    elif 'disabledoff' in item['iconset'].keys():
+                        lstItem.setIcon(QtGui.QIcon(item['iconset']['disabledoff']))
+                elif item['name'] == 'checkState':
+                    if item['enum'] == 'Unchecked':
+                        lstItem.setCheckState(QtCore.Qt.Unchecked)
+                    elif item['enum'] == 'PartiallyChecked':
+                        lstItem.setCheckState(QtCore.Qt.PartiallyChecked)
+                    elif item['enum'] == 'Checked':
+                        lstItem.setCheckState(QtCore.Qt.Checked)
+                elif item['name'] == 'toolTip':
+                    lstItem.setToolTip(item['string']['_text'])
+                elif item['name'] == 'statusTip':
+                    lstItem.setToolTip(item['string']['_text'])
+                elif item['name'] == 'whatsThis':
+                    lstItem.setToolTip(item['string']['_text'])
+                elif item['name'] == 'textAlignment':
+                    lstItem.setTextAlignment(_getAlignment(item['set']))
+                elif item['name'] == 'flags':
+                    if 'ItemIsSelectable' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsSelectable)
+                    elif 'ItemIsEditable' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsEditable)
+                    elif 'ItemIsDragEnabled' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsDragEnabled)
+                    elif 'ItemIsDropEnabled' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsDropEnabled)
+                    elif 'ItemIsUserCheckable' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    elif 'ItemIsEnabled' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsEnabled)
+                    elif 'ItemIsTristate' in item['set']:
+                        lstItem.setFlags(lstItem.flags() | QtCore.Qt.ItemIsTristate)
+
+            qobj.addItem(lstItem)
 
     @classmethod
     def setupTableHeader(cls, qobj, confdict, parent=None):
