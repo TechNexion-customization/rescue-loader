@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os
+import socket
 import abc
 import logging
 from threading import Thread, Event
@@ -302,7 +302,7 @@ class InfoOperationHandler(BaseOperationHandler):
                         self.mActionParam['tgt_type'] = 'sd'
                     elif k==i and v.startswith('http'):
                         self.mActionParam['host_name'] = v # web host address
-                    elif k==i and v == os.uname()[1]:
+                    elif k==i and v == socket.gethostname():
                         self.mActionParam['local_fs'] = v # local file system
                     elif k==i and v=='spl':
                         self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
@@ -319,7 +319,7 @@ class InfoOperationHandler(BaseOperationHandler):
                     elif k=='location' and v.startswith('/') and v.endswith('xz'):
                         self.mActionParam['src_directory'] = v # directory/folder
                     elif k==i and v=='som':
-                        self.mActionParam['src_filename'] = '/proc/device-tree/model' # './model'
+                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
                         self.mActionParam['re_pattern'] = '\w+\ (\w+)-(imx\w+|IMX\w+).+\ (\w+)\ baseboard'
                     elif k==i and v=='cpu':
                         self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'

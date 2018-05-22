@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pdb
-
 import re
 import os
 import math
+import socket
 from urllib.parse import urlparse
 from PyQt4 import QtGui, QtCore, QtSvg
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -500,7 +499,7 @@ class crawlLocalfsSlot(QProcessSlot):
         Handle crawling xz files from inputs, i.e. lists of mount points
         """
         # make up the request params
-        params = {'target': os.uname()[1]}
+        params = {'target': socket.gethostname()}
         if isinstance(inputs, list):
             if len(inputs) == 0:
                 inputs.append('~/')
