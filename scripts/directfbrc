@@ -1,3 +1,8 @@
 # directfb configuration
 system=fbdev
 fbdev=/dev/fb0
+# don't use signal handler because it causes core dump
+# when exit directFB, consequently guiclientd.service does
+# not stop properly during system reboot
+no-sighandler
+

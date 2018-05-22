@@ -12,7 +12,11 @@
 import re
 import os
 import sys
+import time
+import signal
+import socket
 import logging
+import subprocess
 import defconfig
 from guidraw import GuiDraw
 from xmldict import XmlDict, ConvertXmlToDict
@@ -20,9 +24,8 @@ from defconfig import DefConfig, SetupLogging
 from messenger import BaseMessenger
 from view import BaseViewer
 
-from PyQt4 import QtNetwork
-from PyQt4 import QtCore, QtDBus, QtGui, QtSvg
-from PyQt4.QtCore import QObject
+from PyQt4 import QtNetwork, QtCore, QtDBus, QtGui, QtSvg
+from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
 
 # get the handler to the current module, and setup logging options
 SetupLogging('/tmp/installer_gui.log')
@@ -33,10 +36,111 @@ _logger.setLevel(logging.INFO)
 
 ###############################################################################
 #
+# Signal Handler
+#
+###############################################################################
+class SignalHandler(QtNetwork.QAbstractSocket):
+    # Normally Python capture SIGTERM and exit, but PyQt's mainloop stops that
+    # hence, setup signal.SIGTERM to quit QApplication gracefully
+    # This way, when system reboots, the systemd queued stop job for stopping
+    # guiclientd.service wouldn't take too long.
+    signalReceived = QtCore.pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(QtNetwork.QAbstractSocket.UdpSocket, parent)
+        self.mActivatedFlag = False
+        self.mNotifier = None
+        self.mTimer = QtCore.QTimer(self)
+        self.mOrigSignalHandlers = {}
+        self.mOrigWakeupFd = None
+
+    def activate(self, unixSignals, handlerSlot, UseTimer=False):
+        """
+        Set up signal handlers.
+        - For OS without a Socket Pair, use a QTimer to periodically hand control
+        from Qt mainloop (C++) over to Python so it can handle signals.
+        - For OS with QSocketNotifier/QAbstractSocket, it uses a
+        QSocketNotifier/QAbstractSocket with signal.set_wakeup_fd to get notified.
+        """
+        if isinstance(unixSignals, list) and len(unixSignals):
+            if callable(handlerSlot):
+                self.signalReceived.connect(handlerSlot)
+
+            for sig in unixSignals:
+                # setup new handler using signal.signal(), and it returns origin unix signal handler
+                self.mOrigSignalHandlers[sig] = signal.signal(sig, self.interrupt)
+                print('capture signal {} original handler {}'.format(sig, self.mOrigSignalHandlers[sig]))
+
+            if not UseTimer and hasattr(signal, 'set_wakeup_fd'):
+                print('socket pair setup')
+                # get a pair of file descriptors from creating a socket pair
+                self.wsock, self.rsock = socket.socketpair(type=socket.SOCK_DGRAM)
+                # Let Qt AbstractSocket listen on the one end
+                self.setSocketDescriptor(self.rsock.fileno())
+                # Un-blocking the write socket and let Python write on the other end
+                self.wsock.setblocking(False)
+                # Set the wakeup file descriptor to fd. When a signal is received,
+                # the signal number is written as a single byte into the fd.
+                self.mOrigWakeupFd = signal.set_wakeup_fd(self.wsock.fileno())
+                # setup the AbstractSocket's readyRead signal to handleSignalWakeup slot
+                self.readyRead.connect(lambda : None) # the first time connect generates exception
+                self.readyRead.connect(self.handleSignalWakeup)
+            else:
+                # Dirty timer hack to get timer slice from mainloop (MS-Windows)
+                print('dirty hack - timer setup')
+                self.mTimer.timeout.connect(lambda: None)
+                self.mTimer.start(1000)
+
+            self.mActivatedFlag = True
+
+    def deactivate(self):
+        """
+        Deactivate all signal handlers.
+        """
+        if not self.mActivatedFlag:
+            return
+
+        # Restore any old handler on deletion
+        if self.mOrigWakeupFd is not None and hasattr(signal, 'set_wakeup_fd'):
+            signal.set_wakeup_fd(self.mOrigWakeupFd)
+
+        # restore original signal handler
+        for sig, origHandler in self.mOrigSignalHandlers.items():
+            signal.signal(sig, origHandler)
+
+        # stop the timer slicing
+        self.mTimer.stop()
+        self.mActivatedFlag = False
+
+    @pyqtSlot()
+    def handleSignalWakeup(self):
+        """
+        Handle a newly arrived signal.
+        This gets called via self.mNotifier when there's a signal.
+        Python will get control here, so the signal will get handled.
+        """
+        # Read the written byte.
+        # Note: readyRead is blocked from occuring again until readData() was called,
+        #       so call it, even if you don't need the value.
+        data = self.readData(1)
+        _logger.warning('Handling signal wakeup! read data on rsock: {}'.format(data))
+
+    def interrupt(self, signum, stackframe):
+        """
+        Handler for signals to gracefully shutdown (SIGINT/SIGTERM).
+        """
+        data = self.readData(1)
+        _logger.warning('Received Unix Signal:{} read data: {}...'.format(signum, data[0]))
+        # Emit a Qt signal for convenience
+        self.signalReceived.emit(int(data[0]))
+
+
+
+###############################################################################
+#
 # DBus
 #
 ###############################################################################
-
 
 class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
     QtCore.Q_CLASSINFO("D-Bus Interface", 'com.technexion.dbus.interface')
@@ -780,12 +884,19 @@ class GuiViewer(QObject, BaseViewer):
         return self.mMsger.getResult()
 
 
+
 if __name__ == '__main__':
+
     app = QtGui.QApplication(sys.argv)
+    sighdl = SignalHandler(app)
+    sighdl.activate([signal.SIGTERM, signal.SIGUSR1], app.exit)
+
     uifile = ''
     if os.path.isfile(sys.argv[-1]):
         uifile = sys.argv[-1]
     view = GuiViewer(uifile)
     view.show(app.desktop().screenGeometry())
 
-    sys.exit(app.exec_())
+    ret = app.exec_()
+    sighdl.deactivate()
+    sys.exit(ret)

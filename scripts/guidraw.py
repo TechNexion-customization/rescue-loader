@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pdb
-
 from view import CliViewer
 from guiprocslot import QProcessSlot, QWaitingIndicator
 from PyQt4 import QtGui, QtCore, QtSvg
