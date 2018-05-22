@@ -793,13 +793,9 @@ class GuiViewer(QObject, BaseViewer):
         else:
             return False
 
-    def _preExec(self):
-#         print('receivers count: {}'.format(self.receivers(QtCore.SIGNAL("responseSignal(PyQt_PyObject)"))))
-#         _printSignatures(self)
-        return True
-
     def _mainExec(self):
         """
+        override BaseViewer::_mainExec()
         Send the actual dbus commands
         """
         try:
@@ -813,12 +809,6 @@ class GuiViewer(QObject, BaseViewer):
         except Exception as ex:
             _logger.info('Error: {}'.format(ex))
         return False
-
-    def _postExec(self):
-        """
-        Handles additional work when main execution was successful
-        """
-        return True
 
     @QtCore.pyqtSlot(dict)
     def request(self, arguments):

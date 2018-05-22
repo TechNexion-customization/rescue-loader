@@ -11,6 +11,7 @@ from model import CopyBlockActionModeller, \
                   WebDownloadActionModeller, \
                   QueryWebFileActionModeller, \
                   QueryLocalFileActionModeller, \
+                  ConfigMmcActionModeller, \
                   BaseActionModeller
 import urllib.parse
 
@@ -20,8 +21,6 @@ class BaseOperationHandler(object):
     """
     Base Operation Handler that handles the Action Models and further IO actions
     """
-
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self, cbUserRequest):
         super().__init__()
@@ -92,11 +91,9 @@ class BaseOperationHandler(object):
             self.mStatus.clear()
             self.mStatus.update(OpParams)
             # clear old action models for next command
-            if len(self.mActionModellers):
-                #self.mActionModellers = []
-                del self.mActionModellers[:]
+            if len(self.mActionModellers): del self.mActionModellers[:] #self.mActionModellers = []
             # if successfully setup an action model, do the work
-            if self.__setupActions(OpParams):
+            if self._setupActions(OpParams):
                 if all(isinstance(model, BaseActionModeller) for model in self.mActionModellers):
 #                     if self.mUseThread:
 #                         # use thread
@@ -142,7 +139,7 @@ class BaseOperationHandler(object):
                 prompt.update({'user_request': 'Recover from failed operation? Y/N: '});
                 self.mUserRequestHandler(prompt, self)
                 # after the user request returns, check the user input
-                if self.__hasValidUserResponse(self.mUserInputs):
+                if self._hasValidUserResponse(self.mUserInputs):
                     _logger.debug("Has valid user inputs, so recover operation")
                     # FIXME: Retry or Recover
                     if self.__recoverOperation():
@@ -176,17 +173,23 @@ class BaseOperationHandler(object):
             _logger.error('User inputs must be in a dictionary form')
         return False
 
-    @abc.abstractmethod
     def isOpSupported(self, OpParams):
-        raise NotImplementedError
+        """
+        To be overridden
+        """
+        return False
 
-    @abc.abstractmethod
-    def __hasValidUserResponse(self, inputs):
-        raise NotImplementedError
+    def _hasValidUserResponse(self, inputs):
+        """
+        To be overridden
+        """
+        return False
 
-    @abc.abstractmethod
-    def __setupActions(self, OpParams):
-        raise NotImplementedError
+    def _setupActions(self, OpParams):
+        """
+        To be overridden
+        """
+        return False
 
 
 
@@ -202,15 +205,7 @@ class FlashOperationHandler(BaseOperationHandler):
                 return True
         return False
 
-    def _BaseOperationHandler__hasValidUserResponse(self, inputs):
-        # Check if User Response is valid
-        _logger.debug('__hasValidUserResponse: {}'.format(inputs))
-        if isinstance(inputs, dict) and 'user_response' in inputs.keys():
-            if inputs['user_response'].upper() == 'Y':
-                return True
-        return False
-
-    def _BaseOperationHandler__setupActions(self, OpParams):
+    def _setupActions(self, OpParams):
         # setup "flash" cmd operations
         if (self.__parseParam(OpParams)):
             self.mActionModellers.append(CopyBlockActionModeller())
@@ -257,16 +252,7 @@ class InfoOperationHandler(BaseOperationHandler):
                 return True
         return False
 
-    def _BaseOperationHandler__hasValidUserResponse(self, inputs):
-        # Check if User Response is valid
-        _logger.debug('__hasValidUserResponse: {}'.format(inputs))
-        ret = False
-        if isinstance(inputs, dict) and 'user_response' in inputs.keys():
-            if inputs['user_response'].upper() == 'Y':
-                ret = True
-        return ret
-
-    def _BaseOperationHandler__setupActions(self, OpParams):
+    def _setupActions(self, OpParams):
         # setup "info" cmd operations
         if (self.__parseParam(OpParams)):
             self.mActionModellers.append(QueryBlockDevActionModeller())
@@ -282,7 +268,7 @@ class InfoOperationHandler(BaseOperationHandler):
             raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParam:{}'.format(OpParams))
+        _logger.debug('__parseParam: {}'.format(OpParams))
         self.mActionParam.clear()
 #         # default values for type and for all locations
 #         self.mActionParam['tgt_type'] = 'mmc'
@@ -360,16 +346,7 @@ class DownloadOperationHandler(BaseOperationHandler):
                 return True
         return False
 
-    def _BaseOperationHandler__hasValidUserResponse(self, inputs):
-        # Check if User Response is valid
-        _logger.debug('__hasValidUserResponse: {}'.format(inputs))
-        ret = False
-        if isinstance(inputs, dict) and 'user_response' in inputs.keys():
-            if inputs['user_response'].upper() == 'Y':
-                ret = True
-        return ret
-
-    def _BaseOperationHandler__setupActions(self, OpParams):
+    def _setupActions(self, OpParams):
         # setup "download" cmd operations
         if (self.__parseParam(OpParams)):
             self.mActionModellers.append(WebDownloadActionModeller())
@@ -426,6 +403,44 @@ class DownloadOperationHandler(BaseOperationHandler):
 
 
 
+class ConfigOperationHandler(BaseOperationHandler):
+    def __init__(self, UserRequestCB):
+        super().__init__(UserRequestCB)
+
+    def isOpSupported(self, OpParams):
+        # Check if User Response is valid
+        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys() and 'subcmd' in OpParams.keys():
+            if OpParams['cmd'] == 'config' and OpParams['subcmd'] == 'mmc':
+                return True
+        return False
+
+    def _setupActions(self, OpParams):
+        # setup "config" cmd operation:
+        # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_setting': 'enable', 'boot_part_no': 1, 'send_ack': '1', 'target': '/dev/mmcblk2'}
+        if (self.__parseParam(OpParams)):
+            self.mActionModellers.append(ConfigMmcActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            return True
+        else:
+            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+
+    def __parseParam(self, OpParams):
+        _logger.debug('__parseParam: {}'.format(OpParams))
+        self.mActionParam.clear()
+        # Parse the OpParams and Setup mActionParams
+        if isinstance(OpParams, dict):
+            for k in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']:
+                if k in OpParams:
+                    self.mActionParam.update({k: OpParams[k]})
+        # verify the ActionParam to pass to modeller
+        if all(s in self.mActionParam.keys() for s in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']):
+            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            return True
+        else:
+            return False
+
+
+
 class InteractiveOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB, use_thread=True):
         super().__init__(UserRequestCB)
@@ -440,7 +455,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
                     # del self.mActionModellers
 
                 # if successfully setup an action model, do the work
-                if self._BaseOperationHandler__setupActions(ActParams):
+                if self._setupActions(ActParams):
                     if all(isinstance(model, BaseActionModeller) for model in self.mActionModellers):
                         _logger.info('interactive run')
                         self._BaseOperationHandler__run(StatusEvt)
@@ -464,7 +479,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
             self.mUserRequestHandler(self.mStatus, self)
         return
 
-    def performOperation(self, OpParams, WorkEvt):
+    def performOperation(self, OpParams, WorkEvt = Event()):
         """
         Override performOperation for interactive operations
         """
@@ -496,15 +511,15 @@ class InteractiveOperationHandler(BaseOperationHandler):
                 return True
         return False
 
-    def _BaseOperationHandler__hasValidUserResponse(self, inputs):
+    def _hasValidUserResponse(self, inputs):
         # Check if User Response is valid
-        _logger.debug('__hasValidUserResponse: {}'.format(inputs))
+        _logger.debug('_hasValidUserResponse: {}'.format(inputs))
         if isinstance(inputs, dict) and 'user_response' in inputs.keys():
             return self.__parseInput(inputs['user_response'])
         return False
 
-    def _BaseOperationHandler__setupActions(self, ActParams):
-        _logger.warning('__setupActions: {}'.format(ActParams))
+    def _setupActions(self, ActParams):
+        _logger.warning('_setupActions: {}'.format(ActParams))
         # setup "interactive" cmd operations
         # if parse operation succuessful, ask for what to do next
         if callable(self.mUserRequestHandler):
@@ -516,7 +531,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
             # after the handler returns, check the user input after user
             # responded from client/viewer, handle a valid user response
             # if we have one
-            if self._BaseOperationHandler__hasValidUserResponse(self.mUserInputs):
+            if self._hasValidUserResponse(self.mUserInputs):
                 _logger.warning("Has valid user inputs")
                 # FIXME: Retry or Recover
                 self.mStatus.update({'status': 'success'})
@@ -556,32 +571,34 @@ if __name__ == "__main__":
     def opcb(Status, Hdl):
         print ('called back:\n{}'.format(Status))
 
-    flashobj = FlashOperationHandler(opcb, use_thread=True)
-    flashparam = {'cmd': 'flash', 'src_filename': './test.bin', 'src_start_sector': 0, 'src_total_sectors': 64, \
-              'tgt_filename': './target.bin', 'tgt_start_sector': 32}
-    if (flashobj.isOpSupported(flashparam)):
-        flashobj.performOperation(flashparam, Event())
+    import pdb
+    import sys
 
-    infoobj = InfoOperationHandler(opcb)
-    infoparam = {'cmd': 'info', 'target': 'som', 'location': 'baseboard'}
-    if (infoobj.isOpSupported(infoparam)):
-        infoobj.performOperation(infoparam, Event())
-    print(infoobj.getStatus())
+    if sys.argv[1] == 'local':
+        hdlr = FlashOperationHandler(opcb, use_thread=True)
+        param = {'cmd': 'flash', 'src_filename': './test.bin', 'src_start_sector': 0, 'src_total_sectors': 64, 'tgt_filename': './target.bin', 'tgt_start_sector': 32}
+    elif sys.argv[1] == 'som':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'som', 'location': 'baseboard'}
+    elif sys.argv[1] == 'web':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
+    elif sys.argv[1] == 'fs':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'PoMachine', 'location': '/home/po/Downloads/'} #dwarf-hdmi/'}
+    elif sys.argv[1] == 'dl':
+        hdlr = DownloadOperationHandler(opcb)
+        # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
+        param = {'cmd': 'download', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', 'tgt_filename': './ubuntu.img'}
+    elif sys.argv[1] == 'config':
+        pdb.set_trace()
+        hdlr = ConfigOperationHandler(opcb)
+        # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
+        param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
+    else:
+        exit(1)
 
-    webparam = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
-    if (infoobj.isOpSupported(webparam)):
-        infoobj.performOperation(webparam, Event())
-
-    fsparam = {'cmd': 'info', 'target': 'PoMachine', 'location': '/home/po/Downloads/'} #dwarf-hdmi/'}
-    if (infoobj.isOpSupported(fsparam)):
-        infoobj.performOperation(fsparam) #, Event())
-    print(infoobj.getStatus())
-
-    dlobj = DownloadOperationHandler(opcb)
-    # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
-    dlparam = {'cmd': 'download', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', \
-              'tgt_filename': './ubuntu.img'}
-    if (dlobj.isOpSupported(dlparam)):
-        dlobj.performOperation(dlparam, Event())
-
+    if (hdlr.isOpSupported(param)):
+        hdlr.performOperation(param)
+    print(hdlr.getStatus())
     exit(0)

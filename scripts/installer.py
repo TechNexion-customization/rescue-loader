@@ -76,7 +76,7 @@ def crawlWeb(link, result):
             pobj = checkUrl(i[2])
             if pobj is not None:
                 crawlWeb(pobj.path.replace('/rescue/', '/'), result)
-        elif i[1].endswith('xz'):
+        elif i[1].endswith('.xz'):
             result.update({link+i[1]: i[2]})
 
 def loopResult(viewer, ev):

@@ -3,8 +3,10 @@
 import abc
 import re
 import os
+import stat
 import psutil
 import pyudev
+import subprocess
 import logging
 from argparse import ArgumentTypeError
 from html.parser import HTMLParser
@@ -58,8 +60,6 @@ class BaseActionModeller(object):
     
     """
     
-    __metaclass__ = abc.ABCMeta
-    
     def __init__(self):
         super().__init__()
         self.mParam = {}
@@ -85,14 +85,14 @@ class BaseActionModeller(object):
         self.mResult.clear()
         ret = False
         try:
-            ret = self.__preAction()
-            _logger.debug('__preAction(): {}'.format(ret))
+            ret = self._preAction()
+            _logger.debug('_preAction(): {}'.format(ret))
             if (ret):
-                ret = self.__mainAction()
-                _logger.debug('__mainAction(): {}'.format(ret))
+                ret = self._mainAction()
+                _logger.debug('_mainAction(): {}'.format(ret))
                 if(ret):
-                    ret = self.__postAction()
-                    _logger.debug('__postAction(): {}'.format(ret))
+                    ret = self._postAction()
+                    _logger.debug('_postAction(): {}'.format(ret))
         except Exception as ex:
             _logger.info('performAction exception: {}'.format(ex))
             ret = False
@@ -100,21 +100,30 @@ class BaseActionModeller(object):
         finally:
             return ret
 
-    @abc.abstractmethod
     def recoverAction(self):
-        raise NotImplementedError
+        """
+        To be overriden
+        """
+        # no need to recover
+        return False
 
-    @abc.abstractmethod
-    def __preAction(self):
-        raise NotImplementedError
+    def _preAction(self):
+        """
+        To be overriden
+        """
+        return True
 
-    @abc.abstractmethod    
-    def __mainAction(self):
-        raise NotImplementedError
+    def _mainAction(self):
+        """
+        To be overriden
+        """
+        return True
 
-    @abc.abstractmethod        
-    def __postAction(self):
-        raise NotImplementedError
+    def _postAction(self):
+        """
+        To be overriden
+        """
+        return True
 
 
 
@@ -136,7 +145,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         except Exception:
             raise
 
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
         # setup the input/output objects
@@ -182,7 +191,7 @@ class CopyBlockActionModeller(BaseActionModeller):
             return True
         return False
 
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         # TODO: copy specified address range from src file to target file
         try:
             if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
@@ -209,7 +218,7 @@ class CopyBlockActionModeller(BaseActionModeller):
             raise
         return False
     
-    def _BaseActionModeller__postAction(self):
+    def _postAction(self):
         for ioobj in self.mIOs:
             ioobj._close()
         del self.mOrigData
@@ -250,11 +259,7 @@ class QueryFileActionModeller(BaseActionModeller):
         super().__init__()
         self.mIO = None
 
-    def recoverAction(self):
-        # no need to recover
-        return False
-
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         # setup the input output
@@ -270,7 +275,7 @@ class QueryFileActionModeller(BaseActionModeller):
             raise ReferenceError('No File Input Output')
         return False
     
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         # read the file, and return read lines
         # TODO: should implement writing files in the future
         try:
@@ -293,7 +298,7 @@ class QueryFileActionModeller(BaseActionModeller):
             raise
         return False
     
-    def _BaseActionModeller__postAction(self):
+    def _postAction(self):
         if 're_pattern' in self.mParam:
             # if there is a regular express pattern passed in, return the
             # found regular express pattern
@@ -321,11 +326,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         self.mDisks = []
         self.mPartitions = []
 
-    def recoverAction(self):
-        # no need to recover
-        return False
-
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         if all(s in self.mParam for s in ['tgt_type', 'dst_pos']):
             self.__gatherStorage()
             _logger.debug('controllers: {}\ndisks: {}\npartitions: {}'.format(self.mCtrls, self.mDisks, self.mPartitions))
@@ -334,7 +335,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         else:
             return False
 
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         # check the actparams against the udev info
         # find self.mParam['tgt_type'] from ctrller's attributes('type') or driver()
         for o in self.mCtrls:
@@ -349,7 +350,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         else:
             return False
 
-    def _BaseActionModeller__postAction(self):
+    def _postAction(self):
         # set results to found controller and its children disk/partitions
         if len(self.mFound) > 0:
             for o in self.mFound if (len(self.mFound) > 0) else self.mCtrls:
@@ -468,11 +469,7 @@ class WebDownloadActionModeller(BaseActionModeller):
         super().__init__()
         self.mIOs = []
 
-    def recoverAction(self):
-        # no need to recover
-        return False
-
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
@@ -498,7 +495,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
         return False
 
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         # copy specified address range from downloaded src file to target file
         try:
             chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535
@@ -524,7 +521,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             raise
         return False
 
-    def _BaseActionModeller__postAction(self):
+    def _postAction(self):
         for ioobj in self.mIOs:
             ioobj._close()
 #        del self.mOrigData
@@ -563,11 +560,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
         super().__init__()
         self.mIO = None
 
-    def recoverAction(self):
-        # no need to recover
-        return False
-
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         if all(s in self.mParam for s in ['host_name', 'src_directory']):
@@ -594,7 +587,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
         else:
             return False
 
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         # read the file, and return read lines
         # TODO: should implement writing files in the future
         try:
@@ -620,7 +613,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
             raise
         return False
 
-    def _BaseActionModeller__postAction(self):
+    def _postAction(self):
         # clear the mIO
         del self.mIO
         return True
@@ -645,11 +638,7 @@ class QueryLocalFileActionModeller(BaseActionModeller):
         super().__init__()
         self.mIO = None
 
-    def recoverAction(self):
-        # no need to recover
-        return False
-
-    def _BaseActionModeller__preAction(self):
+    def _preAction(self):
         self.mResult['file_list'] = {}
         if all(s in self.mParam for s in ['local_fs', 'src_directory']):
             if ('src_directory' in self.mParam):
@@ -662,7 +651,7 @@ class QueryLocalFileActionModeller(BaseActionModeller):
         else:
             return False
 
-    def _BaseActionModeller__mainAction(self):
+    def _mainAction(self):
         try:
             for dirpath, dirnames, filenames in os.walk(self.mSrcPath):
                 for file in filenames:
@@ -691,8 +680,50 @@ class QueryLocalFileActionModeller(BaseActionModeller):
             raise
         return False
 
-    def _BaseActionModeller__postAction(self):
-        return True
+
+
+class ConfigMmcActionModeller(BaseActionModeller):
+    """
+    # Check for emmc boot sequence
+    if 'androidthings' in self.mPick['os']:
+        subprocess.check_call(['mmc', 'bootpart', 'enable', '1', '1', '/dev/mmcblk2'])
+    else:
+        subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+     or subprocess.check_call(['mmc', 'bootpart', 'disable', '1', '1', '/dev/mmcblk2'])
+    """
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+        self.mResult['retcode'] = 0
+        self.mSubProcCmd = []
+
+    def _preAction(self):
+        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']):
+            # subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+            if self.mParam['subcmd'] == 'mmc':
+                self.mSubProcCmd.append('mmc')
+            else:
+                self.mSubProcCmd.append('echo')
+
+            if stat.S_ISBLK(os.stat(self.mParam['target']).st_mode):
+                self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], self.mParam['boot_part_no'], self.mParam['send_ack'], self.mParam['target']])
+
+            _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
+            return True
+        else:
+            return False
+
+    def _mainAction(self):
+        try:
+            # do something to query mmc
+            if len(self.mSubProcCmd):
+                self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
+                return True
+        except Exception as ex:
+            _logger.error('Exception: {}'.format(ex))
+            raise
+        return False
 
 
 

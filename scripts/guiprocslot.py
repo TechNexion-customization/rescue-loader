@@ -3,6 +3,8 @@
 
 import re
 import os
+import sys
+import subprocess
 import math
 import socket
 from urllib.parse import urlparse
@@ -319,6 +321,7 @@ class QProcessSlot(QtGui.QWidget):
         self.validateResult()
 
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         """
         To be overridden
         """
@@ -469,6 +472,7 @@ class crawlWebSlot(QProcessSlot):
         return os, ver
 
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         if isinstance(self.mResults, list) and len(self.mResults):
             _logger.debug('crawlWeb result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
@@ -527,6 +531,7 @@ class crawlLocalfsSlot(QProcessSlot):
                     _logger.warning("skip parsing {} to extract form, cpu, board, display, os, and version info.".format(fname))
 
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         if isinstance(self.mResults, list) and len(self.mResults):
             _logger.debug('validateResult: crawlLocalfs result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
@@ -596,6 +601,7 @@ class scanStorageSlot(QProcessSlot):
                                       'id_model': tgt[2]['id_model'] if 'id_model' in tgt[2] else 'None'})
 
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
         if isinstance(self.mResults, list) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
@@ -638,6 +644,7 @@ class scanPartitionSlot(QProcessSlot):
                             self.mResults.append(v['mount_point'])
 
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
         _logger.debug('validateResult scanPartition result: {}'.format(self.mResults))
         if isinstance(self.mResults, list) and len(self.mResults):
@@ -1481,7 +1488,7 @@ class downloadImageSlot(QProcessSlot):
         self.mLblRemain = None
         #self.mLblDownloadFlash = None
         self.mLstWgtSelection = None
-        #self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
+        self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
 
     def _queryResult(self):
         """
@@ -1502,10 +1509,8 @@ class downloadImageSlot(QProcessSlot):
                 pcent = int(float(self.mResults['bytes_written']) / float(self.mResults['total_uncompressed']) * 100)
                 self.success.emit(pcent)
 
-            if 'status' in self.mResults:
-                if self.mResults['status'] == 'success':
-                    self.success.emit(100)
-                self.finish.emit()
+            if 'status' in self.mResults and self.mResults['status'] == 'success':
+                self.success.emit(100)
 
     def process(self, inputs):
         """
@@ -1527,6 +1532,7 @@ class downloadImageSlot(QProcessSlot):
             # Need to grab or keep the chooses from file list selection and target list selection
             if self.sender().objectName() == 'chooseSelection':
                 _logger.warning('selected choices: {}'.format(inputs))
+                self.mPick.update(inputs)
                 # extract URL and Target
                 self.__getUrlStorageFromPick(inputs)
                 # reset the progress bar
@@ -1595,15 +1601,34 @@ class downloadImageSlot(QProcessSlot):
             self.mTimer.stop()
             self.mFlashFlag = False
 
+        # Check for flash complete and send another command for setting emmc boot sequence
+        if results['status'] == 'success' and results['cmd'] == 'download':
+            if 'androidthings' in self.mPick['os']:
+                #subprocess.check_call(['mmc', 'bootpart', 'enable', '1', '1', '/dev/mmcblk2'])
+                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+            else:
+                #subprocess.check_call(['mmc', 'bootpart', 'disable', '1', '1', '/dev/mmcblk2']) or
+                #subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+                self.request.emit(self.mCmds[-1])
+
+#         # Check for success of the config mmc command
+#         if results['status'] == 'successs' and results['cmd'] == 'config' and results['subcmd'] == 'mmc':
+#             self.finish.emit()
+
     def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
         _logger.debug('validateResult: {}'.format(self.mResults))
-        # Check for flash complete
-        # Check for available storage disk in the self.mResult list
+
+        # Final notification
         if isinstance(self.mResults, dict) and (self.mResults['status'] == 'success' or self.mResults['status'] == 'failure'):
             ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'Installation {}...\nSet boot jumper to boot from sdcard/emmc,\nAnd click RESET to reboot sytem!'.format('Complete' if (self.mResults['status'] == 'success') else 'Failed'), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Reset, QtGui.QMessageBox.Ok)
             if ret == QtGui.QMessageBox.Reset:
-                # reset/reboot the system
-                os.system("reboot")
+                try:
+                    # reset/reboot the system
+                    subprocess.call(['reboot'])
+                except:
+                    raise
 
     def _updateDisplay(self):
         # show and hide some Gui elements

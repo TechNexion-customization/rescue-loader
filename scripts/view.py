@@ -22,8 +22,6 @@ class BaseViewer(object):
     Base Viewer Class
     """
 
-    __metaclass__ = abc.ABCMeta
-
     def __init__(self, confname = ''):
         super().__init__()
         self.mResponseEvent = Event()
@@ -37,25 +35,35 @@ class BaseViewer(object):
         else:
             self.mDefConfig.loadConfig('/etc/installer.xml')
 
-    @abc.abstractmethod
-    def _mainExec(self):
-        pass
-
-    @abc.abstractmethod
     def _preExec(self):
-        pass
+        """
+        To be overriden
+        """
+        return True
 
-    @abc.abstractmethod
+    def _mainExec(self):
+        """
+        To be overriden
+        """
+        return True
+
     def _postExec(self):
-        pass
+        """
+        To be overriden
+        """
+        return True
 
-    @abc.abstractmethod
     def _parseResult(self):
-        pass
+        """
+        To be overriden
+        """
+        return True
 
-    @abc.abstractmethod
     def _parseCmd(self, params):
-        pass
+        """
+        To be overriden
+        """
+        return True
 
     def _waitForEventTimeout(self, t):
         _logger.debug('Client Wait for Response Event Timeout {}s'.format(t))
@@ -148,10 +156,10 @@ class CliViewer(BaseViewer):
         else:
             self.__dump(self.mResponse)
 
-    def _preExec(self):
-        return True
-
     def _mainExec(self):
+        """
+        Override BaseViewer::_mainExec()
+        """
         try:
             if isinstance(self.mCmd, dict):
                 # clear the event before sending message over to dbus
@@ -166,6 +174,9 @@ class CliViewer(BaseViewer):
         return False
 
     def _postExec(self):
+        """
+        Override BaseViewer::_postExec()
+        """
         while True:
             # loop to wait for dbus response
             # wait for dbus server response for 25 seconds, same as DBus timeout
@@ -261,28 +272,6 @@ class CliViewer(BaseViewer):
 
 
 
-class WebViewer(BaseViewer):
-    def __init__(self, confname=''):
-        super().__init__(confname)
-        self.mPageTemplates = []
-
-    def _parseCmd(self, params):
-        pass
-
-    def _parseResult(self):
-        pass
-
-    def _preExec(self):
-        pass
-
-    def _postExec(self):
-        pass
-
-    def __getUserInput(self, prompt):
-        pass
-
-
-
 if __name__ == "__main__":
     fmtr = logging.Formatter('%(asctime)s %(name)-12s (%(threadName)-10s):%(levelname)-8s %(message)s', datefmt='%m-%d %H:%M')
     hdlr = logging.FileHandler('/tmp/installer_cli.log')
@@ -364,12 +353,26 @@ if __name__ == "__main__":
                               action='store', default='-1', help='Specify total number of sectors to copy')
 
     # config commands
-    # 'configfile'
+    # 'load'/'save' 'configfile'
     config_parser = subparsers.add_parser('config', help='configurations')
-    config_parser.add_argument('subcmd', choices=('load', 'save'), default='load', \
-                               action='store', help='Load/Save the configuration')
-    config_parser.add_argument('-c', '--config-file', dest='configfile', \
-                               action='store', metavar='FILENAME', help='Specify the configuration file')
+    config_subparser = config_parser.add_subparsers(dest='subcmd', help='sub configuration command')
+    config_subloadparser = config_subparser.add_parser('load', help="Load the configuration file")
+    config_subloadparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
+    config_subsaveparser = config_subparser.add_parser('save', help="Save the configuration file")
+    config_subsaveparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
+    # 'mmc' 'target'
+    # python3 view.py {'config' 'mmc' -c 'bootpart' -s 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
+    # param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_setting': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'location': '/dev/mmcblk2'}
+    config_submmcparser = config_subparser.add_parser('mmc', help='Specify MMC configure settings')
+    config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_OPTION_NAME', action='store', help='Specify the mmc configuration option')
+    config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the mmc action for the configuration option')
+    config_submmcparser.add_argument('-n', '--boot-partition-number', dest='boot_part_no', metavar='BOOT_OPTION_NUMBER', action='store', type=str, help='Specify the mmc boot partition number')
+    config_submmcparser.add_argument('-k', '--send-acknowledge', dest='send_ack', metavar='SEND_ACK', action='store', help='Specify whether to send acknowledge or not {0, 1}')
+    config_submmcparser.add_argument('target', metavar='TARGET_MMC_NODEPATH', action='store', help='Specify the mmc device path to configure')
+    #config_parser.add_argument('subcmd', choices=('load', 'save'), default='load', action='store', help='Load/Save the configuration')
+    #config_parser.add_argument('-c', '--config-file', dest='configfile', action='store', metavar='FILENAME', help='Specify the configuration file')
+    #config_parser.add_argument('-t', '--target-device', dest='target', choices=('mmc', 'i2c', 'gpio'), default='mmc', action='store', help='Specify target device to configure, choices are: [mmc, i2c, gpio, ...]')
+    #config_parser.add_argument('-l', '--location', dest='location', default='/dev/mmcblk2', action='store', help='Specify the mmc dev path')
 
     # verify commands
 
@@ -439,7 +442,7 @@ if __name__ == "__main__":
 #                         action='store_true', default=argparse.SUPPRESS, help='Interactive mode')
     parser.add_argument('--verbose', dest='verbose', \
                         action='store_true', default=False, help='Show more information')
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 2018.5.16.1')
     args = parser.parse_args() # by default, arguments taken from sys.argv[1:]
     if args.verbose:
         _logger.setLevel(logging.DEBUG)
