@@ -1610,7 +1610,7 @@ class downloadImageSlot(QProcessSlot):
                 #subprocess.check_call(['mmc', 'bootpart', 'disable', '1', '1', '/dev/mmcblk2']) or
                 #subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
                 self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
-                self.request.emit(self.mCmds[-1])
+            self.request.emit(self.mCmds[-1])
 
 #         # Check for success of the config mmc command
 #         if results['status'] == 'successs' and results['cmd'] == 'config' and results['subcmd'] == 'mmc':
