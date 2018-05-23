@@ -13,7 +13,9 @@
 
 import re
 import time
+import math
 import logging
+import subprocess
 from threading import Thread, Event
 from urllib.parse import urlparse
 
@@ -23,6 +25,10 @@ from view import CliViewer
 SetupLogging('/tmp/installer_cli.log')
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.DEBUG)
+
+def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
+    r,f=min(int(math.log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
+    return (f%(abs(r%(-r-1)),pre[r],u)).format(n*b**pow/b**float(r))
 
 def findAttrs(keys, dc):
     """
@@ -83,12 +89,17 @@ def loopResult(viewer, ev):
     while not ev.wait(1):
         result = viewer.queryResult()
         if 'total_uncompressed' in result and 'bytes_written'  in result:
-            outstr = 'Processing: {}/{}'.format(int(result['bytes_written']), int(result['total_uncompressed']))
-            print(outstr, end='\r')
+            pcent = float(int(result['bytes_written']) / int(result['total_uncompressed']))
+            hashes = '#' * int(round(pcent * 40))
+            spaces = ' ' * (40 - len(hashes))
+            outstr = 'Percent: [{}] {}% ({}/{})'.format(hashes + spaces, int(round(pcent * 100)), _prettySize(int(result['bytes_written'])), _prettySize(int(result['total_uncompressed'])))
+            print(outstr, end=((' ' * (80 - len(outstr))) + '\r'))
         else:
             print('Processing: ...', end='\r')
 
-
+def disable_guiclientd():
+    print('Disable guiclientd first...')
+    subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
 
 def main():
     def parseSOMInfo(path):
@@ -110,7 +121,7 @@ def main():
     tgtResult = {}
 
     # step 0: find out the module and baseboard of the target device
-    print('Find target device cpu, form-factor, and baseboard...')
+    print('Find target device cpu, and form-factor...')
     cliSom = CliViewer()
     cliSom.request({'cmd': 'info', 'target': 'som'})
     if 'found_match' in cliSom.getResult():
@@ -136,23 +147,23 @@ def main():
 
     # step 3: ask user to choose the file to download
     menus = [(i, k, v) for i, (k, v) in enumerate(sorted(menuResult.items()))]
-    print('{:>4} {:<8} {:<8} {:<8} {:<14} {:<10} {:<24} {:<10}'.format('#', 'cpu', 'form', 'board', 'display', 'os', 'ver', 'size'))
+    print('{:>4} {:<8} {:<6} {:<8} {:<14} {:<14} {:<10} {:<8}'.format('#', 'cpu', 'form', 'board', 'display', 'os', 'ver', 'size'))
     for menu in menus:
         cliInfo = CliViewer()
         cliInfo.request({'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': menu[1]})
         if 'total_uncompressed' in cliInfo.getResult():
-            uncompsize = cliInfo.getResult()['total_uncompressed']
+            uncompsize = int(cliInfo.getResult()['total_uncompressed'])
         elif 'total_size' in cliInfo.getResult():
-            uncompsize = cliInfo.getResult()['total_size']
+            uncompsize = int(cliInfo.getResult()['total_size'])
         else:
             uncompsize = 0
         del cliInfo
-        if (menu[1].endswith('.xz')):
+        if menu[1].endswith('.xz'):
             form, cpu, board, disp, fname = parseSOMInfo(menu[1])
             os, ver = parseFilename(fname.rstrip('.xz'))
-            print('{:>4} {:<8} {:<8} {:<8} {:<14} {:<10} {:<24} {:<10}'.format(menu[0], cpu, form, board, disp, os, ver, uncompsize))
+            print('{:>4} {:<8} {:<6} {:<8} {:<14} {:<14} {:<10} {:<8}'.format(menu[0], cpu, form, board, disp, os, ver, _prettySize(uncompsize)))
     while True:
-        srcNum = input('Choose a file to download: ')
+        srcNum = input('Choose a file to download ([Q]uit): ')
         if srcNum.isdecimal() and (int(srcNum) >= 0 and int(srcNum) < len(menus)):
             break
         elif srcNum.isalpha() and srcNum.lower() == 'q':
@@ -170,9 +181,9 @@ def main():
     targets = parseTargetList(tgtResult)
     print('{:>4} {:<16} {:<24} {:<24}'.format('#', 'name', 'node path', 'disk size'))
     for tgt in targets:
-        print('{:>4} {:<16} {:<24} {:<24}'.format(tgt[0], tgt[1], tgt[2]['device_node'], int(tgt[2]['size']) * 512))
+        print('{:>4} {:<16} {:<24} {:<24}'.format(tgt[0], tgt[1], tgt[2]['device_node'], _prettySize(int(tgt[2]['size']) * 512)))
     while True:
-        tgtNum = input('Choose a storage to flash: ')
+        tgtNum = input('Choose a storage to flash ([Q]uit): ')
         if tgtNum.isdecimal() and (int(tgtNum) >= 0 and int(tgtNum) < len(targets)):
             break
         elif tgtNum.isalpha() and tgtNum.lower() == 'q':
@@ -182,12 +193,12 @@ def main():
 
     # step 6: make up the command to download and flash and execute it
     cliDl = CliViewer()
-    # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
+    # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t /dev/mmcblk2}
     dlparam = {'cmd': 'download', 'dl_url': menus[int(srcNum)][2], 'tgt_filename': targets[int(tgtNum)][2]['device_node']}
     print("Download {}, and flash to {}".format(menus[int(srcNum)][2], targets[int(tgtNum)][2]['device_node']))
     # print("with cmd: {}".format(dlparam))
     while True:
-        yn = input("Yes/No? ")
+        yn = input("[Y]es/[N]o ([Q]uit)? ")
         if yn.lower() == 'yes' or yn.lower() == 'y':
             break
         elif yn.lower() == 'no' or yn.lower() == 'n' or yn.lower() == 'quit' or yn.lower() == 'q':
@@ -200,10 +211,26 @@ def main():
     resultThread.start()
     cliDl.request(dlparam)
     time.sleep(1)
-    print('\rProcessed: {}/{}'.format(cliDl.getResult()['bytes_written'], cliDl.getResult()['total_uncompressed'], end=' '*40))
     endEvent.set()
     resultThread.join()
+    print('Flash complete...', end=((' '*60) + '\r\n'))
     del cliDl
 
+    # step 8: enable/disable the mmc boot option
+    cliCfg = CliViewer()
+    # python3 view.py {config mmc -c bootpart -s enable/disable -n 1 -k 1 /dev/mmcblk2}
+    cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                'config_action': 'enable' if 'androidthings' in dlparam['dl_url'] else 'disable', \
+                'boot_part_no': '1', 'send_ask': '1', 'target': dlparam['tgt_filename']}
+    print('{} mmc boot partition 1 configuration...'.format('Enable' if 'androidthings' in dlparam['dl_url'] else 'Disable'))
+    cliCfg.request(cfgparam)
+    del cliCfg
+
+    # step 9: a message to tell user what to do next
+    print('Please set the boot jumper to BOOT MODE and reboot your board...')
+
+
+
 if __name__ == "__main__":
+    disable_guiclientd()
     main()
