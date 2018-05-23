@@ -1,5 +1,5 @@
 [Unit]
-Description=TechNexion Gui Client Start Up
+Description=TechNexion Gui Client
 After=dbus.service dbus-sess.service installerd.service network-online.target systemd-networkd-wait-online.service systemd-resolved.service
 
 [Service]
