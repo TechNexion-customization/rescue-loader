@@ -154,14 +154,23 @@ class CopyBlockActionModeller(BaseActionModeller):
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
             try:
-                # default mode is rb+
-                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename']))
-                # setup different size params
-                filesize = self.mIOs[-1].getFileSize()
-                blksize = self.mIOs[-1].getBlockSize()
-                if (self.mParam['src_total_sectors'] == -1) or ('src_total_sectors' not in self.mParam):
-                    self.mParam['src_total_sectors'] = int(filesize/blksize) + 0 if (filesize % blksize) else 1
-                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+                if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode) and stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode):
+                    # special case where source is a char device and target is a block device, e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
+                    self.mParam['chunk_size'] = 4096 #  self.mIOs[-1].getBlockSize()
+                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
+                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
+                    self.mParam['src_total_sectors'] = int(self.mIOs[-1].getFileSize() / self.mParam['chunk_size'])
+                    self.mParam['src_start_sector'] = 0
+                    self.mParam['tgt_start_sector'] = 0
+                else:
+                    # default mode is rb+
+                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename']))
+                    # setup different size params
+                    filesize = self.mIOs[-1].getFileSize()
+                    blksize = self.mIOs[-1].getBlockSize()
+                    if (self.mParam['src_total_sectors'] == -1) or ('src_total_sectors' not in self.mParam):
+                        self.mParam['src_total_sectors'] = int(filesize/blksize) + 0 if (filesize % blksize) else 1
+                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
             except Exception as ex:
                 _logger.error('Cannot create block inputoutput: {}'.format(ex))
                 raise
@@ -200,6 +209,7 @@ class CopyBlockActionModeller(BaseActionModeller):
                 srcstart = self.mParam['src_start_sector'] * blksize
                 tgtstart = self.mParam['tgt_start_sector'] * blksize
                 totalbytes = self.mParam['src_total_sectors'] * blksize
+                self.mResult['total_size'] = totalbytes
                 # sector addresses of a very large file for looping
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
                 _logger.debug('list of addresses to copy: {}'.format(address))
@@ -746,42 +756,50 @@ if __name__ == "__main__":
                     ret[k if len(key) == 0 else key+'|'+k] = v
         return ret
 
-    model = CopyBlockActionModeller()
-    actparam = {'src_filename': './ubuntu-16.04.xz', 'src_start_sector': 0, 'src_total_sectors': -1, \
-              'tgt_filename': './ubuntu.img', 'tgt_start_sector': 0}
-    model.setActionParam(actparam)
-    model.performAction()
-
-    query = QueryFileActionModeller()
-    qryparam = {'src_filename': './model', 'src_start_line': 0, 'src_totallines': 5, 're_pattern': '\w+\ (\w+)-\w+'}
-    query.setActionParam(qryparam)
-    query.performAction()
-    print(query.getResult())
-
-    blk = QueryBlockDevActionModeller()
-    blkparam = {'tgt_type': 'mmc'}
-    blk.setActionParam(blkparam)
-    blk.performAction()
-    info = {}
-    info.update(__flatten(blk.getResult()))
-    for i in sorted(info):
-        print('{0} ===> {1}'.format(i, info[i]))
-
+    import sys
     _logger.setLevel(logging.DEBUG)
 
-    dlmodel = WebDownloadActionModeller()
-    dlparam = {'chunk_size': 65536, 'src_directory': '/pico-imx7/pi-050/',
-               'src_filename': 'ubuntu-16.04.xz', 'host_name': 'rescue.technexion.net', \
-               'host_protocol': 'http', 'tgt_filename': 'ubuntu-16.04.img', 'tgt_start_sector': 0}
-    dlmodel.setActionParam(dlparam)
-    dlmodel.performAction()
-    print(dlmodel.getResult())
-
-    querywebmodel = QueryWebFileActionModeller()
-    querywebparam = {'src_directory': '/pico-imx6/dwarf-hdmi/',
-                     'host_name': 'http://rescue.technexion.net', }
-    querywebmodel.setActionParam(querywebparam)
-    querywebmodel.performAction()
-    print(querywebmodel.getResult())
-
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'copy':
+            model = CopyBlockActionModeller()
+            actparam = {'src_filename': './ubuntu-16.04.xz', 'src_start_sector': 0, 'src_total_sectors': -1, \
+                        'tgt_filename': './ubuntu.img', 'tgt_start_sector': 0}
+            model.setActionParam(actparam)
+            model.performAction()
+        elif sys.argv[1] == 'qmodel':
+            query = QueryFileActionModeller()
+            qryparam = {'src_filename': './model', 'src_start_line': 0, 'src_totallines': 5, 're_pattern': '\w+\ (\w+)-\w+'}
+            query.setActionParam(qryparam)
+            query.performAction()
+            print(query.getResult())
+        elif sys.argv[1] == 'qmmc':
+            blk = QueryBlockDevActionModeller()
+            blkparam = {'tgt_type': 'mmc'}
+            blk.setActionParam(blkparam)
+            blk.performAction()
+            info = {}
+            info.update(__flatten(blk.getResult()))
+            for i in sorted(info):
+                print('{0} ===> {1}'.format(i, info[i]))
+        elif sys.argv[1] == 'webdl':
+            dlmodel = WebDownloadActionModeller()
+            dlparam = {'chunk_size': 65536, 'src_directory': '/pico-imx7/pi-050/',
+                       'src_filename': 'ubuntu-16.04.xz', 'host_name': 'rescue.technexion.net', \
+                       'host_protocol': 'http', 'tgt_filename': 'ubuntu-16.04.img', 'tgt_start_sector': 0}
+            dlmodel.setActionParam(dlparam)
+            dlmodel.performAction()
+            print(dlmodel.getResult())
+        elif sys.argv[1] =='qweb':
+            querywebmodel = QueryWebFileActionModeller()
+            querywebparam = {'src_directory': '/pico-imx6/dwarf-hdmi/',
+                             'host_name': 'http://rescue.technexion.net', }
+            querywebmodel.setActionParam(querywebparam)
+            querywebmodel.performAction()
+            print(querywebmodel.getResult())
+        elif sys.argv[1] == 'clrboot':
+            flashmodel = CopyBlockActionModeller()
+            flashparam = {'src_filename': '/dev/zero', 'tgt_filename': '/dev/mmcblk2boot0'}
+            flashmodel.setActionParam(flashparam)
+            flashmodel.performAction()
+            print(flashmodel.getResult())
     exit()

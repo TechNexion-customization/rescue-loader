@@ -88,18 +88,23 @@ def crawlWeb(link, result):
 def loopResult(viewer, ev):
     while not ev.wait(1):
         result = viewer.queryResult()
-        if 'total_uncompressed' in result and 'bytes_written'  in result:
-            pcent = float(int(result['bytes_written']) / int(result['total_uncompressed']))
+        if 'total_uncompressed' in result:
+            total = int(result['total_uncompressed'])
+        elif 'total_size' in result:
+            total = int(result['total_size'])
+
+        if 'bytes_written'  in result:
+            pcent = float(int(result['bytes_written']) / total)
             hashes = '#' * int(round(pcent * 40))
             spaces = ' ' * (40 - len(hashes))
-            outstr = 'Percent: [{}] {}% ({}/{})'.format(hashes + spaces, int(round(pcent * 100)), _prettySize(int(result['bytes_written'])), _prettySize(int(result['total_uncompressed'])))
+            outstr = 'Percent: [{}] {}% ({}/{})'.format(hashes + spaces, int(round(pcent * 100)), _prettySize(int(result['bytes_written'])), _prettySize(total))
             print(outstr, end=((' ' * (80 - len(outstr))) + '\r'))
         else:
             print('Processing: ...', end='\r')
 
-def disable_guiclientd():
-    print('Disable guiclientd first...')
-    subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
+def startstop_guiclientd(flag):
+    print('{} gui rescue client application...'.format('Start' if flag else 'Stop'))
+    subprocess.check_call(['systemctl', 'start' if flag else 'stop', 'guiclientd.service'])
 
 def main():
     def parseSOMInfo(path):
@@ -167,6 +172,7 @@ def main():
         if srcNum.isdecimal() and (int(srcNum) >= 0 and int(srcNum) < len(menus)):
             break
         elif srcNum.isalpha() and srcNum.lower() == 'q':
+            startstop_guiclientd(1)
             exit(1)
         else:
             print('Invalid Inputs')
@@ -187,6 +193,7 @@ def main():
         if tgtNum.isdecimal() and (int(tgtNum) >= 0 and int(tgtNum) < len(targets)):
             break
         elif tgtNum.isalpha() and tgtNum.lower() == 'q':
+            startstop_guiclientd(1)
             exit(1)
         else:
             print('Invalid Inputs')
@@ -202,6 +209,7 @@ def main():
         if yn.lower() == 'yes' or yn.lower() == 'y':
             break
         elif yn.lower() == 'no' or yn.lower() == 'n' or yn.lower() == 'quit' or yn.lower() == 'q':
+            startstop_guiclientd(1)
             exit(1)
 
     # step 7: parse the result in a loop until result['status'] != 'processing'
@@ -213,16 +221,33 @@ def main():
     time.sleep(1)
     endEvent.set()
     resultThread.join()
-    print('Flash complete...', end=((' '*60) + '\r\n'))
+    print('Flash complete...', end=((' '*60) + '\n'))
     del cliDl
 
-    # step 8: enable/disable the mmc boot option
+    # step 8: enable/disable the mmc boot option, and clear the boot partition if it is disabled
+    if 'androidthings' not in dlparam['dl_url']:
+        print('Disable mmc boot partition readonly...')
+        subprocess.check_call(' '.join(['echo', '0', '>', '/sys/block/' + dlparam['tgt_filename'].replace('/dev/', '') + 'boot0' + '/force_ro']), shell=True)
+        cliFlash = CliViewer()
+        flashparam = {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': dlparam['tgt_filename'] + 'boot0'}
+        print('Clear mmc boot partition...')
+        endEvent = Event()
+        endEvent.clear()
+        resultThread = Thread(name='ResultThread', target=loopResult, args=(cliFlash, endEvent))
+        resultThread.start()
+        cliFlash.request(flashparam)
+        time.sleep(1)
+        endEvent.set()
+        resultThread.join()
+        print('Clear complete...', end=((' '*60) + '\n'))
+        del cliFlash
+
     cliCfg = CliViewer()
     # python3 view.py {config mmc -c bootpart -s enable/disable -n 1 -k 1 /dev/mmcblk2}
     cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
                 'config_action': 'enable' if 'androidthings' in dlparam['dl_url'] else 'disable', \
-                'boot_part_no': '1', 'send_ask': '1', 'target': dlparam['tgt_filename']}
-    print('{} mmc boot partition 1 configuration...'.format('Enable' if 'androidthings' in dlparam['dl_url'] else 'Disable'))
+                'boot_part_no': '1', 'send_ack': '1', 'target': dlparam['tgt_filename']}
+    print('{} mmc boot partition configuration...'.format('Enable' if 'androidthings' in dlparam['dl_url'] else 'Disable'))
     cliCfg.request(cfgparam)
     del cliCfg
 
@@ -232,5 +257,5 @@ def main():
 
 
 if __name__ == "__main__":
-    disable_guiclientd()
+    startstop_guiclientd(0)
     main()

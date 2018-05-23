@@ -2,6 +2,7 @@
 
 import os
 import abc
+import stat
 import fcntl
 import mimetypes
 import urllib.request
@@ -312,8 +313,9 @@ class BaseInputOutput(object):
         if (self.mHandle and (isinstance(self.mHandle, IOBase) and not self.mHandle.closed)):
             if any(s in self.mMode for s in ['w', 'a', '+']):
                 fcntl.flock(self.mHandle, fcntl.LOCK_UN)
-            self.mHandle.flush()
-            os.fsync(self.mHandle.fileno())
+                # only flush and fsync files with write mode
+                self.mHandle.flush()
+                os.fsync(self.mHandle.fileno())
             self.mHandle.close()
             _logger.debug('{} _close: {}'.format(self.__class__, self.mFilename))
         if self.mCFHandle:
@@ -323,9 +325,12 @@ class BaseInputOutput(object):
         """
         returns file size in bytes
         """
-        if self.mFilename:
-            statinfo = os.stat(self.mFilename)
+        statinfo = os.stat(self.mFilename)
+        if int(statinfo.st_size) > 0:
             return int(statinfo.st_size)
+        else:
+            if self.mHandle:
+                return os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)
         return 0
 
     def getBlockSize(self):
@@ -356,7 +361,9 @@ class CompressInputOutput(BaseInputOutput):
     """
     def __init__(self, filename, mode='ab+'):
         super().__init__(filename, mode)
-        self.mCFHandle = self.__getCompressedFile()
+        self.mCFHandle = None
+        if stat.S_ISREG(os.stat(filename).st_mode):
+            self.mCFHandle = self.__getCompressedFile()
 
     # factory function to create a suitable instance for accessing files
     def __getCompressedFile(self):
@@ -676,7 +683,6 @@ if __name__ == "__main__":
         parts = int(totalBytes / chunkSize) + (1 if (totalBytes % chunkSize) else 0)
         return [(srcStart + i * chunkSize, tgtStart + i) for i in range(parts)]
 
-    import pdb
     import argparse
     parser = argparse.ArgumentParser(description='Process Arguments.')
     parser.add_argument('-c', '--config-file', dest='configfile', help='Specify the configuration file to load', metavar='FILE')
@@ -698,7 +704,6 @@ if __name__ == "__main__":
             print (srcstat.st_size, srcstat.st_blksize)
             # get files handle
             sio = BlockInputOutput(chunksize, args.sourcefile)
-            pdb.set_trace()
             print('calculated uncompressed size: {}'.format(sio.getUncompressedSize()))
 #             tio = BlockInputOutput(args.targetfile)
 #

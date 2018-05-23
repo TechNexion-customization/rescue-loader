@@ -571,7 +571,6 @@ if __name__ == "__main__":
     def opcb(Status, Hdl):
         print ('called back:\n{}'.format(Status))
 
-    import pdb
     import sys
 
     if sys.argv[1] == 'local':
@@ -591,7 +590,6 @@ if __name__ == "__main__":
         # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
         param = {'cmd': 'download', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', 'tgt_filename': './ubuntu.img'}
     elif sys.argv[1] == 'config':
-        pdb.set_trace()
         hdlr = ConfigOperationHandler(opcb)
         # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
         param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
