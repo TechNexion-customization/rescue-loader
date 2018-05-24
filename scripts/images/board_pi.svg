@@ -15,7 +15,7 @@
    id="svg4736"
    version="1.1"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="pi_board.svg">
+   sodipodi:docname="board_pi.svg">
   <defs
      id="defs4738" />
   <sodipodi:namedview
@@ -25,9 +25,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.7"
-     inkscape:cx="-497.18599"
-     inkscape:cy="510.68737"
+     inkscape:zoom="15.839192"
+     inkscape:cx="12.510043"
+     inkscape:cy="29.857374"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -45,7 +45,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -578,6 +578,19 @@
              style="fill:#262827" />
         </g>
       </g>
+    </g>
+    <g
+       transform="scale(0.99956219,1.000438)"
+       style="font-style:normal;font-weight:normal;font-size:20.30885887px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#b81c22;fill-opacity:1;stroke:#ffff00;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       id="text4148">
+      <path
+         d="m 19.884153,1021.156 0,5.5631 2.518775,0 q 1.398217,0 2.161782,-0.7239 0.763566,-0.7239 0.763566,-2.0626 0,-1.3288 -0.763566,-2.0527 -0.763565,-0.7239 -2.161782,-0.7239 l -2.518775,0 z m -2.00312,-1.6462 4.521895,0 q 2.489025,0 3.758328,1.1305 1.279221,1.1206 1.279221,3.2923 0,2.1915 -1.279221,3.312 -1.269303,1.1206 -3.758328,1.1206 l -2.518775,0 0,5.9499 -2.00312,0 0,-14.8053 z"
+         style="stroke:#ffff00;stroke-opacity:1;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none;stroke-linejoin:round;stroke-linecap:round"
+         id="path4234" />
+      <path
+         d="m 30.137747,1019.5098 2.00312,0 0,14.8053 -2.00312,0 0,-14.8053 z"
+         style="stroke:#ffff00;stroke-opacity:1;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none;stroke-linejoin:round;stroke-linecap:round"
+         id="path4236" />
     </g>
   </g>
 </svg>
