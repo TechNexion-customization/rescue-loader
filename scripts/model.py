@@ -708,26 +708,40 @@ class ConfigMmcActionModeller(BaseActionModeller):
         self.mSubProcCmd = []
 
     def _preAction(self):
-        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']):
+        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']):
             # subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-            if self.mParam['subcmd'] == 'mmc':
+            if self.mParam['subcmd'] == 'mmc' and any(value in self.mParam['config_id'] \
+                                                      for value in ['bootpart', 'bootbus', 'bkops', 'cache', 'csd', 'cid', 'extcsd', \
+                                                                    'enh_area', 'hwreset', 'rpmb', 'scr', 'ffu', 'sanitize', 'status', \
+                                                                    'write_reliability', 'writeprotect']):
                 self.mSubProcCmd.append('mmc')
             else:
                 self.mSubProcCmd.append('echo')
 
             if stat.S_ISBLK(os.stat(self.mParam['target']).st_mode):
-                self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], self.mParam['boot_part_no'], self.mParam['send_ack'], self.mParam['target']])
+                if self.mParam['config_id'] == 'bootpart':
+                    self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], \
+                                             self.mParam['boot_part_no'], self.mParam['send_ack'], self.mParam['target']])
+                elif self.mParam['config_id'] == 'readonly':
+                    if 'boot' in self.mParam['target']:
+                        tgtfile = self.mParam['target'][:self.mParam['target'].find('boot')].replace('/dev/', '')
+                    else:
+                        tgtfile = self.mParam['target'].replace('/dev/', '')
 
-            _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
-            return True
-        else:
-            return False
+                    self.mSubProcCmd.extend(['0' if self.mParam['config_action'] == 'disable' else '1',
+                                             '>', '/sys/block/' + tgtfile + 'boot' + str(int(self.mParam['boot_part_no']) - 1) + '/force_ro'])
+                _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
+                return True
+        return False
 
     def _mainAction(self):
         try:
             # do something to query mmc
             if len(self.mSubProcCmd):
-                self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                if self.mSubProcCmd[0] == 'mmc':
+                    self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                else:
+                    self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
                 _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
                 return True
         except Exception as ex:
@@ -802,4 +816,16 @@ if __name__ == "__main__":
             flashmodel.setActionParam(flashparam)
             flashmodel.performAction()
             print(flashmodel.getResult())
+        elif sys.argv[1] == 'mmcboot':
+            cfgmodel = ConfigMmcActionModeller()
+            cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'disable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
+            cfgmodel.setActionParam(cfgparam)
+            cfgmodel.performAction()
+            print(cfgmodel.getResult())
+        elif sys.argv[1] == 'mmcreadonly':
+            cfgmodel = ConfigMmcActionModeller()
+            cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': '/dev/mmcblk2'}
+            cfgmodel.setActionParam(cfgparam)
+            cfgmodel.performAction()
+            print(cfgmodel.getResult())
     exit()

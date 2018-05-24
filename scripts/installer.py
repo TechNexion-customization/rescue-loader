@@ -227,7 +227,13 @@ def main():
     # step 8: enable/disable the mmc boot option, and clear the boot partition if it is disabled
     if 'androidthings' not in dlparam['dl_url']:
         print('Disable mmc boot partition readonly...')
-        subprocess.check_call(' '.join(['echo', '0', '>', '/sys/block/' + dlparam['tgt_filename'].replace('/dev/', '') + 'boot0' + '/force_ro']), shell=True)
+        # python3 view.py {config mmc -c readonly -s enable/disable -n 1 /dev/mmcblk2}
+        cliCfg = CliViewer()
+        cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                    'config_action': 'disable', 'boot_part_no': '1', 'target': dlparam['tgt_filename']}
+        cliCfg.request(cfgparam)
+        del cliCfg
+
         cliFlash = CliViewer()
         flashparam = {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': dlparam['tgt_filename'] + 'boot0'}
         print('Clear mmc boot partition...')

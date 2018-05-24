@@ -215,7 +215,7 @@ class FlashOperationHandler(BaseOperationHandler):
             raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: {}'.format(OpParams))
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if all(s in OpParams.keys() for s in self.mSrcFileOps):
@@ -268,7 +268,7 @@ class InfoOperationHandler(BaseOperationHandler):
             raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: {}'.format(OpParams))
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
         self.mActionParam.clear()
 #         # default values for type and for all locations
 #         self.mActionParam['tgt_type'] = 'mmc'
@@ -356,7 +356,7 @@ class DownloadOperationHandler(BaseOperationHandler):
             raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: {}'.format(OpParams))
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if 'tgt_filename' in OpParams.keys():
@@ -425,15 +425,22 @@ class ConfigOperationHandler(BaseOperationHandler):
             raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: {}'.format(OpParams))
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
         self.mActionParam.clear()
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            for k in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']:
+            # required params
+            for k in ['subcmd', 'target', 'config_id', 'config_action']:
                 if k in OpParams:
                     self.mActionParam.update({k: OpParams[k]})
+            # optional params depending on config_id
+            if OpParams['config_id'] == 'bootpart' and 'boot_part_no' in OpParams and 'send_ack' in OpParams:
+                self.mActionParam.update({'boot_part_no': OpParams['boot_part_no'], 'send_ack': OpParams['send_ack']})
+            elif OpParams['config_id'] == 'readonly' and 'boot_part_no' in OpParams:
+                self.mActionParam.update({'boot_part_no': OpParams['boot_part_no']})
+
         # verify the ActionParam to pass to modeller
-        if all(s in self.mActionParam.keys() for s in ['subcmd', 'target', 'config_id', 'config_action', 'boot_part_no', 'send_ack']):
+        if all(s in self.mActionParam.keys() for s in ['subcmd', 'target', 'config_id', 'config_action']):
             _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
             return True
         else:
@@ -548,7 +555,7 @@ class InteractiveOperationHandler(BaseOperationHandler):
         return False
 
     def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: {}'.format(OpParams))
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
             OpParams.pop('interactive')
@@ -593,6 +600,10 @@ if __name__ == "__main__":
         hdlr = ConfigOperationHandler(opcb)
         # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
         param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
+    elif sys.argv[1] == 'readonly':
+        hdlr = ConfigOperationHandler(opcb)
+        # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
+        param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'enable', 'boot_part_no': '1', 'target': '/dev/mmcblk2'}
     else:
         exit(1)
 
