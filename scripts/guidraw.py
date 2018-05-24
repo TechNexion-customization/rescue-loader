@@ -108,7 +108,7 @@ class GuiDraw(object):
                 elif confdict['class'] == 'QWaitingIndicator':
                     # create the QWaitingIndicator's sub class object
                     _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
-                    cls.clsGuiDraws.update({confdict['name']: QWaitingIndicator(confdict, parent)})
+                    cls.clsGuiDraws.update({confdict['name']: QWaitingIndicator(parent)})
 
                 elif hasattr(QtGui, confdict['class']) or hasattr(QtSvg, confdict['class']) or confdict['class'] == 'Line':
                     # DIRTY HACK for drawing h/v line in QtDesigner with condition checking confdict['class'] == 'Line'

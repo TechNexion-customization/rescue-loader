@@ -12,19 +12,19 @@
 import re
 import os
 import sys
-import time
 import signal
 import socket
 import logging
-import subprocess
 import defconfig
+
+from guiprocslot import _displayMessage
 from guidraw import GuiDraw
 from xmldict import XmlDict, ConvertXmlToDict
 from defconfig import DefConfig, SetupLogging
 from messenger import BaseMessenger
 from view import BaseViewer
 
-from PyQt4 import QtNetwork, QtCore, QtDBus, QtGui, QtSvg
+from PyQt4 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
 
 # get the handler to the current module, and setup logging options
@@ -420,12 +420,8 @@ class GuiViewer(QObject, BaseViewer):
             self.__parseConf(self.mConfDict['gui_viewer'])
         self.__setupMsger()
 
-        # for checking network connectivity
-        self.mNetMgr = QtNetwork.QNetworkAccessManager()
-        # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
-        self.mNetMgr.finished.connect(self._networkResponse)
-        # signal once after 1000ms to check network connectivity
-        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+        # signal once after 1000ms to do initialisation checking
+        QtCore.QTimer.singleShot(1000, self.__initialCheck)
 
     def __setupMsger(self):
         # check the DefConfig, and create mMsger as the dbus client
@@ -641,36 +637,15 @@ class GuiViewer(QObject, BaseViewer):
     ###########################################################################
     # GuiViewer flow control related
     ###########################################################################
-    def __checkNetwork(self):
-        # use QtNetwork NAMger to send a request to technexion's rescue server
-        # when the request is finished, NAMger will signal its "finish" signal
-        # which calls back to self._networkResponse() with reply
-        url = 'http://rescue.technexion.net'
-        req = QtNetwork.QNetworkRequest(QtCore.QUrl(url))
-        self.mNetMgr.get(req)
-
-    def _networkResponse(self, reply):
-        # Check whether network connect is active and correct
-        if reply.error() != QtNetwork.QNetworkReply.NoError:
-            _logger.error("Network Access Manager Error occured: {}, {}", reply.error(), reply.errorString())
-            # the system does not have a valid network interface and connection
-            ret = QtGui.QMessageBox.critical(self.mGuiRootWidget, 'TechNexion Rescue System', 'Internet not available!!!', QtGui.QMessageBox.Reset|QtGui.QMessageBox.Retry, QtGui.QMessageBox.Retry)
-            if ret == QtGui.QMessageBox.Reset:
-                # reset/reboot the system
-                _logger.critical('Internet not available!!!')
-                sys.exit(1)
-            elif ret == QtGui.QMessageBox.Retry:
-                QtCore.QTimer.singleShot(1000, self.__checkNetwork)
-                return
-
-        # Check whether the dbus connection and interface is valid
+    def __initialCheck(self):
+        # 1. Check whether the dbus connection and interface is valid
         if not self.mMsger.hasValidDbusConn():
             # the system does not have a valid DBus Session or dbus interface
-            ret = QtGui.QMessageBox.critical(self.mGuiRootWidget, 'TechNexion Rescue System', 'DBus session bus or installer dbus server not available!!!', QtGui.QMessageBox.Reset, QtGui.QMessageBox.Reset)
-            if ret == QtGui.QMessageBox.Reset:
-                # reset/reboot the system
-                _logger.critical('DBus session bus or installer dbus server not available!!!')
-                sys.exit(1)
+            ret = _displayMessage(self.mGuiRootWidget, 'NoDbus')
+            if ret: # accept:1, reject: 0
+                _logger.critical('DBus session bus or installer dbus server not available!!! Retrying...')
+                QtCore.QTimer.singleShot(1000, self.__initialCheck)
+                return
 
         # Finally, emit the signals defined for the root gui element, passing
         # the viewer reference to the QProcessSlots, allowing them to
@@ -690,18 +665,23 @@ class GuiViewer(QObject, BaseViewer):
         called by QProcessSlot's processSlot() slot
         """
         try:
-            # self.responseSignal.connect(self.sender().resultSlot)
+            # try to disconnect first, then connect
+            self.responseSignal.disconnect(senderSlot)
+        except:
+            pass
+        try:
             self.responseSignal.connect(senderSlot)
             _logger.info("connect responseSignal to {}.resultSlot.".format(senderSlot))
         except:
             _logger.warning("connect responseSignal to {}.resultSlot failed".format(senderSlot))
+            raise
 
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
 
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
-            pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 2, scnRect.height() * 2))
-            brush = QtGui.QBrush(pixmap.scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio))
+            pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 4, scnRect.height() * 4)).scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio)
+            brush = QtGui.QBrush(pixmap)
             palette.setBrush(QtGui.QPalette.Background, brush)
             self.mGuiRootWidget.setPalette(palette)
             self.mGuiRootWidget.setGeometry(scnRect)

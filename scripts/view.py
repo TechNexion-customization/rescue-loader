@@ -360,9 +360,10 @@ if __name__ == "__main__":
     config_subloadparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
     config_subsaveparser = config_subparser.add_parser('save', help="Save the configuration file")
     config_subsaveparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
+
     # 'mmc' 'target'
     # python3 view.py {'config' 'mmc' -c 'bootpart' -s 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
-    # param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_setting': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'location': '/dev/mmcblk2'}
+    # param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
     config_submmcparser = config_subparser.add_parser('mmc', help='Specify MMC configure settings')
     config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_OPTION_NAME', action='store', help='Specify the mmc configuration option')
     config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the mmc action for the configuration option')
@@ -374,13 +375,27 @@ if __name__ == "__main__":
     #config_parser.add_argument('-t', '--target-device', dest='target', choices=('mmc', 'i2c', 'gpio'), default='mmc', action='store', help='Specify target device to configure, choices are: [mmc, i2c, gpio, ...]')
     #config_parser.add_argument('-l', '--location', dest='location', default='/dev/mmcblk2', action='store', help='Specify the mmc dev path')
 
+    # 'nic' 'target'
+    # python3 view.py {'config' 'nic' -c 'ifflags' -s 'get' enp3s0'}
+    # param = {'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': 'enp3s0'}
+    config_submmcparser = config_subparser.add_parser('nic', help='Specify network configure settings')
+    config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_NAME', action='store', help='Specify the network configuration option')
+    config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the network configure action for the configuration option')
+    config_submmcparser.add_argument('-d', '--config-data', dest='config_data', metavar='CONFIG_DATA', action='store', default='', help='Specify the network configuration data')
+    config_submmcparser.add_argument('target', metavar='TARGET_MMC_NODEPATH', action='store', help='Specify the mmc device path to configure')
+
+
+
     # verify commands
 
 
+
     # connect commands
+
     
 
     # disconnect commands
+
     
 
 #     # start commands

@@ -12,6 +12,7 @@ from model import CopyBlockActionModeller, \
                   QueryWebFileActionModeller, \
                   QueryLocalFileActionModeller, \
                   ConfigMmcActionModeller, \
+                  ConfigNicActionModeller, \
                   BaseActionModeller
 import urllib.parse
 
@@ -410,8 +411,9 @@ class ConfigOperationHandler(BaseOperationHandler):
     def isOpSupported(self, OpParams):
         # Check if User Response is valid
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys() and 'subcmd' in OpParams.keys():
-            if OpParams['cmd'] == 'config' and OpParams['subcmd'] == 'mmc':
-                return True
+            if OpParams['cmd'] == 'config':
+                if any(k in OpParams['subcmd'] for k in ['mmc', 'nic']):
+                    return True
         return False
 
     def _setupActions(self, OpParams):
@@ -419,6 +421,8 @@ class ConfigOperationHandler(BaseOperationHandler):
         # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_setting': 'enable', 'boot_part_no': 1, 'send_ack': '1', 'target': '/dev/mmcblk2'}
         if (self.__parseParam(OpParams)):
             self.mActionModellers.append(ConfigMmcActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            self.mActionModellers.append(ConfigNicActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         else:
@@ -596,18 +600,23 @@ if __name__ == "__main__":
         hdlr = DownloadOperationHandler(opcb)
         # python3 view.py {download -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img}
         param = {'cmd': 'download', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', 'tgt_filename': './ubuntu.img'}
-    elif sys.argv[1] == 'config':
+    elif sys.argv[1] == 'mmcconfig':
         hdlr = ConfigOperationHandler(opcb)
         # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
         param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
-    elif sys.argv[1] == 'readonly':
+    elif sys.argv[1] == 'mmcreadonly':
         hdlr = ConfigOperationHandler(opcb)
         # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
         param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'enable', 'boot_part_no': '1', 'target': '/dev/mmcblk2'}
+    elif sys.argv[1] == 'nicifflag':
+        hdlr = ConfigOperationHandler(opcb)
+        # python3 view.py {'config' -t mmc -c 'bootpart' -i 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
+        param = {'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': 'enp3s0'}
     else:
         exit(1)
 
     if (hdlr.isOpSupported(param)):
         hdlr.performOperation(param)
     print(hdlr.getStatus())
+    print(hdlr.getResult())
     exit(0)

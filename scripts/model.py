@@ -4,8 +4,11 @@ import abc
 import re
 import os
 import stat
+import fcntl
 import psutil
 import pyudev
+import socket
+import struct
 import subprocess
 import logging
 from argparse import ArgumentTypeError
@@ -694,12 +697,11 @@ class QueryLocalFileActionModeller(BaseActionModeller):
 
 class ConfigMmcActionModeller(BaseActionModeller):
     """
-    # Check for emmc boot sequence
-    if 'androidthings' in self.mPick['os']:
-        subprocess.check_call(['mmc', 'bootpart', 'enable', '1', '1', '/dev/mmcblk2'])
-    else:
-        subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-     or subprocess.check_call(['mmc', 'bootpart', 'disable', '1', '1', '/dev/mmcblk2'])
+    Configures emmc boot partition option
+    for androidthings:
+        set boot partition 1 to enable
+    for other TechNexion OSes"
+        set boot partition options to disable
     """
     def __init__(self):
         super().__init__()
@@ -708,12 +710,11 @@ class ConfigMmcActionModeller(BaseActionModeller):
         self.mSubProcCmd = []
 
     def _preAction(self):
-        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']):
+        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']) and self.mParam['subcmd'] == 'mmc':
             # subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-            if self.mParam['subcmd'] == 'mmc' and any(value in self.mParam['config_id'] \
-                                                      for value in ['bootpart', 'bootbus', 'bkops', 'cache', 'csd', 'cid', 'extcsd', \
-                                                                    'enh_area', 'hwreset', 'rpmb', 'scr', 'ffu', 'sanitize', 'status', \
-                                                                    'write_reliability', 'writeprotect']):
+            if any(value in self.mParam['config_id'] for value in ['bootpart', 'bootbus', 'bkops', 'cache', 'csd', 'cid', 'extcsd', \
+                                                                   'enh_area', 'hwreset', 'rpmb', 'scr', 'ffu', 'sanitize', 'status', \
+                                                                   'write_reliability', 'writeprotect']):
                 self.mSubProcCmd.append('mmc')
             else:
                 self.mSubProcCmd.append('echo')
@@ -747,6 +748,179 @@ class ConfigMmcActionModeller(BaseActionModeller):
         except Exception as ex:
             _logger.error('Exception: {}'.format(ex))
             raise
+        return False
+
+
+
+class ConfigNicActionModeller(BaseActionModeller):
+    """
+    Config Network Interfaces for the current network status
+    Using IOCTL on socket fd
+    e.g. ioctl
+    fcntl.ioctl(sock.fileno(), 0x8915,  # SIOCGIFADDR, struct.pack('256s', ifname[:15]))
+
+    struct socladdr {
+         unsigned short sa_family;
+         char sa_data[16];
+    }
+
+    # define IF_NAMESIZE    16
+    # define IFHWADDRLEN    6
+    # define IFNAMSIZ       IF_NAMESIZE
+    struct ifreq {
+        /* Interface name, e.g. "en0".  */
+        char ifrn_name[IFNAMSIZ];                     16
+        union {
+            struct sockaddr ifru_addr;                16
+            struct sockaddr ifru_dstaddr;
+            struct sockaddr ifru_broadaddr;
+            struct sockaddr ifru_netmask;
+            struct sockaddr ifru_hwaddr;
+            short int ifru_flags;
+            int ifru_ivalue;
+            int ifru_mtu;
+            struct ifmap ifru_map;
+            char ifru_slave[IFNAMSIZ];    /* Just fits the size */
+            char ifru_newname[IFNAMSIZ];
+            __caddr_t ifru_data;
+        } ifr_ifru;
+    };
+    """
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+        self.mIoctlCmd = None
+        self.mIoctlArg = None
+
+    def _preAction(self):
+        if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']) and self.mParam['subcmd'] == 'nic':
+            if self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'iflink':
+                self.mIoctlCmd = 0x8911 # SIOCSIFLINK
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifconf':
+                self.mIoctlCmd = 0x8912 # SIOCGIFCONF
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifname':
+                self.mIoctlCmd = 0x8910 # SIOCGIFNAME
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifname':
+                self.mIoctlCmd = 0x8923 # SIOCSIFNAME
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifflags':
+                self.mIoctlCmd = 0x8913 # SIOCGIFFLAGS
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifflags':
+                self.mIoctlCmd = 0x8914 # SIOCSIFFLAGS
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifaddr':
+                self.mIoctlCmd = 0x8915 # SIOCGIFADDR
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifaddr':
+                self.mIoctlCmd = 0x8916 # SIOCSIFADDR
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifdstaddr':
+                self.mIoctlCmd = 0x8917 # SIOCGIFDSTADDR
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifdstaddr':
+                self.mIoctlCmd = 0x8918 # SIOCSIFDSTADDR
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifbraddr':
+                self.mIoctlCmd = 0x8919 # SIOCGIFBRDADDR
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifbraddr':
+                self.mIoctlCmd = 0x891a # SIOCSIFBRDADDR
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifnetmask':
+                self.mIoctlCmd = 0x891b # SIOCGIFNETMASK
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifnetmask':
+                self.mIoctlCmd = 0x891c # SIOCSIFNETMASK
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmetric':
+                self.mIoctlCmd = 0x891d # SIOCGIFMETRIC
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmetric':
+                self.mIoctlCmd = 0x891e # SIOCSIFMETRIC
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmem':
+                self.mIoctlCmd = 0x891f # SIOCGIFMEM
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmem':
+                self.mIoctlCmd = 0x8920 # SIOCSIFMEM
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmtu':
+                self.mIoctlCmd = 0x8921 # SIOCGIFMTU
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmtu':
+                self.mIoctlCmd = 0x8922 # SIOCSIFMTU
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifencap':
+                self.mIoctlCmd = 0x8925 # SIOCGIFENCAP
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifencap':
+                self.mIoctlCmd = 0x8926 # SIOCSIFENCAP
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifhwaddr':
+                self.mIoctlCmd = 0x8927 # SIOCGIFHWADDR
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifhwaddr':
+                self.mIoctlCmd = 0x8924 # SIOCSIFHWADDR
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifslave':
+                self.mIoctlCmd = 0x8929 # SIOCGIFSLAVE
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifslave':
+                self.mIoctlCmd = 0x8930 # SIOCSIFSLAVE
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifpflags':
+                self.mIoctlCmd = 0x8935 # SIOCGIFPFLAGS
+                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+            elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifpflags':
+                self.mIoctlCmd = 0x8934 # SIOCSIFPFLAGS
+            else:
+                return False
+
+            _logger.info('_preAction: ioctl cmd: {} arg: {}'.format(self.mIoctlCmd, self.mIoctlArg))
+            return True
+        return False
+
+    def _mainAction(self):
+        try:
+            # do ioctl to get/set NIC related information
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.mResult['retcode'] = fcntl.ioctl(s.fileno(), self.mIoctlCmd, self.mIoctlArg)
+            _logger.info('retcode: {}, unpack: {}'.format(self.mResult['retcode'], struct.unpack('16s240s', self.mResult['retcode'])))
+            return True
+        except Exception as ex:
+            _logger.error('Exception: {}'.format(ex))
+            raise
+        return False
+
+    def _postAction(self):
+        """
+        Convert the returned ioctl info usable information and store in self.mResults
+        for ifflags:
+            IFF_UP = 0x1,              /* interface is up. Can be toggled through sysfs. */
+            IFF_BROADCAST = 0x2,       /* broadcast address valid. Volatile. */
+            IFF_DEBUG = 0x4,           /* turn on debugging. Can be toggled through sysfs. */
+            IFF_LOOPBACK = 0x8,        /* is a loopback net. Volatile. */
+            IFF_POINTOPOINT = 0x10,    /* interface is has p-p link. Volatile. */
+            IFF_NOTRAILERS = 0x20,     /* avoid use of trailers. Can be toggled through sysfs. Volatile. */
+            IFF_RUNNING = 0x40,        /* Resources allocated. interface RFC2863 OPER_UP. Volatile. */
+            IFF_NOARP = 0x80,          /* no ARP protocol. Can be toggled through sysfs. Volatile. */
+            IFF_PROMISC = 0x100,       /* receive all packets. Can be toggled through sysfs. */
+            IFF_ALLMULTI = 0x200,      /* receive all multicast packets. Can be toggled through sysfs. */
+            IFF_MASTER = 0x400,        /* master of a load balancer. Volatile. */
+            IFF_SLAVE = 0x800,         /* slave of a load balancer. Volatile. */
+            IFF_MULTICAST = 0x1000,    /* Supports multicast. Can be toggled through sysfs. */
+            IFF_PORTSEL = 0x2000,      /* can set media type. Can be toggled through sysfs. */
+            IFF_AUTOMEDIA = 0x4000,    /* auto media select active. Can be toggled through sysfs. */
+            IFF_DYNAMIC = 0x8000       /* dialup device with changing addresses. Can be toggled through sysfs. */
+            IFF_LOWER_UP = 0x10000     /* driver signals L1 up. Volatile. */
+            IFF_DORMENT = 0x20000      /* driver signals dormant. Volatile. */
+            IFF_ECHO = 0x40000         /* echo sent packets. Volatile. */
+        """
+        if self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifflags':
+            self.mResult['ifname'], self.mResult['flags'] = struct.unpack('16si236x', self.mResult['retcode'])
+            _logger.info('flags: {}'.format(self.mResult['flags']))
+            self.mResult['state'] = []
+            if self.mResult['flags'] & 0x1:
+                self.mResult['state'].append('UP')
+            if self.mResult['flags'] & 0x2:
+                self.mResult['state'].append('BOARDCAST')
+            if self.mResult['flags'] & 0x40:
+                self.mResult['state'].append('RUNNING')
+            if self.mResult['flags'] & 0x1000:
+                self.mResult['state'].append('MULTICAST')
+            if self.mResult['flags'] & 0x10000:
+                self.mResult['state'].append('LOWER_UP')
+            return True
         return False
 
 
@@ -828,4 +1002,11 @@ if __name__ == "__main__":
             cfgmodel.setActionParam(cfgparam)
             cfgmodel.performAction()
             print(cfgmodel.getResult())
+        elif sys.argv[1] == 'nicflags':
+            nicmodel = ConfigNicActionModeller()
+            # self.mParam['subcmd'] == 'nic' and self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifflags':
+            nicparam = {'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': 'enp3s0'}
+            nicmodel.setActionParam(nicparam)
+            nicmodel.performAction()
+            print(nicmodel.getResult())
     exit()

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 import re
 import os
 import sys
+import pyqrcode
 import subprocess
 import math
 import socket
 from urllib.parse import urlparse
-from PyQt4 import QtGui, QtCore, QtSvg
+from PyQt4 import QtGui, QtCore, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
 # import our resource.py with all the pretty images/icons
 import resource
@@ -24,6 +24,62 @@ def _printSignatures(qobj):
 def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
     r,f=min(int(math.log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
     return (f%(abs(r%(-r-1)),pre[r],u)).format(n*b**pow/b**float(r))
+
+def _displayMessage(parent, msgtype):
+    msgBox = QMessageDialog(parent)
+    if msgtype == 'NoCable':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No ethernet cable connected,\nplease connect an ethernet cable.")
+        msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoNIC':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No NIC,\nPlease check your network card")
+        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoDrv':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("Network Interface is down,\nPlease check your network interface is ready")
+        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoConnection':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No Network Connectivity,\nplease check your NAME server.")
+        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoDbus':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No DBus Connectivity,\nplease make sure installerd.service is running...")
+        #msgBox.setContent(QtGui.QMovie(':/res/images/error_dbus.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoStorage':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No Mass Storage Detected,\n Please insert an SD card.")
+        msgBox.setContent(QtGui.QMovie(':/res/images/error_sd.gif'))
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'NoCpuForm':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+        msgBox.setTitle("No CPU or Form Factor Detected,\n Continue with all CPU/Form Factor?")
+        #msgBox.setContent(QtGui.QMovie(':/res/images/error_sd.gif'))
+        msgBox.setButtonText({'accept': 'RETRY', 'reject': 'CONTINUE'})
+    elif msgtype == 'Reboot':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+        msgBox.setTitle("Flash Complete.\nPlease set your jumper to BOOT MODE,\nand reset your board.")
+        msgBox.setContent(QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif'))
+        msgBox.setButtonText({'accept': 'REBOOT'})
+    elif msgtype == 'InputError':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+        msgBox.setTitle("Input Error.")
+        msgBox.setContent("Please Choose an image file to download and a storage device to flash")
+        msgBox.setButtonText({'accept': 'RETRY'})
+    elif msgtype == 'Flashing':
+        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+        msgBox.setTitle("Flashing images.")
+        msgBox.setContent("Do you want to stop?")
+        msgBox.setButtonText({'accept': 'NO', 'reject': 'STOP'})
+    else:
+        return False
+    return msgBox.exec_()
 
 def _insertToContainer(lstResult, qContainer, qSignal):
     def match_data(data):
@@ -64,6 +120,10 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif 'board' in row:
                     #update the VERSION within the svg resource byte array, and draw the svg
                     resName = ":/res/images/board_{}.svg".format(row['board'].lower())
+                    #font = QtGui.QFont('Lato', 32, QtGui.QFont.Bold)
+                    #item.setFont(font)
+                    #item.setTextColor(QtGui.QColor(184, 24, 34))
+                    #item.setText(row['board'].lower())
                     item.setToolTip(row['board'].lower())
                 elif 'display' in row:
                     if 'ifce_type' in row:
@@ -220,9 +280,9 @@ class QProcessSlot(QtGui.QWidget):
         """
         if confdict['name'] not in cls.subclasses.keys():
             raise ValueError('Bad slot name: {}'.format(confdict['name']))
-        return cls.subclasses[confdict['name']](confdict, parent)
+        return cls.subclasses[confdict['name']](parent)
 
-    def __init__(self, confdict, parent = None):
+    def __init__(self, parent = None):
         QtGui.QWidget.__init__(self, parent)
         self.mCmds = []
         self.mViewer = None
@@ -338,9 +398,9 @@ class detectDeviceSlot(QProcessSlot):
     success = pyqtSignal(str)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
-        self.mResults = ''
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        self.mResults = {}
 
     def process(self, inputs = None):
         """
@@ -353,17 +413,30 @@ class detectDeviceSlot(QProcessSlot):
         """
         Handle returned detect device results from PyQt Msger
         """
-        if 'found_match' in results:
+        if 'found_match' in results and results['status'] == 'success':
+            self.mResults.update(results)
             form, cpu, baseboard = results['found_match'].split(',')
             self._findChildWidget('lblCpu').setText(cpu)
             self._findChildWidget('lblForm').setText(form)
-            self.success.emit('Found: {} {} {}\n'.format(cpu, form, baseboard))
-        else:
-            if results['status'] != 'processing':
-                form = cpu = baseboard = '' # same reference
+
+    def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
+        # Check for available cpu anf form factor
+        if 'found_match' not in self.mResults and self.mResults['status'] == 'failure':
+            ret = _displayMessage(self, 'NoCpuForm')
+            if ret: # Accepted: 1 (retry), Rejected: 0 (continue)
+                # retry scanning the storage
+                # signal once after 1000ms to do check for CPU / Form Factor again
+                QtCore.QTimer.singleShot(1000, self.process)
+                return
+            else:
+                # do not retry and carry on detecting all imx and all form factor
                 self._findChildWidget('lblCpu').setText('No CPU')
                 self._findChildWidget('lblForm').setText('No Form Factor')
                 self.fail.emit('Target Device SOM info not found.\n')
+
+        form, cpu, baseboard = self.mResults['found_match'].split(',')
+        self.success.emit('Found: {} {} {}\n'.format(cpu, form, baseboard))
 
 
 
@@ -378,27 +451,95 @@ class crawlWebSlot(QProcessSlot):
     #success = pyqtSignal(int, int, object) # QtGui.PyQt_PyObject)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        self.mInputs = {}
         self.mResults = []
+        # use QtNetwork NAMger to send a request to technexion's rescue server
+        # when the request is finished, NAMger will signal its "finish" signal
+        # which calls back to self._networkResponse() with reply
+        # for checking network connectivity
+        self.mNetMgr = QtNetwork.QNetworkAccessManager()
+        # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
+        self.mNetMgr.finished.connect(self._urlResponse)
 
     def process(self, inputs):
         """
-        Handle crawlWeb callback slot
+        Handle crawlWeb process slot (signalled by initialized signal)
         """
-        params = {}
         if 'location' not in inputs:
-            params.update({'location': '/'})
+            self.mInputs.update({'location': '/'})
         if 'target' not in inputs:
-            params.update({'target': 'http://rescue.technexion.net'})
-        params.update(inputs)
-        self.__crawlUrl(params) # e.g. /pico-imx7/pi-070/
+            self.mInputs.update({'target': 'http://rescue.technexion.net'})
 
-    def __crawlUrl(self, params):
+        # check network connections
+        self.__checkNetwork()
+        
+    def __checkNetwork(self):
+        # Check for networks, which means sending commands to installerd.service to request for network status
+        # send request to installerd.service to request for network status.
+        _logger.debug('send request to installerd to query network status...')
+        self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': 'eth0'})
+        self.request.emit(self.mCmds[-1])
+
+    def __hasValidNetworkConnectivity(self):
+        _logger.debug('check whether we have connectivity to server...')
+        url = 'http://rescue.technexion.net'
+        req = QtNetwork.QNetworkRequest(QtCore.QUrl(url))
+        self.mNetMgr.get(req)
+
+    def _urlResponse(self, reply):
+        # Check whether network connection is active and can connect to our rescue server
+        if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
+            _logger.error("Network Access Manager Error occured: {}, {}".format(reply.error(), reply.errorString()))
+            # the system cannot connect to our rescue server
+            ret = _displayMessage(self, 'NoConnection')
+            if ret: # accept: 1, reject: 0
+                _logger.critical('TechNexion rescue server not available!!! Retrying...')
+                QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
+                return
+        _logger.debug('start the crawl process: {}'.format(self.mInputs))
+        # start the crawl process
+        self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
+
+    def __crawlUrl(self, inputs):
+        params = {}
+        params.update(inputs)
         self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
+        _logger.debug('crawl request: {}'.format(self.mCmds[-1]))
         self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
+        if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
+            print('subcmd: nic, parse result: {}'.format(results))
+            if 'status' in results and results['status'] == 'success':
+                if 'state' in results.keys() and 'flags' in results.keys():
+                    # a. Check whether NIC hardware available (do we have mac?)
+                    #if 'LOWER_UP' in results['state']:
+                    # b. Check NIC connection is up (flag says IFF_UP?)
+                    if 'UP' in results['state']:
+                        # c. Check NIC connection is running (flag says IFF_RUNNING?)
+                        if 'RUNNING' in results['state']:
+                            # d. when all is running, check to see if we can connect to our rescue server.
+                            self.__hasValidNetworkConnectivity()
+                            return
+                        else:
+                            err = 'NoCable'
+                    else:
+                        err = 'NoDrv'
+                    #else:
+                    #    err = 'NoNic'
+                    ret = _displayMessage(self, err)
+                    if ret: # accept: 1, (RETRY) reject: 0
+                        if err == 'NoNic':
+                            _logger.critical('Network Error No L1 Driver!!! Retrying...')
+                        elif err == 'NoDrv':
+                            _logger.critical('Network Error NIC Down!!! Retrying...')
+                        elif err == 'NoCable':
+                            _logger.critical('Network Error No Cable!!! Retrying...')
+                        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+            return
+
         #print('crawlWeb result: {}'.format(results))
         if 'total_uncompressed' in results.keys() or 'total_size' in results.keys():
             # step 3: figure out the xz file to download
@@ -434,6 +575,10 @@ class crawlWebSlot(QProcessSlot):
                         if self.__matchDevice(item[2].split('/rescue/', 1)[1]):
                             self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location': '/' + item[2].split('/rescue/', 1)[1]})
             self.fail.emit('Crawling url {} to find suitable xz file.\n'.format(results['location']))
+
+        # Emit our own finished signal, because network check will cause a premature finish.emit()
+        if len(self.mCmds) == 0:
+            self.finish.emit()
 
     def __parseWebList(self, results):
         if 'file_list' in results and isinstance(results['file_list'], dict):
@@ -494,8 +639,8 @@ class crawlLocalfsSlot(QProcessSlot):
     #success = pyqtSignal(int, int, object) # QtGui.PyQt_PyObject)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mResults = []
 
     def process(self, inputs):
@@ -559,8 +704,8 @@ class scanStorageSlot(QProcessSlot):
     #success = pyqtSignal(int, int, object) # QtGui.PyQt_PyObject)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mResults = []
 
     def process(self, inputs = None):
@@ -608,10 +753,11 @@ class scanStorageSlot(QProcessSlot):
             self.success.emit(self.mResults)
             return
         else:
-            ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'No suitable storage found, please insert sdcard...\nClick Retry to rescan!!!', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Retry, QtGui.QMessageBox.Ok)
-            if ret == QtGui.QMessageBox.Retry:
+            #ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'No suitable storage found, please insert sdcard...\nClick Retry to rescan!!!', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Retry, QtGui.QMessageBox.Ok)
+            ret = _displayMessage(self, 'NoStorage')
+            if ret: # Accepted: 1, Rejected: 0
                 # retry scanning the storage
-                self.process()
+                QtCore.QTimer.singleShot(1000, self.process)
 
 
 @QProcessSlot.registerProcessSlot('scanPartition')
@@ -623,8 +769,8 @@ class scanPartitionSlot(QProcessSlot):
     success = pyqtSignal(object)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mResults = []
 
     def process(self, inputs):
@@ -662,8 +808,8 @@ class scanPartitionSlot(QProcessSlot):
 #     success = pyqtSignal(dict)
 #     fail = pyqtSignal(str)
 # 
-#     def __init__(self,  confdict, parent = None):
-#         super().__init__(confdict, parent)
+#     def __init__(self, parent = None):
+#         super().__init__(parent)
 #         self.mResults = []
 #         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None}
 #         self.mLstWgtBoard = None
@@ -835,8 +981,8 @@ class scanPartitionSlot(QProcessSlot):
 #
 ###############################################################################
 class QChooseSlot(QProcessSlot):
-    def __init__(self, confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mResults = []
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
 
@@ -929,8 +1075,8 @@ class chooseOSSlot(QChooseSlot):
     success = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mOSUIList = None
         self.mLstWgtOS = None
         self.mLstWgtSelection =None
@@ -1043,8 +1189,8 @@ class chooseBoardSlot(QChooseSlot):
     success = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mBoardUIList = None
         self.mLstWgtBoard = None
         self.mLstWgtSelection =None
@@ -1133,8 +1279,8 @@ class chooseDisplaySlot(QChooseSlot):
     success = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mDisplayUIList = []
         self.mLstWgtDisplay = None
         self.mLstWgtSelection =None
@@ -1240,8 +1386,8 @@ class chooseStorageSlot(QChooseSlot):
     success = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mStorageUIList = None
         self.mLstWgtStorage = None
         self.mLstWgtSelection =None
@@ -1335,8 +1481,8 @@ class chooseSelectionSlot(QChooseSlot):
     chosen = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mLstWgtSelection =None
         self.mLstWgtStorage = None
         self.mLstWgtOS = None
@@ -1473,8 +1619,8 @@ class downloadImageSlot(QProcessSlot):
     success = pyqtSignal(int)
     fail = pyqtSignal(str)
 
-    def __init__(self,  confdict, parent = None):
-        super().__init__(confdict, parent)
+    def __init__(self, parent = None):
+        super().__init__(parent)
         self.mFileList = []
         self.mResults = {}
         self.mFileUrl = None
@@ -1549,11 +1695,13 @@ class downloadImageSlot(QProcessSlot):
                     # disable the selection widget once started flashing
                 else:
                     # prompt for error message
-                    QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Input Error:\nPlease Choose an image file to download and a storage device to flash')
+                    #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Input Error:\nPlease Choose an image file to download and a storage device to flash')
+                    _displayMessage(self, 'InputError')
 
         else:
             # prompt for error message
-            QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Hold Your Hourses!!!\nPlease wait until downloading is completed...')
+            #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Hold Your Hourses!!!\nPlease wait until downloading is completed...')
+            _displayMessage(self, 'Flashing')
 
     def __getUrlStorageFromPick(self, pick):
         # get picked items from lstWgtSelection
@@ -1603,13 +1751,25 @@ class downloadImageSlot(QProcessSlot):
 
         # Check for flash complete and send another command for setting emmc boot sequence
         if results['status'] == 'success' and results['cmd'] == 'download':
-            if 'androidthings' in self.mPick['os']:
-                #subprocess.check_call(['mmc', 'bootpart', 'enable', '1', '1', '/dev/mmcblk2'])
-                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
-            else:
-                #subprocess.check_call(['mmc', 'bootpart', 'disable', '1', '1', '/dev/mmcblk2']) or
-                #subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+            # 1. disable readonly for mmc boot partition
+            # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
+            self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                              'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                              'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+            self.request.emit(self.mCmds[-1])
+
+        if results['status'] == 'success' and results['cmd'] == 'config' and results['config_id'] == 'readonly':
+            # 2. clear the mmc boot partition
+            # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mTgtStorage + 'boot0'}
+            self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mTgtStorage + 'boot0'})
+            self.request.emit(self.mCmds[-1])
+
+        if results['status'] == 'success' and results['cmd'] == 'flash':
+            # 3. set the mmc boot partition option
+            # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
+            self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                              'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                              'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
             self.request.emit(self.mCmds[-1])
 
 #         # Check for success of the config mmc command
@@ -1622,11 +1782,12 @@ class downloadImageSlot(QProcessSlot):
 
         # Final notification
         if isinstance(self.mResults, dict) and (self.mResults['status'] == 'success' or self.mResults['status'] == 'failure'):
-            ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'Installation {}...\nSet boot jumper to boot from sdcard/emmc,\nAnd click RESET to reboot sytem!'.format('Complete' if (self.mResults['status'] == 'success') else 'Failed'), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Reset, QtGui.QMessageBox.Ok)
-            if ret == QtGui.QMessageBox.Reset:
+            #ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'Installation {}...\nSet boot jumper to boot from sdcard/emmc,\nAnd click RESET to reboot sytem!'.format('Complete' if (self.mResults['status'] == 'success') else 'Failed'), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Reset, QtGui.QMessageBox.Ok)
+            ret = _displayMessage(self, 'Reboot')
+            if ret:
                 try:
                     # reset/reboot the system
-                    subprocess.call(['reboot'])
+                    subprocess.check_call(['reboot'])
                 except:
                     raise
 
@@ -1642,7 +1803,7 @@ class downloadImageSlot(QProcessSlot):
 
 
 class QWaitingIndicator(QtGui.QWidget):
-    def __init__(self, confdict, parent=None):
+    def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
         palette = QtGui.QPalette(self.palette())
         palette.setColor(palette.Background, QtCore.Qt.transparent)
@@ -1707,3 +1868,131 @@ class QWaitingIndicator(QtGui.QWidget):
     def timerEvent(self, event):
         self.mCounter += 1
         self.update() # cause re-painting
+
+
+
+class QMessageDialog(QtGui.QDialog):
+    """
+    Our own customized Message Dialog to display messages in our own TN styles
+    """
+    def __init__(self, parent=None):
+        QtGui.QDialog.__init__(self, parent, QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
+
+        # Set the geometry to slightly smaller than application geomtry
+        self.mRect = parent.window().geometry() if parent else QtGui.QApplication.instance().desktop().screenGeometry()
+        self.setGeometry(self.mRect.width() / 16, self.mRect.height() / 16, self.mRect.width() - (self.mRect.width() / 8), self.mRect.height() - (self.mRect.height() / 8))
+
+        # draw and mask round corner
+        radius = 20.0
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(QtCore.QRectF(self.rect()), radius, radius)
+        mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(mask)
+
+        # set background to transparent
+        palette = QtGui.QPalette(self.palette())
+        palette.setColor(palette.Background, QtCore.Qt.transparent)
+        self.setPalette(palette)
+
+        # sets fonts
+        font = QtGui.QFont('Lato', 32, QtGui.QFont.Normal)
+        self.setFont(font)
+
+        # Create widgets
+        self.mIcon = QtGui.QLabel()
+        self.mIcon.setAlignment(QtCore.Qt.AlignCenter)
+        self.mTitle = QtGui.QLabel()
+        self.mContent = QtGui.QLabel()
+        self.mContent.setAlignment(QtCore.Qt.AlignCenter)
+        self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel'), 'done': QtGui.QPushButton('done')}
+
+        # Set dialog layout
+        # Create grid layout for the MessageDialog widget and add widgets to layout
+        self.mLayout = QtGui.QGridLayout()
+        self.mLayout.addWidget(self.mIcon, 0, 0)
+        self.mLayout.addWidget(self.mTitle, 0, 1, 1, 4)  # row, col, rowspan, colspan
+        self.mLayout.addWidget(self.mContent, 1, 0, 3, 5)  # row, col, rowspan, colspan
+        self.mLayout.addWidget(self.mButtons['accept'], 6, 4)
+        self.mLayout.addWidget(self.mButtons['reject'], 6, 3)
+        self.setLayout(self.mLayout)
+
+        # Setup button signal to Dialog default slots
+        self.mButtons['accept'].clicked.connect(self.accept)
+        self.mButtons['reject'].clicked.connect(self.reject)
+        self.mButtons['done'].clicked.connect(self.done)
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        rect = event.rect()
+
+        # draw rounded rectangle the size of the event.rect() i.e. size of widget
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(QtCore.QRectF(rect), 20, 20)
+        pen = QtGui.QPen(QtCore.Qt.black, 10) #pen = QtGui.QPen(QtGui.QColor(15, 55, 112, 255), 10)
+        painter.setPen(pen)
+        # and fill it with our technexion background image
+        pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(rect.width() * 4, rect.height() * 4)).scaled(QtCore.QSize(rect.width(), rect.height()), QtCore.Qt.IgnoreAspectRatio)
+        brush = QtGui.QBrush(pixmap)
+        painter.fillPath(path, brush)
+        painter.drawPath(path)
+
+        # painter.fillRect(rect, QtGui.QBrush(QtGui.QColor(200, 200, 200, 255)))
+        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        painter.end()
+
+    def setButtonText(self, buttonTexts):
+        if isinstance(buttonTexts, dict):
+            for buttonRole, buttonText in buttonTexts.items():
+                for role in ['accept', 'reject', 'done']:
+                    if role == buttonRole:
+                        if isinstance(buttonText, str):
+                            self.mButtons[role].setText(buttonText)
+                            self.mButtons[role].show()
+                    else:
+                        self.mButtons[role].hide()
+
+    def setIcon(self, icon):
+        if isinstance(icon, QtGui.QIcon):
+            d = self.mRect.height() / 8 if self.mRect.height() / 8 < self.mRect.width() / 8 else self.mRect.width() / 8
+            iconsize = QtCore.QSize(d, d)
+            pix = icon.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.IgnoreAspectRatio)
+            self.mIcon.setPixmap(pix)
+            #self.mIcon.setMask(pix.mask())
+        else:
+            self.clear()
+
+    def setTitle(self, title):
+        if isinstance(title, str):
+            self.mTitle.setText(title)
+        elif isinstance(title, QtGui.QIcon):
+            d = self.mRect.height() / 8 if self.mRect.height() / 8 < self.mRect.width() / 8 else self.mRect.width() / 8
+            iconsize = QtCore.QSize(d, d)
+            pix = title.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
+            self.mTitle.setPixmap(pix)
+            #self.mIcon.setMask(pix.mask())
+        elif isinstance(title, QtGui.QPixmap):
+            self.mTitle.setPixmap(title)
+        elif isinstance(title, QtGui.QMovie):
+            self.mTitle.setMovie(title)
+            title.start()
+        else:
+            self.clear()
+
+    def setContent(self, content):
+        if isinstance(content, str):
+            self.mContent.setText(content)
+        elif isinstance(content, QtGui.QIcon):
+            d = self.mRect.height() / 1.5 if self.mRect.height() / 1.5 < self.mRect.width() / 1.5 else self.mRect.width() / 1.5
+            iconsize = QtCore.QSize(d, d)
+            pix = content.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
+            self.mTitle.setPixmap(pix)
+            #self.mIcon.setMask(pix.mask())
+        elif isinstance(content, QtGui.QPixmap):
+            self.mContent.setPixmap(content)
+        elif isinstance(content, QtGui.QMovie):
+            self.mContent.setMovie(content)
+            content.start()
+        else:
+            self.clear()
