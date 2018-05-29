@@ -69,10 +69,10 @@ class SignalHandler(QtNetwork.QAbstractSocket):
             for sig in unixSignals:
                 # setup new handler using signal.signal(), and it returns origin unix signal handler
                 self.mOrigSignalHandlers[sig] = signal.signal(sig, self.interrupt)
-                print('capture signal {} original handler {}'.format(sig, self.mOrigSignalHandlers[sig]))
+                _logger.info('capture signal {} original handler {}'.format(sig, self.mOrigSignalHandlers[sig]))
 
             if not UseTimer and hasattr(signal, 'set_wakeup_fd'):
-                print('socket pair setup')
+                _logger.debug('socket pair setup')
                 # get a pair of file descriptors from creating a socket pair
                 self.wsock, self.rsock = socket.socketpair(type=socket.SOCK_DGRAM)
                 # Let Qt AbstractSocket listen on the one end
@@ -87,7 +87,6 @@ class SignalHandler(QtNetwork.QAbstractSocket):
                 self.readyRead.connect(self.handleSignalWakeup)
             else:
                 # Dirty timer hack to get timer slice from mainloop (MS-Windows)
-                print('dirty hack - timer setup')
                 self.mTimer.timeout.connect(lambda: None)
                 self.mTimer.start(1000)
 
@@ -518,7 +517,7 @@ class GuiViewer(QObject, BaseViewer):
             parent = GuiDraw.GenGuiDraw(confdict)
             self.mGuiRootWidget = parent
             # Window Additional Flags
-            self.mGuiRootWidget.setWindowFlags(QtCore.Qt.SplashScreen) # | QtCore.Qt.WindowStaysOnTopHint)
+            self.mGuiRootWidget.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint) #QtCore.Qt.SplashScreen | QtCore.Qt.WindowStaysOnTopHint)
         else:
             # takes the old parent, and return itself as the new parent
             parent = GuiDraw.GenGuiDraw(confdict, parent)

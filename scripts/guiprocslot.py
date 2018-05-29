@@ -511,7 +511,7 @@ class crawlWebSlot(QProcessSlot):
 
     def parseResult(self, results):
         if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
-            print('subcmd: nic, parse result: {}'.format(results))
+            _logger.info('subcmd: nic, parse result: {}'.format(results))
             if 'status' in results and results['status'] == 'success':
                 if 'state' in results.keys() and 'flags' in results.keys():
                     # a. Check whether NIC hardware available (do we have mac?)
@@ -1876,7 +1876,7 @@ class QMessageDialog(QtGui.QDialog):
     Our own customized Message Dialog to display messages in our own TN styles
     """
     def __init__(self, parent=None):
-        QtGui.QDialog.__init__(self, parent, QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
+        QtGui.QDialog.__init__(self, parent, QtCore.Qt.SplashScreen) # QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
 
         # Set the geometry to slightly smaller than application geomtry
         self.mRect = parent.window().geometry() if parent else QtGui.QApplication.instance().desktop().screenGeometry()
