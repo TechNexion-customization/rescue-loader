@@ -17,8 +17,8 @@ import socket
 import logging
 import defconfig
 
-from guiprocslot import _displayMessage
 from guidraw import GuiDraw
+from guiprocslot import QMessageDialog
 from xmldict import XmlDict, ConvertXmlToDict
 from defconfig import DefConfig, SetupLogging
 from messenger import BaseMessenger
@@ -637,14 +637,22 @@ class GuiViewer(QObject, BaseViewer):
     # GuiViewer flow control related
     ###########################################################################
     def __initialCheck(self):
+        msgbox = self.mGuiRootWidget.findChild(QMessageDialog, 'msgbox')
+        msgbox.setMessage('NoDbus')
         # 1. Check whether the dbus connection and interface is valid
         if not self.mMsger.hasValidDbusConn():
             # the system does not have a valid DBus Session or dbus interface
-            ret = _displayMessage(self.mGuiRootWidget, 'NoDbus')
-            if ret: # accept:1, reject: 0
-                _logger.critical('DBus session bus or installer dbus server not available!!! Retrying...')
-                QtCore.QTimer.singleShot(1000, self.__initialCheck)
-                return
+            msgbox.setCheckFlags({'NoDbus': True})
+            msgbox.setModal(False)
+            msgbox.display(True) # _displayMessage(self.mGuiRootWidget, 'NoDbus') # non modal dialog
+            _logger.critical('DBus session bus or installer dbus server not available!!! Retrying...')
+            QtCore.QTimer.singleShot(1000, self.__initialCheck)
+            return
+        else:
+            msgbox.setCheckFlags({'NoDbus': False}) # _displayMessage(self.mGuiRootWidget, 'NoDbus', hide=True)
+            msgbox.display(False)
+            msgbox.clearCheckFlags()
+            msgbox.clearMessage()
 
         # Finally, emit the signals defined for the root gui element, passing
         # the viewer reference to the QProcessSlots, allowing them to
@@ -694,6 +702,9 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').setFixedHeight(int(scnRect.height() / 16 * 9))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
             #self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
+            # Set the geometry of the message box to slightly smaller than application geomtry
+            dialogrect = QtCore.QRect(int(scnRect.width() / 16), int(scnRect.height() / 16), int(scnRect.width() - (scnRect.width() / 8)), int(scnRect.height() - (scnRect.height() / 8)))
+            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setGeometry(dialogrect)
             self.mGuiRootWidget.show()
 
             # setup the icon size for QListWidgets
@@ -742,6 +753,7 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'waitingIndicator').hide()
 
     ###########################################################################
     # BaseViewer related

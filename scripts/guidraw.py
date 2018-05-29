@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from view import CliViewer
-from guiprocslot import QProcessSlot, QWaitingIndicator
+from guiprocslot import QProcessSlot, QWaitingIndicator, QMessageDialog
 from PyQt4 import QtGui, QtCore, QtSvg
 
 # import our resource.py with all the pretty images/icons
@@ -109,6 +109,11 @@ class GuiDraw(object):
                     # create the QWaitingIndicator's sub class object
                     _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
                     cls.clsGuiDraws.update({confdict['name']: QWaitingIndicator(parent)})
+
+                elif confdict['class'] == 'QMessageDialog':
+                    # create the QMessageDialog's sub class object
+                    _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
+                    cls.clsGuiDraws.update({confdict['name']: QMessageDialog(parent)})
 
                 elif hasattr(QtGui, confdict['class']) or hasattr(QtSvg, confdict['class']) or confdict['class'] == 'Line':
                     # DIRTY HACK for drawing h/v line in QtDesigner with condition checking confdict['class'] == 'Line'
@@ -521,6 +526,10 @@ class GuiDraw(object):
                     qobj.setNodeSize(int(prop['number']))
                 elif prop['name'] == 'radius':
                     qobj.setRadius(int(prop['number']))
+
+                # QMessageDialog
+                elif prop['name'] == 'modal':
+                    qobj.setModal(True if prop['bool'] == 'true' else False)
 
         # 1. setup name (common to all Qt widgets)
         if 'name' in confdict:

@@ -25,62 +25,6 @@ def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
     r,f=min(int(math.log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
     return (f%(abs(r%(-r-1)),pre[r],u)).format(n*b**pow/b**float(r))
 
-def _displayMessage(parent, msgtype):
-    msgBox = QMessageDialog(parent)
-    if msgtype == 'NoCable':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No ethernet cable connected,\nplease connect an ethernet cable.")
-        msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoNIC':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No NIC,\nPlease check your network card")
-        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoDrv':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("Network Interface is down,\nPlease check your network interface is ready")
-        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoConnection':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No Network Connectivity,\nplease check your NAME server.")
-        #msgBox.setContent(QtGui.QMovie(':/res/images/error_lan.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoDbus':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No DBus Connectivity,\nplease make sure installerd.service is running...")
-        #msgBox.setContent(QtGui.QMovie(':/res/images/error_dbus.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoStorage':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No Mass Storage Detected,\n Please insert an SD card.")
-        msgBox.setContent(QtGui.QMovie(':/res/images/error_sd.gif'))
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'NoCpuForm':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-        msgBox.setTitle("No CPU or Form Factor Detected,\n Continue with all CPU/Form Factor?")
-        #msgBox.setContent(QtGui.QMovie(':/res/images/error_sd.gif'))
-        msgBox.setButtonText({'accept': 'RETRY', 'reject': 'CONTINUE'})
-    elif msgtype == 'Reboot':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
-        msgBox.setTitle("Flash Complete.\nPlease set your jumper to BOOT MODE,\nand reset your board.")
-        msgBox.setContent(QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif'))
-        msgBox.setButtonText({'accept': 'REBOOT'})
-    elif msgtype == 'InputError':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
-        msgBox.setTitle("Input Error.")
-        msgBox.setContent("Please Choose an image file to download and a storage device to flash")
-        msgBox.setButtonText({'accept': 'RETRY'})
-    elif msgtype == 'Flashing':
-        msgBox.setIcon(parent.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
-        msgBox.setTitle("Flashing images.")
-        msgBox.setContent("Do you want to stop?")
-        msgBox.setButtonText({'accept': 'NO', 'reject': 'STOP'})
-    else:
-        return False
-    return msgBox.exec_()
-
 def _insertToContainer(lstResult, qContainer, qSignal):
     def match_data(data):
         for item in qContainer.findItems('.*', QtCore.Qt.MatchRegExp):
@@ -286,6 +230,7 @@ class QProcessSlot(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent)
         self.mCmds = []
         self.mViewer = None
+        self.mMsgBox = None
         self.finish.connect(self._reqDone)
 
     def _setCommand(self, cmd):
@@ -304,6 +249,7 @@ class QProcessSlot(QtGui.QWidget):
         called by signals from other GObject components
         To be overriden by all sub classes
         """
+        if not self.mMsgBox: self.mMsgBox = self._findChildWidget('msgbox')
         if self.mViewer is None and isinstance(inputs, dict) and 'viewer' in inputs.keys():
             try:
                 self.request.disconnect()
@@ -333,6 +279,7 @@ class QProcessSlot(QtGui.QWidget):
         called by signals from other GObject components
         To be overriden by all sub classes
         """
+        if not self.mMsgBox: self.mMsgBox = self._findChildWidget('msgbox')
         if self._hasSameCommand(results):
             self.parseResult(results)
             if len(self.mCmds) == 0:
@@ -401,60 +348,9 @@ class detectDeviceSlot(QProcessSlot):
     def __init__(self, parent = None):
         super().__init__(parent)
         self.mResults = {}
-
-    def process(self, inputs = None):
-        """
-        Handle detect device callback slot
-        """
-        self._setCommand({'cmd': 'info', 'target': 'som'})
-        self.request.emit(self.mCmds[-1])
-
-    def parseResult(self, results):
-        """
-        Handle returned detect device results from PyQt Msger
-        """
-        if 'found_match' in results and results['status'] == 'success':
-            self.mResults.update(results)
-            form, cpu, baseboard = results['found_match'].split(',')
-            self._findChildWidget('lblCpu').setText(cpu)
-            self._findChildWidget('lblForm').setText(form)
-
-    def validateResult(self):
-        # flow comes here (gets called) after self.finish.emit()
-        # Check for available cpu anf form factor
-        if 'found_match' not in self.mResults and self.mResults['status'] == 'failure':
-            ret = _displayMessage(self, 'NoCpuForm')
-            if ret: # Accepted: 1 (retry), Rejected: 0 (continue)
-                # retry scanning the storage
-                # signal once after 1000ms to do check for CPU / Form Factor again
-                QtCore.QTimer.singleShot(1000, self.process)
-                return
-            else:
-                # do not retry and carry on detecting all imx and all form factor
-                self._findChildWidget('lblCpu').setText('No CPU')
-                self._findChildWidget('lblForm').setText('No Form Factor')
-                self.fail.emit('Target Device SOM info not found.\n')
-
-        form, cpu, baseboard = self.mResults['found_match'].split(',')
-        self.success.emit('Found: {} {} {}\n'.format(cpu, form, baseboard))
-
-
-
-@QProcessSlot.registerProcessSlot('crawlWeb')
-class crawlWebSlot(QProcessSlot):
-    """
-    Potentially the Crawling Mechanism is done in a long process thread.
-    If the long process is needed, it could possibly be done using QThread in Qt.
-    """
-    request = pyqtSignal(dict)
-    success = pyqtSignal(object)
-    #success = pyqtSignal(int, int, object) # QtGui.PyQt_PyObject)
-    fail = pyqtSignal(str)
-
-    def __init__(self, parent = None):
-        super().__init__(parent)
-        self.mInputs = {}
-        self.mResults = []
+        self.mCpu = None
+        self.mForm = None
+        self.mBaseboard = None
         # use QtNetwork NAMger to send a request to technexion's rescue server
         # when the request is finished, NAMger will signal its "finish" signal
         # which calls back to self._networkResponse() with reply
@@ -463,18 +359,77 @@ class crawlWebSlot(QProcessSlot):
         # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
         self.mNetMgr.finished.connect(self._urlResponse)
 
-    def process(self, inputs):
+    def process(self, inputs = None):
         """
-        Handle crawlWeb process slot (signalled by initialized signal)
+        Handle detect device callback slot
         """
-        if 'location' not in inputs:
-            self.mInputs.update({'location': '/'})
-        if 'target' not in inputs:
-            self.mInputs.update({'target': 'http://rescue.technexion.net'})
+        self.__checkCpuForm()
 
-        # check network connections
-        self.__checkNetwork()
-        
+    def __checkCpuForm(self):
+        self._setCommand({'cmd': 'info', 'target': 'som'})
+        self.request.emit(self.mCmds[-1])
+
+    def parseResult(self, results):
+        """
+        Handle returned detect network device results from server
+        """
+        if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
+            _logger.info('subcmd: nic, parse result: {}'.format(results))
+            if 'status' in results and results['status'] == 'success':
+                if 'state' in results.keys() and 'flags' in results.keys():
+                    # a. Check whether NIC hardware available (do we have mac?)
+                    #if 'LOWER_UP' in results['state']:
+                    # b. Check NIC connection is up (flag says IFF_UP?)
+                    if 'UP' in results['state']:
+                        # c. Check NIC connection is running (flag says IFF_RUNNING?)
+                        if 'RUNNING' in results['state']:
+                            # d. when all is running, check to see if we can connect to our rescue server.
+                            self.mMsgBox.setCheckFlags({'NoIface': False, 'NoCable': False}) # 'NoNIC': False,
+                            self.__hasValidNetworkConnectivity()
+                            return
+                        else:
+                            err = 'NoCable'
+                    else:
+                        err = 'NoIface'
+                    #else:
+                    #    err = 'NoNIC'
+                    self.mMsgBox.setMessage(err)
+                    if err == 'NoNIC':
+                        _logger.critical('Network Error No L1 Driver!!! Retrying...')
+                        self.mMsgBox.setCheckFlags({err: True, 'NoIface': True, 'NoCable': True, 'NoServer': True})
+                    elif err == 'NoIface':
+                        _logger.critical('Network Error NIC Down!!! Retrying...')
+                        self.mMsgBox.setCheckFlags({err: True, 'NoCable': True, 'NoServer': True})
+                    elif err == 'NoCable':
+                        _logger.critical('Network Error No Cable!!! Retrying...')
+                        self.mMsgBox.setCheckFlags({err: True, 'NoServer': True})
+                    self.mMsgBox.setModal(False) # non-modal dialog
+                    self.mMsgBox.display(True)
+                    QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+            return
+
+        if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and 'status' in results and results['status'] == 'success':
+            self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
+            self._findChildWidget('lblCpu').setText(self.mCpu)
+            self._findChildWidget('lblForm').setText(self.mForm)
+            # check network connections
+            self.__checkNetwork()
+
+        self.mResults.update(results)
+
+    def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
+        # Check for available cpu anf form factor
+        if 'cmd' in self.mResults and self.mResults['cmd'] == 'info' and 'found_match' not in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'failure':
+            self.mMsgBox.setMessage('NoCpuForm')
+            self.mMsgBox.setCheckFlags({'NoCpuForm': True})
+            self.mMsgBox.setModal(True)  # model dialog
+            ret = self.mMsgBox.display(True)
+            self.mMsgBox.clearMessage()
+            if ret: # critical: continue with your own peril
+                _logger.critical('Cannot find CPU or FORM FACTOR!!! Continue at your own peril...')
+                self.success.emit('Cpu and form factor not found.')
+
     def __checkNetwork(self):
         # Check for networks, which means sending commands to installerd.service to request for network status
         # send request to installerd.service to request for network status.
@@ -493,14 +448,51 @@ class crawlWebSlot(QProcessSlot):
         if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
             _logger.error("Network Access Manager Error occured: {}, {}".format(reply.error(), reply.errorString()))
             # the system cannot connect to our rescue server
-            ret = _displayMessage(self, 'NoConnection')
-            if ret: # accept: 1, reject: 0
-                _logger.critical('TechNexion rescue server not available!!! Retrying...')
-                QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
-                return
-        _logger.debug('start the crawl process: {}'.format(self.mInputs))
-        # start the crawl process
-        self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
+            self.mMsgBox.setMessage('NoServer')
+            self.mMsgBox.setCheckFlags({'NoServer': True})
+            self.mMsgBox.setModal(False) # none model dialog
+            self.mMsgBox.display(True)
+            _logger.error('TechNexion rescue server not available!!! Retrying...')
+            QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
+            return
+
+        self.mMsgBox.setCheckFlags({'NoServer': False})
+        self.mMsgBox.display(False)
+        self.success.emit('Found: {} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
+
+
+
+@QProcessSlot.registerProcessSlot('crawlWeb')
+class crawlWebSlot(QProcessSlot):
+    """
+    Potentially the Crawling Mechanism is done in a long process thread.
+    If the long process is needed, it could possibly be done using QThread in Qt.
+    """
+    request = pyqtSignal(dict)
+    success = pyqtSignal(object)
+    #success = pyqtSignal(int, int, object) # QtGui.PyQt_PyObject)
+    fail = pyqtSignal(str)
+
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        self.mInputs = {}
+        self.mResults = []
+
+    def process(self, inputs):
+        """
+        Handle crawlWeb process slot (signalled by initialized signal)
+        """
+        if self.sender().objectName() == 'scanStorage':
+            # setup rescue server and location if there isn't any
+            if 'location' not in inputs:
+                self.mInputs.update({'location': '/'})
+            if 'target' not in inputs:
+                self.mInputs.update({'target': 'http://rescue.technexion.net'})
+
+            _logger.debug('start the crawl process: {}'.format(self.mInputs))
+            # start the crawl process
+            self._findChildWidget('waitingIndicator').show()
+            self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
 
     def __crawlUrl(self, inputs):
         params = {}
@@ -510,36 +502,6 @@ class crawlWebSlot(QProcessSlot):
         self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
-        if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
-            _logger.info('subcmd: nic, parse result: {}'.format(results))
-            if 'status' in results and results['status'] == 'success':
-                if 'state' in results.keys() and 'flags' in results.keys():
-                    # a. Check whether NIC hardware available (do we have mac?)
-                    #if 'LOWER_UP' in results['state']:
-                    # b. Check NIC connection is up (flag says IFF_UP?)
-                    if 'UP' in results['state']:
-                        # c. Check NIC connection is running (flag says IFF_RUNNING?)
-                        if 'RUNNING' in results['state']:
-                            # d. when all is running, check to see if we can connect to our rescue server.
-                            self.__hasValidNetworkConnectivity()
-                            return
-                        else:
-                            err = 'NoCable'
-                    else:
-                        err = 'NoDrv'
-                    #else:
-                    #    err = 'NoNic'
-                    ret = _displayMessage(self, err)
-                    if ret: # accept: 1, (RETRY) reject: 0
-                        if err == 'NoNic':
-                            _logger.critical('Network Error No L1 Driver!!! Retrying...')
-                        elif err == 'NoDrv':
-                            _logger.critical('Network Error NIC Down!!! Retrying...')
-                        elif err == 'NoCable':
-                            _logger.critical('Network Error No Cable!!! Retrying...')
-                        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
-            return
-
         #print('crawlWeb result: {}'.format(results))
         if 'total_uncompressed' in results.keys() or 'total_size' in results.keys():
             # step 3: figure out the xz file to download
@@ -619,6 +581,7 @@ class crawlWebSlot(QProcessSlot):
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         if isinstance(self.mResults, list) and len(self.mResults):
+            self._findChildWidget('waitingIndicator').hide()
             _logger.debug('crawlWeb result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
             self.success.emit(self.mResults)
@@ -647,16 +610,18 @@ class crawlLocalfsSlot(QProcessSlot):
         """
         Handle crawling xz files from inputs, i.e. lists of mount points
         """
-        # make up the request params
-        params = {'target': socket.gethostname()}
-        if isinstance(inputs, list):
-            if len(inputs) == 0:
-                inputs.append('~/')
+        if self.sender().objectName() == 'scanPartition':
+            # make up the request params
+            params = {'target': socket.gethostname()}
+            if isinstance(inputs, list):
+                if len(inputs) == 0:
+                    inputs.append('~/')
 
-            for path in inputs:
-                params.update({'location': path if path.endswith('/') else (path + '/')})
-                self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
-                self.request.emit(self.mCmds[-1])
+                self._findChildWidget('waitingIndicator').show()
+                for path in inputs:
+                    params.update({'location': path if path.endswith('/') else (path + '/')})
+                    self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
+                    self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
         # Parse the return local xz files
@@ -678,6 +643,7 @@ class crawlLocalfsSlot(QProcessSlot):
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         if isinstance(self.mResults, list) and len(self.mResults):
+            self._findChildWidget('waitingIndicator').hide()
             _logger.debug('validateResult: crawlLocalfs result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
             self.success.emit(self.mResults)
@@ -707,9 +673,16 @@ class scanStorageSlot(QProcessSlot):
     def __init__(self, parent = None):
         super().__init__(parent)
         self.mResults = []
+        self.mTimerId = None
 
     def process(self, inputs = None):
-        # step 4: request for list of targets storage device
+        """
+        step 4: request for list of targets storage device
+        """
+        if self.sender().objectName() == 'detectDevice':
+            self.__detectStorage()
+
+    def __detectStorage(self):
         self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
         self.request.emit(self.mCmds[-1])
         self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
@@ -746,18 +719,31 @@ class scanStorageSlot(QProcessSlot):
                                       'id_model': tgt[2]['id_model'] if 'id_model' in tgt[2] else 'None'})
 
     def validateResult(self):
+        self.mMsgBox.setMessage('NoStorage')
         # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
         if isinstance(self.mResults, list) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
-            self.success.emit(self.mResults)
+            self.mMsgBox.setCheckFlags({'NoStorage': False})
+            self.mMsgBox.setModal(False) # none model dialog
+            self.mMsgBox.display(True)
+            self.mTimerId = self.startTimer(1000)
             return
         else:
             #ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'No suitable storage found, please insert sdcard...\nClick Retry to rescan!!!', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Retry, QtGui.QMessageBox.Ok)
-            ret = _displayMessage(self, 'NoStorage')
-            if ret: # Accepted: 1, Rejected: 0
-                # retry scanning the storage
-                QtCore.QTimer.singleShot(1000, self.process)
+            self.mMsgBox.setCheckFlags({'NoStorage': True})
+            self.mMsgBox.setModal(False) # non modal dialog
+            self.mMsgBox.display(True)
+            _logger.error('Cannot find available storage!!! Retrying...')
+            QtCore.QTimer.singleShot(1000, self.__detectStorage)
+
+    def timerEvent(self, event):
+        self.killTimer(self.mTimerId)
+        self.mMsgBox.display(False)
+        self.mMsgBox.clearCheckFlags()
+        self.mMsgBox.clearMessage()
+        self.success.emit(self.mResults)
+
 
 
 @QProcessSlot.registerProcessSlot('scanPartition')
@@ -774,11 +760,14 @@ class scanPartitionSlot(QProcessSlot):
         self.mResults = []
 
     def process(self, inputs):
-        # issue commands to find partitions with mount points
-        self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
-        self.request.emit(self.mCmds[-1])
-        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
-        self.request.emit(self.mCmds[-1])
+        """
+        issue commands to find partitions with mount points
+        """
+        if self.sender().objectName() == 'detectDevice':
+            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
+            self.request.emit(self.mCmds[-1])
+            self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
+            self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
         # parse the returned partition results to find mount points
@@ -1652,7 +1641,7 @@ class downloadImageSlot(QProcessSlot):
                 self.mLastWritten = int(self.mResults['bytes_written'])
                 _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(self.mResults['total_uncompressed']), int(self.mResults['bytes_written']), self.mAvSpeed, self.mRemaining))
                 self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
-                pcent = int(float(self.mResults['bytes_written']) / float(self.mResults['total_uncompressed']) * 100)
+                pcent = int(round(float(self.mResults['bytes_written']) / float(self.mResults['total_uncompressed']) * 100))
                 self.success.emit(pcent)
 
             if 'status' in self.mResults and self.mResults['status'] == 'success':
@@ -1696,12 +1685,21 @@ class downloadImageSlot(QProcessSlot):
                 else:
                     # prompt for error message
                     #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Input Error:\nPlease Choose an image file to download and a storage device to flash')
-                    _displayMessage(self, 'InputError')
-
+                    self.mMsgBox.setMessage('InputError')
+                    self.mMsgBox.setModal(True) # modal dialog
+                    ret = self.mMsgBox.display(True)
+                    if ret:
+                        pass
+                    self.mMsgBox.clearMessage()
         else:
             # prompt for error message
             #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Hold Your Hourses!!!\nPlease wait until downloading is completed...')
-            _displayMessage(self, 'Flashing')
+            self.mMsgBox.setMessage('Flashing')
+            self.mMsgBox.setModal(True) # modal dialog
+            ret = self.mMsgBox.display(True)
+            if ret:
+                pass
+            self.mMsgBox.clearMessage()
 
     def __getUrlStorageFromPick(self, pick):
         # get picked items from lstWgtSelection
@@ -1783,13 +1781,16 @@ class downloadImageSlot(QProcessSlot):
         # Final notification
         if isinstance(self.mResults, dict) and (self.mResults['status'] == 'success' or self.mResults['status'] == 'failure'):
             #ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'Installation {}...\nSet boot jumper to boot from sdcard/emmc,\nAnd click RESET to reboot sytem!'.format('Complete' if (self.mResults['status'] == 'success') else 'Failed'), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Reset, QtGui.QMessageBox.Ok)
-            ret = _displayMessage(self, 'Reboot')
+            self.mMsgBox.setMessage('Reboot')
+            self.mMsgBox.setModal(True) # modal dialog
+            ret = self.mMsgBox.display(True)
             if ret:
                 try:
                     # reset/reboot the system
                     subprocess.check_call(['reboot'])
                 except:
                     raise
+            self.mMsgBox.clearMessage()
 
     def _updateDisplay(self):
         # show and hide some Gui elements
@@ -1878,17 +1879,6 @@ class QMessageDialog(QtGui.QDialog):
     def __init__(self, parent=None):
         QtGui.QDialog.__init__(self, parent, QtCore.Qt.SplashScreen) # QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
 
-        # Set the geometry to slightly smaller than application geomtry
-        self.mRect = parent.window().geometry() if parent else QtGui.QApplication.instance().desktop().screenGeometry()
-        self.setGeometry(self.mRect.width() / 16, self.mRect.height() / 16, self.mRect.width() - (self.mRect.width() / 8), self.mRect.height() - (self.mRect.height() / 8))
-
-        # draw and mask round corner
-        radius = 20.0
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QtCore.QRectF(self.rect()), radius, radius)
-        mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
-        self.setMask(mask)
-
         # set background to transparent
         palette = QtGui.QPalette(self.palette())
         palette.setColor(palette.Background, QtCore.Qt.transparent)
@@ -1897,102 +1887,268 @@ class QMessageDialog(QtGui.QDialog):
         # sets fonts
         font = QtGui.QFont('Lato', 32, QtGui.QFont.Normal)
         self.setFont(font)
+        self.mIcon = None
+        self.mTitle = None
+        self.mContent = None
+        self.mWgtContent = None
+        self.mWgtContentLayout = None
+        self.mButtons = {}
+        self.mCheckFlags = {}
 
-        # Create widgets
-        self.mIcon = QtGui.QLabel()
-        self.mIcon.setAlignment(QtCore.Qt.AlignCenter)
-        self.mTitle = QtGui.QLabel()
-        self.mContent = QtGui.QLabel()
-        self.mContent.setAlignment(QtCore.Qt.AlignCenter)
-        self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel'), 'done': QtGui.QPushButton('done')}
+    def resizeEvent(self, event):
+        #rect = event.rect()
+        _logger.debug('resizeEvent: {}'.format(event.size()))
+        self.mRect = self.rect()
 
-        # Set dialog layout
-        # Create grid layout for the MessageDialog widget and add widgets to layout
-        self.mLayout = QtGui.QGridLayout()
-        self.mLayout.addWidget(self.mIcon, 0, 0)
-        self.mLayout.addWidget(self.mTitle, 0, 1, 1, 4)  # row, col, rowspan, colspan
-        self.mLayout.addWidget(self.mContent, 1, 0, 3, 5)  # row, col, rowspan, colspan
-        self.mLayout.addWidget(self.mButtons['accept'], 6, 4)
-        self.mLayout.addWidget(self.mButtons['reject'], 6, 3)
-        self.setLayout(self.mLayout)
+        # draw and mask round corner
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(QtCore.QRectF(self.rect()), 20, 20)
+        mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(mask)
 
-        # Setup button signal to Dialog default slots
-        self.mButtons['accept'].clicked.connect(self.accept)
-        self.mButtons['reject'].clicked.connect(self.reject)
-        self.mButtons['done'].clicked.connect(self.done)
+        # draw background
+        palette = QtGui.QPalette(self.palette())
+        # and fill it with our technexion background image
+        pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(self.rect().width() * 2, self.rect().height() * 2)).scaled(QtCore.QSize(self.rect().width(), self.rect().height()), QtCore.Qt.IgnoreAspectRatio)
+        brush = QtGui.QBrush(pixmap)
+        palette.setBrush(QtGui.QPalette.Background, brush)
+        self.setPalette(palette)
+
+#         # Create widgets
+#         self.mIcon = QtGui.QLabel()
+#         self.mIcon.setAlignment(QtCore.Qt.AlignCenter)
+#         self.mTitle = QtGui.QLabel()
+#         self.mContent = QtGui.QLabel()
+#         self.mContent.setAlignment(QtCore.Qt.AlignCenter)
+#         self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel'), 'done': QtGui.QPushButton('done')}
+# 
+#         # Set dialog layout
+#         # Create grid layout for the MessageDialog widget and add widgets to layout
+#         self.mLayout = QtGui.QGridLayout()
+#         self.mLayout.addWidget(self.mIcon, 0, 0)
+#         self.mLayout.addWidget(self.mTitle, 0, 1, 1, 4)  # row, col, rowspan, colspan
+#         self.mLayout.addWidget(self.mContent, 1, 0, 3, 5)  # row, col, rowspan, colspan
+#         self.mLayout.addWidget(self.mButtons['accept'], 6, 4)
+#         self.mLayout.addWidget(self.mButtons['reject'], 6, 3)
+#         self.setLayout(self.mLayout)
+# 
+#         # Setup button signal to Dialog default slots
+#         self.mButtons['accept'].clicked.connect(self.accept)
+#         self.mButtons['reject'].clicked.connect(self.reject)
+#         self.mButtons['done'].clicked.connect(self.done)
 
     def paintEvent(self, event):
+        # draw the boundary edges
+        _logger.debug('paintEvent: {}'.format(event.rect()))
+
         painter = QtGui.QPainter()
         painter.begin(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        rect = event.rect()
-
-        # draw rounded rectangle the size of the event.rect() i.e. size of widget
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QtCore.QRectF(rect), 20, 20)
-        pen = QtGui.QPen(QtCore.Qt.black, 10) #pen = QtGui.QPen(QtGui.QColor(15, 55, 112, 255), 10)
-        painter.setPen(pen)
-        # and fill it with our technexion background image
-        pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(rect.width() * 4, rect.height() * 4)).scaled(QtCore.QSize(rect.width(), rect.height()), QtCore.Qt.IgnoreAspectRatio)
-        brush = QtGui.QBrush(pixmap)
-        painter.fillPath(path, brush)
-        painter.drawPath(path)
-
-        # painter.fillRect(rect, QtGui.QBrush(QtGui.QColor(200, 200, 200, 255)))
+        painter.setPen(QtGui.QPen(QtCore.Qt.black, 10))
+        painter.drawRoundedRect(self.mRect, 20, 20)
+        # unset drawing pen
         painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         painter.end()
 
-    def setButtonText(self, buttonTexts):
-        if isinstance(buttonTexts, dict):
-            for buttonRole, buttonText in buttonTexts.items():
-                for role in ['accept', 'reject', 'done']:
-                    if role == buttonRole:
-                        if isinstance(buttonText, str):
-                            self.mButtons[role].setText(buttonText)
-                            self.mButtons[role].show()
-                    else:
-                        self.mButtons[role].hide()
+    def setButtons(self, buttons):
+        if isinstance(buttons, dict):
+            if 'accept' in buttons.keys():
+                btn = QtGui.QPushButton(buttons['accept'])
+                btn.clicked.connect(self.accept)
+                self.layout().addWidget(btn, 4, 5)
+            if 'reject' in buttons.keys():
+                btn = QtGui.QPushButton(buttons['reject'])
+                btn.clicked.connect(self.reject)
+                self.layout().addWidget(btn, 4, 4 if 'accept' in buttons.keys() else 5)
+
+    def clearButtons(self):
+        for col in [4, 5]:
+            if self.layout().itemAtPosition(4, col):
+                index = self.layout().indexOf(self.layout().itemAtPosition(4, col).widget())
+                wgt = self.layout().takeAt(index)
+                del wgt
 
     def setIcon(self, icon):
-        if isinstance(icon, QtGui.QIcon):
-            d = self.mRect.height() / 8 if self.mRect.height() / 8 < self.mRect.width() / 8 else self.mRect.width() / 8
+        if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
+        if self.mIcon and isinstance(icon, QtGui.QIcon):
+            d = self.rect().height() / 8 if self.rect().height() / 8 < self.rect().width() / 8 else self.rect().width() / 8
             iconsize = QtCore.QSize(d, d)
             pix = icon.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.IgnoreAspectRatio)
             self.mIcon.setPixmap(pix)
             #self.mIcon.setMask(pix.mask())
-        else:
-            self.clear()
+
+    def clearIcon(self):
+        if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
+        if self.mIcon: self.mIcon.clear()
 
     def setTitle(self, title):
-        if isinstance(title, str):
+        if not self.mTitle: self.mTitle = self.window().findChild(QtGui.QLabel, 'msgTitle')
+        if self.mTitle and isinstance(title, str):
             self.mTitle.setText(title)
-        elif isinstance(title, QtGui.QIcon):
-            d = self.mRect.height() / 8 if self.mRect.height() / 8 < self.mRect.width() / 8 else self.mRect.width() / 8
-            iconsize = QtCore.QSize(d, d)
-            pix = title.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
-            self.mTitle.setPixmap(pix)
-            #self.mIcon.setMask(pix.mask())
-        elif isinstance(title, QtGui.QPixmap):
-            self.mTitle.setPixmap(title)
-        elif isinstance(title, QtGui.QMovie):
-            self.mTitle.setMovie(title)
-            title.start()
-        else:
-            self.clear()
+
+    def clearTitle(self):
+        if not self.mTitle: self.mTitle = self.window().findChild(QtGui.QLabel, 'msgTitle')
+        if self.mTitle: self.mTitle.clear()
 
     def setContent(self, content):
-        if isinstance(content, str):
-            self.mContent.setText(content)
-        elif isinstance(content, QtGui.QIcon):
-            d = self.mRect.height() / 1.5 if self.mRect.height() / 1.5 < self.mRect.width() / 1.5 else self.mRect.width() / 1.5
-            iconsize = QtCore.QSize(d, d)
-            pix = content.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
-            self.mTitle.setPixmap(pix)
-            #self.mIcon.setMask(pix.mask())
-        elif isinstance(content, QtGui.QPixmap):
-            self.mContent.setPixmap(content)
-        elif isinstance(content, QtGui.QMovie):
-            self.mContent.setMovie(content)
-            content.start()
+        if not self.mContent: self.mContent = self.window().findChild(QtGui.QWidget, 'msgContent')
+        if self.mContent:
+            if isinstance(content, str):
+                self.mContent.setText(content)
+            elif isinstance(content, QtGui.QIcon):
+                d = self.rect().height() / 8 if self.rect().height() / 8 < self.rect().width() / 8 else self.rect().width() / 8
+                iconsize = QtCore.QSize(d, d)
+                pix = content.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
+                self.mContent.setPixmap(pix)
+                #self.mIcon.setMask(pix.mask())
+            elif isinstance(content, QtGui.QPixmap):
+                self.mContent.setPixmap(content)
+            elif isinstance(content, QtGui.QMovie):
+                self.mContent.setMovie(content)
+                content.start()
+
+    def clearContent(self):
+        if not self.mContent: self.mContent = self.window().findChild(QtGui.QWidget, 'msgContent')
+        if self.mContent: self.mContent.clear()
+
+    def setBackgroundIcons(self, icons):
+        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
+
+        d = self.rect().width() / 6
+        if self.mWgtContent and isinstance(icons, dict):
+            for key, res in icons.items():
+                lbl = None
+                if key == 'NoStorage':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0')
+                elif key == 'NoIface':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1')
+                elif key == 'NoCable':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2')
+                elif key == 'NoServer':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem3')
+                else:
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0')
+
+                if lbl:
+                    lbl.setPixmap(QtGui.QIcon(res).pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio))
+
+    def clearBackgroundIcons(self):
+        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
+        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
+        if self.mWgtContentLayout:
+            for index in range(self.mWgtContentLayout.count()):
+                self.mWgtContentLayout.itemAt(index).widget().clear() # call QLabel 's clear
+
+    def setCheckFlags(self, flags):
+        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
+        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
+
+        d = self.rect().width() / 6
+        if self.mWgtContent and isinstance(flags, dict):
+            self.mCheckFlags.update(flags)
+
+            # loop all current set flags
+            for key, flag in self.mCheckFlags.items():
+
+                # setup which label to show
+                lbl = None
+                if key == 'NoStorage':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL')
+                elif key == 'NoIface':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1_OL')
+                elif key == 'NoCable':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2_OL')
+                elif key == 'NoServer':
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem3_OL')
+                else:
+                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL')
+
+                # setup which flag icon to use
+                if flag: # True or False
+                    pixmap = QtGui.QIcon(':res/images/cross.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
+                else:
+                    if ('NoDbus' in flags or 'NoCpuForm' in flags) and key in ['NoIface', 'NoCable', 'NoServer']:
+                        pixmap = None
+                    else:
+                        pixmap = QtGui.QIcon(':res/images/tick.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
+
+                # set the label pixmap
+                if lbl and pixmap: lbl.setPixmap(pixmap)
+
+    def clearCheckFlags(self):
+        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
+        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
+        if self.mWgtContentLayout:
+            for index in range(self.mWgtContentLayout.count()):
+                # call QLabel 's clear
+                self.mWgtContentLayout.itemAt(index).widget().clear()
+        self.mCheckFlags.clear()
+
+    def setMessage(self, msgtype):
+        print('msgtype: {}'.format(msgtype))
+
+        if msgtype in ['NoCable', 'NoIface', 'NoServer', 'NoStorage']: # 'NoNic'
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("System Check")
+            self.setBackgroundIcons({'NoCable': ':res/images/no_cable.svg', \
+                                     'NoIface': ':res/images/no_iface.svg', \
+                                     'NoServer': ':res/images/no_server.svg', \
+                                     'NoStorage': ':res/images/no_storage.svg'}) # {'NoNIC': ':res/images/no_nic.svg'}
+
+        elif msgtype == 'NoCpuForm':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("System Check")
+            self.setBackgroundIcons({'NoCpuForm': ':res/images/no_cpuform.svg'})
+            self.setButtons({'accept': 'CONTINUE', 'reject': 'HALT'})
+
+        elif msgtype == 'NoDbus':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("System Check:\nInstaller Daemon Not Running.")
+            self.setBackgroundIcons({'NoDbus': ':res/images/no_dbus.svg'})
+
+        elif msgtype == 'Reboot':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setTitle("Flash Complete")
+#             movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
+#             movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
+#             self.setContent(movie)
+            self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
+            self.setButtons({'accept': 'REBOOT'})
+
+        elif msgtype == 'InputError':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setTitle("Input Error")
+            self.setContent("Please Choose an image file to download and a storage device to flash")
+            self.setButtons({'accept': 'RETRY'})
+
+        elif msgtype == 'Flashing':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setTitle("Flashing images.")
+            self.setContent("Do you want to stop?")
+            self.setButtons({'accept': 'NO', 'reject': 'STOP'})
+
+    def clearMessage(self):
+        self.clearIcon()
+        self.clearTitle()
+        self.clearContent()
+        self.clearBackgroundIcons()
+        self.clearButtons()
+
+    def exit(self):
+        self.close()
+
+    def display(self, show=True):
+        self.raise_()
+
+        if not show:
+            if self.isVisible():
+                self.exit()
         else:
-            self.clear()
+            if self.isModal():
+                print('exec Modal')
+                ret = self.exec_()
+                return ret
+            else:
+                if not self.isVisible():
+                    print('show Modaless')
+                    self.show()

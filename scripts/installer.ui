@@ -493,7 +493,7 @@
       <item>
        <widget class="QLabel" name="lblVersion">
         <property name="text">
-         <string>Ver 2018.05.16.1</string>
+         <string>Ver 2018.05.30.1</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -504,6 +504,137 @@
     </widget>
    </item>
   </layout>
+  <widget class="QMessageDialog" name="msgbox">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>400</width>
+     <height>300</height>
+    </rect>
+   </property>
+   <property name="modal">
+    <bool>false</bool>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QLabel" name="msgIcon">
+      <property name="styleSheet">
+       <string notr="true">background: transparent</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="1" colspan="4">
+     <widget class="QLabel" name="msgTitle">
+      <property name="styleSheet">
+       <string notr="true">background: transparent</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0" rowspan="3" colspan="5">
+     <widget class="QWidget" name="wgtContent" native="true">
+      <layout class="QGridLayout" name="msgContentLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="msgItem0">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="msgItem0_OL">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="msgItem1">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="msgItem1_OL">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="msgItem2">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="msgItem2_OL">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QLabel" name="msgItem3">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QLabel" name="msgItem3_OL">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="1" column="0" rowspan="3" colspan="5">
+     <widget class="QLabel" name="msgContent">
+      <property name="styleSheet">
+       <string notr="true">background: transparent</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
   <widget class="QProcessSlot" name="detectDevice" native="true">
    <property name="geometry">
     <rect>
@@ -652,6 +783,12 @@
    <header>qwaitingindicator.h</header>
    <container>1</container>
   </customwidget>
+  <customwidget>
+   <class>QMessageDialog</class>
+   <extends>QDialog</extends>
+   <header>qmessagedialog.h</header>
+   <container>1</container>
+  </customwidget>
  </customwidgets>
  <resources>
   <include location="resource.qrc"/>
@@ -756,6 +893,38 @@
   <connection>
    <sender>detectDevice</sender>
    <signal>success()</signal>
+   <receiver>scanStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>46</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>detectDevice</sender>
+   <signal>success()</signal>
+   <receiver>scanPartition</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>46</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>detectDevice</sender>
+   <signal>success()</signal>
    <receiver>textOutput</receiver>
    <slot>insertPlainText()</slot>
    <hints>
@@ -789,6 +958,22 @@
    <sender>scanStorage</sender>
    <signal>success()</signal>
    <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scanStorage</sender>
+   <signal>success()</signal>
+   <receiver>crawlWeb</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -902,22 +1087,6 @@
    <signal>success()</signal>
    <receiver>downloadImage</receiver>
    <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlWeb</sender>
-   <signal>success()</signal>
-   <receiver>waitingIndicator</receiver>
-   <slot>hide()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>49</x>
