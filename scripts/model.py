@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import abc
+import io
 import re
 import os
 import stat
@@ -11,6 +11,7 @@ import socket
 import struct
 import subprocess
 import logging
+import pyqrcode
 from argparse import ArgumentTypeError
 from html.parser import HTMLParser
 
@@ -788,7 +789,6 @@ class ConfigNicActionModeller(BaseActionModeller):
     """
     def __init__(self):
         super().__init__()
-        self.mIO = None
         self.mIoctlCmd = None
         self.mIoctlArg = None
 
@@ -925,6 +925,59 @@ class ConfigNicActionModeller(BaseActionModeller):
 
 
 
+class QRCodeActionModeller(BaseActionModeller):
+    def __init__(self):
+        super().__init__()
+        self.mIO = io.BytesIO()
+        self.mErrLvl = 'L'
+        self.mCapVer = 8
+        self.mEncMode = 'binary'
+        self.mImage = None
+        self.mMailTo = ''
+
+    def _preAction(self):
+        # 'cmd': 'qrcode', 'mailto': 'youremail@yourdomain.com', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', 'tgt_filename': './ubuntu.img'
+        if all(s in self.mParam for s in ['dl_url', 'tgt_filename']):
+            self.mMailTo = self.mParam['mailto'] if 'mailto' in self.mParam and len(self.mParam['mailto']) else 'rescue@technexion.com'
+            self.mErrLvl = self.mParam['errlvl'] if 'errlvl' in self.mParam and self.mParam in ['L', 'M', 'Q', 'H'] else 'L'
+            self.mEncMode = self.mParam['encmode'] if 'encmode' in self.mParam and self.mParam['encmode'] in ['numeric', 'kanji', 'binary', 'alphanumeric'] else 'binary'
+            self.mImage = self.mParam['img_filename'] if 'img_filename' in self.mParam else 'tmp/qecode.svg'
+            return True
+        return False
+
+    def _mainAction(self):
+        try:
+            # big_code = pyqrcode.create('0987654321', error='L', version=27, mode='binary')
+            # big_code.png('code.png', scale=6, module_color=[0, 0, 0, 128], background=[0xff, 0xff, 0xcc])
+            #strEmail = '<mailto:{}%3Fsubject=Flash%20Image%20Details&cc=recsue@technexion.com&body=Download%20URL:{}%0AStorage:{}%0A>'.format( \
+            #            self.mMailTo, self.mParam['dl_url'], self.mParam['tgt_filename'])
+            strEmail = 'MATMSG:TO:{};SUB:Rescue Image Details;BODY:Download URL:{}\nStorage:{};;'.format(self.mMailTo, self.mParam['dl_url'], self.mParam['tgt_filename'])
+            # make sure we get appropriate size for our message content
+            for ver, tbl in pyqrcode.tables.data_capacity.items():
+                if tbl[self.mErrLvl][pyqrcode.tables.modes[self.mEncMode]] > len(strEmail):
+                    self.mCapVer = ver
+                    break
+            # generate QR code and display on LED grid
+            #code = pyqrcode.create(strEmail, error=self.mErrLvl, version=self.mCapVer, mode=self.mEncMode)
+            code = pyqrcode.create(strEmail, error=self.mErrLvl, version=self.mCapVer, mode=self.mEncMode, encoding='ASCII')
+            code.svg(self.mIO, scale=1, background="white") #, module_color="#7D007D")
+            if self.mImage: code.svg(self.mImage, scale=8)
+            self.mResult['svg_buffer'] = self.mIO.getvalue()[:] # copy the whole bytes
+            return True
+
+        except Exception as ex:
+            _logger.error('main-action exception: {}'.format(ex))
+            raise
+        return False
+
+    def _postAction(self):
+        # clear the mIO
+        self.mIO.close()
+        del self.mIO
+        return True
+
+
+
 if __name__ == "__main__":
     def __find_attr(self, key, dic):
         for k, v in dic.items():
@@ -977,6 +1030,13 @@ if __name__ == "__main__":
             dlmodel.setActionParam(dlparam)
             dlmodel.performAction()
             print(dlmodel.getResult())
+        elif sys.argv[1] == 'webqr':
+            # python3 view.py {qrcode -u http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz -t ./ubuntu.img -i ./qrcode.svg}
+            qrparam = {'cmd': 'qrcode', 'mailto': 'youremail@yourdomain.com', 'dl_url': 'http://rescue.technexion.net/rescue/pico-imx6/dwarf-070/ubuntu-16.04.xz', 'tgt_filename': './ubuntu.img', 'img_filename': './qrcode.svg'}
+            qrmodel = QRCodeActionModeller()
+            qrmodel.setActionParam(qrparam)
+            qrmodel.performAction()
+            print(qrmodel.getResult())
         elif sys.argv[1] =='qweb':
             querywebmodel = QueryWebFileActionModeller()
             querywebparam = {'src_directory': '/pico-imx6/dwarf-hdmi/',

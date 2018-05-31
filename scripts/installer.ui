@@ -620,17 +620,27 @@
          </property>
         </widget>
        </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="msgQRcode">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1" rowspace="1" colspan="3">
+        <widget class="QLabel" name="msgContent">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
       </layout>
-     </widget>
-    </item>
-    <item row="1" column="0" rowspan="3" colspan="5">
-     <widget class="QLabel" name="msgContent">
-      <property name="styleSheet">
-       <string notr="true">background: transparent</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
      </widget>
     </item>
    </layout>

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+import io
 import re
 import os
 import sys
-import pyqrcode
 import subprocess
 import math
 import socket
@@ -1622,6 +1623,7 @@ class downloadImageSlot(QProcessSlot):
         self.mTimer.timeout.connect(self._queryResult)
         self.mLblRemain = None
         #self.mLblDownloadFlash = None
+        self.mQRCode = None
         self.mLstWgtSelection = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
 
@@ -1674,10 +1676,16 @@ class downloadImageSlot(QProcessSlot):
                 self.success.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
+                    _logger.info('generate qrcode from from URL {} and STORAGE {}'.format(self.mFileUrl, self.mTgtStorage))
+                    self._setCommand({'cmd': 'qrcode', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'img_filename': '/tmp/qrcode.svg'})
+                    # send request to installerd
+                    self.request.emit(self.mCmds[-1])
+
                     _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
                     self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
                     # send request to installerd
                     self.request.emit(self.mCmds[-1])
+
                     # show/hide GUI components
                     self._updateDisplay()
                     #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Download {} and Flash to {}'.format(self.mFileUrl, self.mTgtStorage))
@@ -1746,6 +1754,19 @@ class downloadImageSlot(QProcessSlot):
             # flash job either success or failure
             self.mTimer.stop()
             self.mFlashFlag = False
+
+        # Get qrcode and display
+        if results['status'] == 'success' and results['cmd'] == 'qrcode':
+            if 'svg_buffer' in results:
+#                 self.mQRCode = io.BytesIO(results['svg_buffer'])
+#                 qrSvg = QtSvg.QSvgRenderer(self.mQRCode.getvalue())
+#                 qrImage = QtGui.QImage(qrSvg.defaultSize().width(), qrSvg.defaultSize().height(), QtGui.QImage.Format_ARGB32)
+#                 painter = QtGui.QPainter(qrImage)
+#                 qrSvg.render(painter)
+#                 painter.end()
+#                 self._findChildWidget('lblArrow').setPixmap(qrImage)
+                qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
+                self.mMsgBox.setQrCode(qrIcon)
 
         # Check for flash complete and send another command for setting emmc boot sequence
         if results['status'] == 'success' and results['cmd'] == 'download':
@@ -1890,6 +1911,7 @@ class QMessageDialog(QtGui.QDialog):
         self.mIcon = None
         self.mTitle = None
         self.mContent = None
+        self.mQRcode = None
         self.mWgtContent = None
         self.mWgtContentLayout = None
         self.mButtons = {}
@@ -1971,7 +1993,7 @@ class QMessageDialog(QtGui.QDialog):
     def setIcon(self, icon):
         if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
         if self.mIcon and isinstance(icon, QtGui.QIcon):
-            d = self.rect().height() / 8 if self.rect().height() / 8 < self.rect().width() / 8 else self.rect().width() / 8
+            d = self.rect().height() / 8 if self.rect().height() < self.rect().width() else self.rect().width() / 8
             iconsize = QtCore.QSize(d, d)
             pix = icon.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.IgnoreAspectRatio)
             self.mIcon.setPixmap(pix)
@@ -1996,7 +2018,7 @@ class QMessageDialog(QtGui.QDialog):
             if isinstance(content, str):
                 self.mContent.setText(content)
             elif isinstance(content, QtGui.QIcon):
-                d = self.rect().height() / 8 if self.rect().height() / 8 < self.rect().width() / 8 else self.rect().width() / 8
+                d = self.rect().height() / 8 if self.rect().height() < self.rect().width() else self.rect().width() / 8
                 iconsize = QtCore.QSize(d, d)
                 pix = content.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
                 self.mContent.setPixmap(pix)
@@ -2010,6 +2032,23 @@ class QMessageDialog(QtGui.QDialog):
     def clearContent(self):
         if not self.mContent: self.mContent = self.window().findChild(QtGui.QWidget, 'msgContent')
         if self.mContent: self.mContent.clear()
+
+    def setQrCode(self, icon):
+        if not self.mQRcode: self.mQRcode = self.window().findChild(QtGui.QWidget, 'msgQRcode')
+
+        if self.mQRcode:
+            if isinstance(icon, QtGui.QIcon):
+                w1 = self.rect().height() / 4 if self.rect().height() < self.rect().width() else self.rect().width() / 4
+                w2 = self.mIcon.size().height() if self.mIcon.size().height() < self.mIcon.size().width() else self.mIcon.size().width()
+                d = w1 if w1 < w2 else w2
+                iconsize = QtCore.QSize(d, d)
+                actualsz = icon.actualSize(iconsize)
+                pix = icon.pixmap(QtCore.QSize(actualsz.width() * 2, actualsz.height() * 2)).scaled(actualsz, QtCore.Qt.KeepAspectRatio)
+                self.mQRcode.setPixmap(pix)
+
+    def clearQrCode(self):
+        if not self.mQRcode: self.mQRcode = self.window().findChild(QtGui.QWidget, 'msgQRcode')
+        if self.mQRcode: self.mQRcode.clear()
 
     def setBackgroundIcons(self, icons):
         if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
@@ -2085,7 +2124,7 @@ class QMessageDialog(QtGui.QDialog):
         self.mCheckFlags.clear()
 
     def setMessage(self, msgtype):
-        print('msgtype: {}'.format(msgtype))
+        _logger.debug('msgtype: {}'.format(msgtype))
 
         if msgtype in ['NoCable', 'NoIface', 'NoServer', 'NoStorage']: # 'NoNic'
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
@@ -2145,10 +2184,10 @@ class QMessageDialog(QtGui.QDialog):
                 self.exit()
         else:
             if self.isModal():
-                print('exec Modal')
+                _logger.debug('exec Modal')
                 ret = self.exec_()
                 return ret
             else:
                 if not self.isVisible():
-                    print('show Modaless')
+                    _logger.debug('show non Modal')
                     self.show()

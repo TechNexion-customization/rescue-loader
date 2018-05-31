@@ -321,6 +321,20 @@ if __name__ == "__main__":
             else:
                 raise argparse.ArgumentTypeError('Invalid Location Directory')
 
+    def QRCodeModeType(modestr):
+        supported_modes = ['numeric', 'kanji', 'binary', 'alphanumeric']
+        if any(s == modestr for s in supported_modes):
+            return modestr
+        else:
+            raise argparse.ArgumentTypeError('Invalid QRCode mode, must be numeric | kanji | binary | alphanumeric')
+
+    def QRCodeErrLevel(lvlstr):
+        supported_lvls = ['L', 'M', 'Q', 'H']
+        if any(s == lvlstr for s in supported_lvls):
+            return lvlstr
+        else:
+            raise argparse.ArgumentTypeError('Invalid QRCode error level, must be L | M | Q | H')
+
     import argparse
     parser = argparse.ArgumentParser(description='Technexion Installer Program: CLI')
     subparsers = parser.add_subparsers(dest='cmd', help='commands')
@@ -351,6 +365,22 @@ if __name__ == "__main__":
                               action='store', default='0', help='Specify starting locations on the source storage media')
     flash_parser.add_argument('-n', '--total-sectors', dest='src_total_sectors', \
                               action='store', default='-1', help='Specify total number of sectors to copy')
+
+    # qrcode commands
+    # 'dl_url', 'tgt_filename', receiver, lvl, mode
+    qrcode_parser = subparsers.add_parser('qrcode', help='get the qrcode of the download file image info')
+    qrcode_parser.add_argument('-u', '--download-url', dest='dl_url', \
+                              action='store', metavar='URL', type=str, help='Specify download url of the xz file')
+    qrcode_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
+                              action='store', metavar='FILENAME', type=str, help='Specify target storage media')
+    qrcode_parser.add_argument('-i', '--image-file', dest='img_filename', \
+                              action='store', type=str, help='Specify the svg file_name to save')
+    qrcode_parser.add_argument('-r', '--receiver', dest='receiver', \
+                              action='store', default='', metavar='MAILTO', type=str, help='Specify receiver email address')
+    qrcode_parser.add_argument('-m', '--encode-mode', dest='mode', \
+                              action='store', default='binary', type=QRCodeModeType , help='Specify encoding mode for qrcode')
+    qrcode_parser.add_argument('-l', '--error-level', dest='lvl', \
+                              action='store', default='H', type=QRCodeErrLevel, help='Specify error level for qrcode')
 
     # config commands
     # 'load'/'save' 'configfile'

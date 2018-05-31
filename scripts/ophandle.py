@@ -13,6 +13,7 @@ from model import CopyBlockActionModeller, \
                   QueryLocalFileActionModeller, \
                   ConfigMmcActionModeller, \
                   ConfigNicActionModeller, \
+                  QRCodeActionModeller, \
                   BaseActionModeller
 import urllib.parse
 
@@ -235,6 +236,49 @@ class FlashOperationHandler(BaseOperationHandler):
                     self.mActionParam['src_total_sectors'] = int(OpParams['src_total_sectors'])
                 else:
                     self.mActionParam['src_total_sectors'] = -1
+                return True
+        else:
+            return False
+
+
+
+class QRCodeOperationHandler(BaseOperationHandler):
+    def __init__(self, UserRequestCB, use_thread=True):
+        super().__init__(UserRequestCB)
+        self.mUseThread = use_thread
+        self.mSrcFileOps = ['dl_url', 'tgt_filename']
+
+    def isOpSupported(self, OpParams):
+        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
+            if OpParams['cmd'] == 'qrcode':
+                return True
+        return False
+
+    def _setupActions(self, OpParams):
+        # setup "flash" cmd operations
+        if (self.__parseParam(OpParams)):
+            self.mActionModellers.append(QRCodeActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            return True
+        else:
+            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+
+    def __parseParam(self, OpParams):
+        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+        # Parse the OpParams and Setup mActionParams
+        if isinstance(OpParams, dict):
+            if all(s in OpParams.keys() for s in self.mSrcFileOps):
+                # check for copy from source file to target file
+                self.mActionParam['dl_url'] = str(OpParams['dl_url'])
+                self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
+                if 'receiver' in OpParams and len(OpParams['receiver']):
+                    self.mActionParam['mailto'] = str(OpParams['receiver'])
+                if 'lvl' in OpParams:
+                    self.mActionParam['errlvl'] = str(OpParams['lvl'])
+                if 'mode' in OpParams:
+                    self.mActionParam['encmode'] = str(OpParams['mode'])
+                if 'img_filename' in OpParams:
+                    self.mActionParam['img_filename'] = str(OpParams['img_filename'])
                 return True
         else:
             return False

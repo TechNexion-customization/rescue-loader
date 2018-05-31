@@ -18,7 +18,9 @@ from ophandle import FlashOperationHandler, \
                      InfoOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
+                     QRCodeOperationHandler, \
                      InteractiveOperationHandler
+
 from messenger import DbusMessenger, SocketMessenger
 
 SetupLogging('/tmp/installer_srv.log')
@@ -127,6 +129,7 @@ class OpController(object):
         self.mOpHandlers.append(InfoOperationHandler(self.__handleUserRequest))
         self.mOpHandlers.append(DownloadOperationHandler(self.__handleUserRequest))
         self.mOpHandlers.append(ConfigOperationHandler(self.__handleUserRequest))
+        self.mOpHandlers.append(QRCodeOperationHandler(self.__handleUserRequest))
         self.mOpHandlers.append(InteractiveOperationHandler(self.__handleUserRequest))
 
         # finally run the dbusmessenger server, and dbus run is blocking
