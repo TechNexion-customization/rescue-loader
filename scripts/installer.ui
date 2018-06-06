@@ -484,6 +484,16 @@
        </widget>
       </item>
       <item>
+       <widget class="QLabel" name="lblBaseboard">
+        <property name="text">
+         <string>No Baseboard</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="btnNext">
         <property name="text">
          <string>Next</string>

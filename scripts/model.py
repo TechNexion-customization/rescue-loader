@@ -732,6 +732,8 @@ class ConfigMmcActionModeller(BaseActionModeller):
 
                     self.mSubProcCmd.extend(['0' if self.mParam['config_action'] == 'disable' else '1',
                                              '>', '/sys/block/' + tgtfile + 'boot' + str(int(self.mParam['boot_part_no']) - 1) + '/force_ro'])
+                elif self.mParam['config_id'] == 'extcsd':
+                    self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], self.mParam['target']])
                 _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
                 return True
         return False
@@ -741,7 +743,15 @@ class ConfigMmcActionModeller(BaseActionModeller):
             # do something to query mmc
             if len(self.mSubProcCmd):
                 if self.mSubProcCmd[0] == 'mmc':
-                    self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                    #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                    p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
+                    output, err = p.communicate()
+                    p_status = p.wait()
+                    self.mResult['retcode'] = p_status
+                    if err is None:
+                        self.mResult['output'] = str(output[:], 'utf-8')
+                    else:
+                        self.mResult['err'] = str(err[:], 'utf-8')
                 else:
                     self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
                 _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
@@ -1053,6 +1063,12 @@ if __name__ == "__main__":
         elif sys.argv[1] == 'mmcboot':
             cfgmodel = ConfigMmcActionModeller()
             cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'disable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
+            cfgmodel.setActionParam(cfgparam)
+            cfgmodel.performAction()
+            print(cfgmodel.getResult())
+        elif sys.argv[1] == 'mmccsd':
+            cfgmodel = ConfigMmcActionModeller()
+            cfgparam = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'extcsd', 'config_action': 'read', 'target': '/dev/mmcblk2'}
             cfgmodel.setActionParam(cfgparam)
             cfgmodel.performAction()
             print(cfgmodel.getResult())

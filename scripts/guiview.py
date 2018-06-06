@@ -708,18 +708,18 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.show()
 
             # setup the icon size for QListWidgets
-            w = scnRect.width() / 3.5 if (scnRect.width() / 3.5) > 100 else 100
-            h = scnRect.height() / 3.5 if (scnRect.height() / 3.5) > 100 else 100
-            # 100x100 pixels are the icon default size
-            iconsize = QtCore.QSize(w, w) if w < h else QtCore.QSize(h, h)
+            w = scnRect.width() if scnRect.width() < scnRect.height() else scnRect.height()
+            d = w / 3.5 if (w / 3.5) > 50 else 50
+            # 50x50 pixels are the icon default size
+            iconsize = QtCore.QSize(d, d)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setSpacing(w / 14)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setSpacing(w / 14)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setSpacing(w / 14)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setSpacing(iconsize.width()/4)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setSpacing(w / 14)
 
             # draw logo according to scale
             iconLogo = QtGui.QIcon(':/res/images/tn_logo.svg')

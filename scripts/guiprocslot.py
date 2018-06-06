@@ -411,8 +411,10 @@ class detectDeviceSlot(QProcessSlot):
 
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and 'status' in results and results['status'] == 'success':
             self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
+            if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
+            self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
             # check network connections
             self.__checkNetwork()
 
@@ -516,11 +518,11 @@ class crawlWebSlot(QProcessSlot):
             # extract form, cpu, board, display, and filename of the XZ file
             form, cpu, board, display, fname = self.__parseSOMInfo(results['location'])
             # extract the os and ver number from the extracted filename of the XZ file
-            os, ver = self.__parseFilename(fname.rstrip('.xz'))
+            os, ver, extra = self.__parseFilename(fname.rstrip('.xz'))
             # make up the XZ file URL
             url = results['target'] + '/rescue' + results['location']
             # add {cpu, form, board, display, os, ver, size(uncompsize), url}
-            self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url})
+            self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
 
         elif 'file_list' in results.keys():
             # recursively request into the rescue server directories to find XZ files
@@ -560,10 +562,19 @@ class crawlWebSlot(QProcessSlot):
         # step 2: find menu items that matches as cpu, form, but not baseboard
         cpu = self._findChildWidget('lblCpu').text().lower()
         form = self._findChildWidget('lblForm').text().lower()
+        baseboard = self._findChildWidget('lblBaseboard').text().lower()
         if (cpu[0:4] in filename.lower() or cpu in filename.lower()):
             if form in filename.lower():
-                _logger.debug('Matched {} {}... {}'.format(cpu[0:4], form, filename))
-                return True
+                if 'pico' in form:
+                    _logger.debug('Matched CPU:{} and PICO FORM:{}... {}'.format(cpu[0:4], form, filename))
+                    return True
+                else:
+                    if 'tc' in baseboard and 'toucan' in filename.lower():
+                        _logger.debug('Matched CPU:{} and EDM FORM:{} and Baseboard:{}... {}'.format(cpu[0:4], form, baseboard, filename))
+                        return True
+                    elif 'fairy' in baseboard and 'fairy' in filename.lower():
+                        _logger.debug('Matched CPU:{} and EDM FORM:{} and Baseboard:{}... {}'.format(cpu[0:4], form, baseboard, filename))
+                        return True
         return False
 
     def __parseSOMInfo(self, path):
@@ -574,10 +585,14 @@ class crawlWebSlot(QProcessSlot):
 
     def __parseFilename(self, fname):
         if ('-' in fname):
-            os, ver = fname.split('-', 1)
+            os, other = fname.split('-', 1)
         else:
-            os, ver = fname, ''
-        return os, ver
+            os, other = fname, ''
+        if ('-' in other):
+            ver, extra = other.split('-', 1)
+        else:
+            ver, extra = other, ''
+        return os, ver, extra
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
@@ -632,12 +647,16 @@ class crawlLocalfsSlot(QProcessSlot):
             for fname, finfo in results['file_list'].items():
                 # extract form, cpu, board, display, and filename of the XZ filename
                 try:
-                    form, cpu, board, display, os, ver = self.__parseProp(fname)
+                    form, cpu, board, display, os, other = self.__parseProp(fname)
                     size = finfo['total_uncompressed'] if ('total_uncompressed' in finfo and int(finfo['total_uncompressed']) > 0) else finfo['total_size']
                     url = finfo['file_path'] if 'file_path' in finfo else None
-                    if form is not None and cpu is not None and board is not None and display is not None and os is not None and ver is not None and size is not None and url is not None:
+                    if form is not None and cpu is not None and board is not None and display is not None and os is not None and other is not None and size is not None and url is not None:
                         # add {cpu, form, board, display, os, ver, size(uncompsize), url}
-                        self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': size, 'url': url})
+                        if '-' in other:
+                            ver, extra = other.split('-', 1)
+                        else:
+                            ver, extra = other, ''
+                        self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': size, 'url': url, 'extra': extra})
                 except:
                     _logger.warning("skip parsing {} to extract form, cpu, board, display, os, and version info.".format(fname))
 
@@ -789,182 +808,6 @@ class scanPartitionSlot(QProcessSlot):
 
 
 
-# @QProcessSlot.registerProcessSlot('chooseImage')
-# class chooseImageSlot(QProcessSlot):
-#     """
-#     Handles button click event to issue cmd to choose board, os, and display
-#     """
-#     request = pyqtSignal(dict)
-#     success = pyqtSignal(dict)
-#     fail = pyqtSignal(str)
-# 
-#     def __init__(self, parent = None):
-#         super().__init__(parent)
-#         self.mResults = []
-#         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None}
-#         self.mLstWgtBoard = None
-#         self.mLstWgtOS = None
-#         self.mLstWgtDisplay = None
-#         self.mUrl = None
-# 
-#     def process(self, inputs):
-#         # update Display the dynamic UI from the available list of found rescue files passed in inputs
-#         _logger.debug('chooseImageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
-#         # update the UI element for later use
-#         if self.mLstWgtBoard is None: self.mLstWgtBoard = self._findChildWidget('lstWgtBoard')
-#         if self.mLstWgtOS is None: self.mLstWgtOS = self._findChildWidget('lstWgtOS')
-#         if self.mLstWgtDisplay is None: self.mLstWgtDisplay = self._findChildWidget('lstWgtDisplay')
-# 
-#         if (self.sender().objectName() == 'crawlWeb' or self.sender().objectName() == 'crawlLocalfs') and isinstance(inputs, list):
-#             # parse the download files into selectable options, i.e. board, OS, ver, display
-#             self.__parseDownloadFilesList(inputs)
-#             self.__updateUI()
-# 
-#         if self.sender() == self.mLstWgtBoard or self.sender() == self.mLstWgtDisplay or self.sender() == self.mLstWgtOS:
-#             # do smart selections based on item chosen from the board, OS, ver, display pools/lists
-#             filtered = self.__smartFilterSelections(inputs)
-#             # do clever filtering to disable items not related to selection
-#             self.__disableList(filtered)
-#             self.__updateUI()
-# 
-#         if self.sender().objectName()== "btnNext":
-#             # Find a matching CPU and FORM from the self.mCpuNames and self.mFormNames pool
-#             for cpu in self.mCpuNames:
-#                 if cpu in self._findChildWidget('lblCpu').text().lower():
-#                     self.mPick['cpu'] = cpu
-#             for form in self.mFormNames:
-#                 if form in self._findChildWidget('lblForm').text().lower():
-#                     self.mPick['form'] =  form
-#             self.mUrl = '{}-{}/{}-{}/{}-{}.xz'.format(self.mPick['form'], \
-#                                                       self.mPick['cpu'], \
-#                                                       self.mPick['board'], \
-#                                                       self.mPick['display'], \
-#                                                       self.mPick['os'], \
-#                                                       self.mPick['ver'])
-#             if self.mPick['board'] is not None and self.mPick['os'] is not None and self.mPick['display'] is not None and self.mPick['ver'] is not None:
-#                 self.finish.emit()
-# 
-#     def __parseDownloadFilesList(self, listOfFileDict):
-#         # {'os': 'ubuntu',
-#         #  'size': '3420454912',
-#         #  'ver': '16.04',
-#         #  'display': 'lcd800x480',
-#         #  'cpu': 'imx7',
-#         #  'form': 'pico',
-#         #  'board': 'dwarf',
-#         #  'url': 'http://rescue.technexion.net/rescue/pico-imx7/dwarf-lcd800x480/ubuntu-16.04.xz'
-#         self.mResults.extend([d for d in listOfFileDict if (int(d['size']) > 0)])
-#         _logger.info('list of xz files: {}'.format(self.mResults))
-# 
-#         # gets the unique set of available boards, OS, version, Display from the crawled list
-#         self.mCpuNames = set(dlfile['cpu'] for dlfile in self.mResults if ('cpu' in dlfile))
-#         self.mFormNames = set(dlfile['form'] for dlfile in self.mResults if ('form' in dlfile))
-#         self.mBoardNames = set(dlfile['board'] for dlfile in self.mResults if ('board' in dlfile))
-#         self.mDisplayNames = set(dlfile['display'] for dlfile in self.mResults if ('display' in dlfile))
-#         self.mOSNames = []
-#         for d in [{'os':dlfile['os'], 'ver':dlfile['ver']} for dlfile in self.mResults if ('os' in dlfile and 'ver' in dlfile)]:
-#             if all(not (d == n) for n in self.mOSNames):
-#                 self.mOSNames.append(d)
-# 
-#         # come up with a new list to send to GUI container, i.e. QListWidget
-#         self.mBoardList = list({'name': name, 'board': name, 'disable': False} for name in self.mBoardNames)
-#         self.mDisplayList = list({'name': name, 'display': name, 'disable': False} for name in self.mDisplayNames)
-#         self.mOSList = list({'name': item['os']+'-'+item['ver'], 'os': item['os'], 'ver': item['ver'], 'disable': False} for item in self.mOSNames)
-# 
-#     def __smartFilterSelections(self, clickedItem):
-#         """
-#         Handles user selection with the ability to disable other unrelated options (e.g. Board, OS, Version, Display)
-#         """
-# 
-#         selection = []
-#         # clever UI display to provide smarter human computer interfaces
-#         if isinstance(clickedItem, QtGui.QListWidgetItem):
-#             # if not coming from the crawling procSlots, determine what has been chosen from the QListWidget
-#             # get the selected item, and do some clever thing to gray out other options
-#             if self.sender() == self.mLstWgtBoard:
-#                 if (int(clickedItem.flags()) & QtCore.Qt.ItemIsEnabled):
-#                     self.mPick['board'] = clickedItem.data(QtCore.Qt.UserRole)['board']
-#                 else:
-#                     self.mPick['board'] = None
-#             elif self.sender() == self.mLstWgtOS:
-#                 if (int(clickedItem.flags()) & QtCore.Qt.ItemIsEnabled):
-#                     self.mPick['os'] = clickedItem.data(QtCore.Qt.UserRole)['os']
-#                     self.mPick['ver'] = clickedItem.data(QtCore.Qt.UserRole)['ver']
-#                 else:
-#                     self.mPick['os'] = None
-#                     self.mPick['ver'] = None
-#             elif self.sender() == self.mLstWgtDisplay:
-#                 if (int(clickedItem.flags()) & QtCore.Qt.ItemIsEnabled):
-#                     self.mPick['display'] = clickedItem.data(QtCore.Qt.UserRole)['display']
-#                 else:
-#                     self.mPick['display'] = None
-# 
-#         # find the subset of availablelists from user selections
-#         _logger.debug('Pick: {}'.format(self.mPick))
-#         for v in self.mPick.values():
-#             if v is not None:
-#                 selection.append(v)
-#         _logger.debug('Selection: {}'.format(selection))
-#         lstReturn = self._findSubset(selection, self.mResults) if len(selection) else self.mResults
-# #         if len(lstReturn) == 1:
-# #             # should automatically check the only possible selection
-# #             self.mPick['board'] = lstReturn['board']
-# #             self.mPick['display'] = lstReturn['display']
-# #             self.mPick['os'] = lstReturn['os']
-# #             self.mPick['version'] = lstReturn['version']
-#         return lstReturn
-# 
-#     def __disableList(self, filteredList):
-#         _logger.debug('filtered list: {}'.format(filteredList))
-#         for ui in self.mBoardList:
-#             if len(filteredList) and all(ui['board'] not in dlfile.values() for dlfile in filteredList):
-#                 ui['disable'] = True
-#             else:
-#                 ui['disable'] = False
-#         for ui in self.mDisplayList:
-#             if len(filteredList) and all(ui['display'] not in dlfile.values() for dlfile in filteredList):
-#                 ui['disable'] = True
-#             else:
-#                 ui['disable'] = False
-#         for ui in self.mOSList:
-#             if len(filteredList) and all(ui['os'] not in dlfile.values() for dlfile in filteredList):
-#                 ui['disable'] = True
-#             else:
-#                 ui['disable'] = False
-#             if len(filteredList) and all(ui['ver'] not in dlfile.values() for dlfile in filteredList):
-#                 ui['disable'] = True
-#             else:
-#                 ui['disable'] = False
-# 
-#     def __updateUI(self):
-#         # update the UI display according to the parsed board/os/ver/display selections from lists of download files
-#         _insertToContainer(self.mBoardList, self.mLstWgtBoard, None)
-#         _insertToContainer(self.mOSList, self.mLstWgtOS, None)
-#         _insertToContainer(self.mDisplayList, self.mLstWgtDisplay, None)
-# 
-#     # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
-#     # to get results from installerd
-#     #def parseResult(self, results):
-#     #    pass
-# 
-#     def validateResult(self):
-#         # flow comes here (gets called) after self.finish.emit()
-#         # so, check for valid storage to flash selected Url file here
-#         if self.mUrl and isinstance(self.mUrl, str):
-#             for item in self.mResults:
-#                 if self.mUrl.replace('/', '_') in item['url'] or self.mUrl in item['url']:
-#                     _logger.warning('validateResult found matched download URL: {}'.format(item['url']))
-#                     self.success.emit(item)
-#                     self._findChildWidget('tabChoose').hide()
-#                     self._findChildWidget('btnNext').hide()
-#                     self._findChildWidget('tabRescue').show()
-#                     self._findChildWidget('btnFlash').show()
-#                     return
-#         else:
-#             self.fail.emit('failed to choose a valid file to download')
-
-
-
 ###############################################################################
 #
 # QChooseSlot subclassed from QProcessSlot for user selection
@@ -1091,10 +934,12 @@ class chooseOSSlot(QChooseSlot):
            self.sender().objectName() == 'chooseSelection':
             # chooseOS or chooseBoard or chooseDisplay or chooseStorage, then sends a picked choice
             if isinstance(inputs, dict) and all(field in inputs for field in ['board', 'os', 'ver', 'display', 'storage']):
-                _logger.debug('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.Name(), self.sender().objectName(), self.mPick, inputs))
+                _logger.info('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 self._filterList('os', self.mPick, self.mOSUIList, self.mResults)
                 _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
+                if 'edm' in self._findChildWidget('lblForm').text().lower() and self.mOSUIList is not None and len(self.mOSUIList) == 1 and inputs['os'] is None:
+                    self.finish.emit()
 
         if self.sender() == self.mLstWgtOS:
             # inputs is the item chosen from the OS list widget
@@ -1135,7 +980,7 @@ class chooseOSSlot(QChooseSlot):
             if all(not (d == n) for n in self.mVerList):
                 self.mVerList.append(d)
         # come up with a new list to send to GUI container, i.e. QListWidget
-        self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames if name.lower() != 'rescue')
+        self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames) # if name.lower() != 'rescue')
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
@@ -1166,7 +1011,12 @@ class chooseOSSlot(QChooseSlot):
             self.success.emit(self.mPick)
             self._updateDisplay()
         else:
-            self.fail.emit('failed to choose a valid file to download')
+            if 'edm' in self._findChildWidget('lblForm').text().lower() and len(self.mOSUIList) == 1:
+                self.mPick['os'] = self.mOSUIList[0]['os'][:]
+                self.mLstWgtOS.clearSelection()
+                self.success.emit(self.mPick)
+            else:
+                self.fail.emit('failed to choose a valid file to download')
 
 
 
@@ -1205,10 +1055,12 @@ class chooseBoardSlot(QChooseSlot):
            self.sender().objectName() == 'chooseSelection':
             # chooseOS or chooseBoard or chooseDisplay or chooseStorage, then sends a picked choice
             if isinstance(inputs, dict) and all(field in inputs for field in ['board', 'os', 'ver', 'display', 'storage']):
-                _logger.debug('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.Name(), self.sender().objectName(), self.mPick, inputs))
+                _logger.info('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 self._filterList('board', self.mPick, self.mBoardUIList, self.mResults)
                 _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, None)
+                if 'edm' in self._findChildWidget('lblForm').text().lower() and self.mBoardUIList is not None and len(self.mBoardUIList) == 1 and inputs['board'] is None:
+                    self.finish.emit()
 
         if self.sender() == self.mLstWgtBoard:
             # inputs is the item chosen from the OS list widget
@@ -1256,7 +1108,12 @@ class chooseBoardSlot(QChooseSlot):
             # show/hide GUI components
             self._updateDisplay()
         else:
-            self.fail.emit('failed to choose a valid file to download')
+            if 'edm' in self._findChildWidget('lblForm').text().lower() and len(self.mBoardUIList) == 1:
+                self.mPick['board'] = self.mBoardUIList[0]['board'][:]
+                self.mLstWgtBoard.clearSelection()
+                self.success.emit(self.mPick)
+            else:
+                self.fail.emit('failed to choose a valid file to download')
 
 
 
@@ -1295,10 +1152,12 @@ class chooseDisplaySlot(QChooseSlot):
            self.sender().objectName() == 'chooseSelection':
             # chooseOS or chooseBoard or chooseDisplay or chooseStorage, then sends a picked choice
             if isinstance(inputs, dict) and all(field in inputs for field in ['board', 'os', 'ver', 'display', 'storage']):
-                _logger.debug('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.Name(), self.sender().objectName(), self.mPick, inputs))
+                _logger.info('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 self._filterList('display', self.mPick, self.mDisplayUIList, self.mResults)
                 _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, None)
+                if 'edm' in self._findChildWidget('lblForm').text().lower() and self.mDisplayUIList is not None and len(self.mDisplayUIList) == 1 and inputs['display'] is None:
+                    self.finish.emit()
 
         if self.sender() == self.mLstWgtDisplay:
             # inputs is the item chosen from the OS list widget
@@ -1331,23 +1190,43 @@ class chooseDisplaySlot(QChooseSlot):
         lstTemp = []
         # gets the unique set of available boards, OS, version, Display from the crawled list
         self.mDisplayNames = set(dlfile['display'] for dlfile in self.mResults if ('display' in dlfile))
-        for name in self.mDisplayNames:
-            if any(sz in name for sz in ['050', '070', '101', '150', 'lcd']):
-                iftype = 'ttl'
-            elif any(sz in name for sz in ['mipi']):
-                iftype = 'dpi'
-            else:
-                for t in self.mIfaceTypes:
-                    if t in name:
-                        iftype = t
-                        break
-            lstTemp.append({'name': name, 'display': name, 'ifce_type': iftype, 'disable': False})
+        if 'pico' in self._findChildWidget('lblForm').text().lower():
+            # PICO form factor display lists
+            for name in self.mDisplayNames:
+                if any(sz in name for sz in ['050', '070', '101', '150', 'lcd']):
+                    iftype = 'ttl'
+                elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
+                    if 'dsi' in name:
+                        iftype = 'dsi'
+                    else:
+                        iftype = 'dpi'
+                else:
+                    for t in self.mIfaceTypes:
+                        if t in name:
+                            iftype = t
+                            break
+                lstTemp.append({'name': name, 'display': name, 'ifce_type': iftype, 'disable': False})
 
-        # come up with a new list to send to GUI container, i.e. QListWidget
-        for t in self.mIfaceTypes:
-            disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
-            if len(disps) > 0:
-                self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
+            # come up with a new list to send to GUI container, i.e. QListWidget
+            for t in self.mIfaceTypes:
+                disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
+                if len(disps) > 0:
+                    self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
+        else:
+            # EDM form factor display lists (1:1 relationship per baseboard)
+            baseboard = self._findChildWidget('lblBaseboard').text().lower()
+            if '1000' in baseboard:
+                if len(self.mDisplayUIList) > 0:
+                    if 'display' in self.mDisplayUIList[0] and '101' not in self.mDisplayUIList[0]['display']:
+                        self.mDisplayUIList.append({'name': '101', 'display': ['101'], 'ifce_type': 'lvds', 'disable': False})
+                else:
+                    self.mDisplayUIList.append({'name': '101', 'display': ['101'], 'ifce_type': 'lvds', 'disable': False})
+            elif '700' in baseboard:
+                if len(self.mDisplayUIList) > 0:
+                    if 'display' in self.mDisplayUIList[0] and '070' not in self.mDisplayUIList[0]['display']:
+                        self.mDisplayUIList.append({'name': '070', 'display': ['070'], 'ifce_type': 'lvds', 'disable': False})
+                else:
+                    self.mDisplayUIList.append({'name': '070', 'display': ['070'], 'ifce_type': 'lvds', 'disable': False})
 
     # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
     # to get results from installerd
@@ -1363,7 +1242,12 @@ class chooseDisplaySlot(QChooseSlot):
             self.success.emit(self.mPick)
             self._updateDisplay()
         else:
-            self.fail.emit('failed to choose a valid file to download')
+            if 'edm' in self._findChildWidget('lblForm').text().lower() and len(self.mDisplayUIList) == 1:
+                self.mPick['display'] = self.mDisplayUIList[0]['display'][:]
+                self.mLstWgtDisplay.clearSelection()
+                self.success.emit(self.mPick)
+            else:
+                self.fail.emit('failed to choose a valid file to download')
 
 
 
@@ -1401,7 +1285,7 @@ class chooseStorageSlot(QChooseSlot):
            self.sender().objectName() == 'chooseSelection':
             # chooseOS or chooseBoard or chooseDisplay or chooseStorage, then sends a picked choice
             if isinstance(inputs, dict) and all(field in inputs for field in ['board', 'os', 'ver', 'display', 'storage']):
-                _logger.debug('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.Name(), self.sender().objectName(), self.mPick, inputs))
+                _logger.info('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 #self._disableList('storage', self.mStorageUIList, self.mResults)
                 #_insertToContainer(self.mStorageUIList, self.mLstWgtStorage, None)
@@ -1633,7 +1517,19 @@ class downloadImageSlot(QProcessSlot):
         Here we calculate the remaining time for the download and flash and update UI accordingly.
         """
         if self.mViewer:
-            self.mResults.update(self.mViewer.queryResult())
+            try:
+                res = self.mViewer.queryResult()
+            except:
+                self.mMsgBox.setMessage('NoDbus')
+                self.mMsgBox.setCheckFlags({'NoDbus': True})
+                self.mMsgBox.setModal(True) # modal dialog
+                ret = self.mMsgBox.display(True)
+                if ret:
+                    pass
+                self.mMsgBox.clearMessage()
+                return
+
+            self.mResults.update(res)
             if 'total_uncompressed' in self.mResults and 'bytes_written' in self.mResults:
                 smoothing = 0.005
                 lastSpeed = int(self.mResults['bytes_written']) - self.mLastWritten
@@ -1770,12 +1666,19 @@ class downloadImageSlot(QProcessSlot):
 
         # Check for flash complete and send another command for setting emmc boot sequence
         if results['status'] == 'success' and results['cmd'] == 'download':
-            # 1. disable readonly for mmc boot partition
-            # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
-            self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
-                              'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
-                              'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+            # check for sdcard or emmc
+            self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
             self.request.emit(self.mCmds[-1])
+
+        if results['status'] == 'success' and results['cmd'] == 'info':
+            # determine whether target device is an emmc, if it is, then do the mmc boot partition clearing
+            if self._isTargetEMMC(results):
+                # 1. disable readonly for mmc boot partition
+                # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
+                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                                  'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                                  'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+                self.request.emit(self.mCmds[-1])
 
         if results['status'] == 'success' and results['cmd'] == 'config' and results['config_id'] == 'readonly':
             # 2. clear the mmc boot partition
@@ -1794,6 +1697,32 @@ class downloadImageSlot(QProcessSlot):
 #         # Check for success of the config mmc command
 #         if results['status'] == 'successs' and results['cmd'] == 'config' and results['subcmd'] == 'mmc':
 #             self.finish.emit()
+
+
+    def _isTargetEMMC(self, result):
+        def parse_target_controller(res):
+        # Parse the target storage controller info
+            def findAttrs(keys, dc):
+                # find in dictionary and dictionary within a dictionary
+                for k, v in dc.items():
+                    if k in keys:
+                        yield (k, v)
+                    elif isinstance(v, dict):
+                        for ret in findAttrs(keys, v):
+                            yield ret
+            data = {}
+            for k, v in res.items():
+                if isinstance(v, dict):
+                    data.update({k: {att[0]:att[1] for att in findAttrs(['sys_name', 'subsystem', 'driver', 'type'], v)}})
+            return [(k, v) for (k, v) in data.items()]
+
+        lstTargets =  parse_target_controller(result)
+        for tgt in lstTargets:
+            sysname, sysno = tgt[1]['sys_name'].split(':', 1)
+            nodepath = tgt[1]['driver'] + sysname.lstrip(tgt[1]['subsystem'])
+            if nodepath in self.mTgtStorage and tgt[1]['type'] == 'MMC':
+                return True
+        return False
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()

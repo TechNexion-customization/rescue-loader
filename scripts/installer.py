@@ -115,12 +115,14 @@ def main():
 
     def parseFilename(fname):
         if '-' in fname:
-            os, ver = fname.split('-', 1)
+            os, other = fname.split('-', 1)
         else:
-            os = fname
-            ver = ''
-        return os, ver
-
+            os, other = fname, ''
+        if '-' in other:
+            ver, extra = other.split('-', 1)
+        else:
+            ver, extra = other, ''
+        return os, ver, extra
 
     menuResult = {}
     tgtResult = {}
@@ -165,7 +167,7 @@ def main():
         del cliInfo
         if menu[1].endswith('.xz'):
             form, cpu, board, disp, fname = parseSOMInfo(menu[1])
-            os, ver = parseFilename(fname.rstrip('.xz'))
+            os, ver, extra = parseFilename(fname.rstrip('.xz'))
             print('{:>4} {:<8} {:<6} {:<8} {:<14} {:<14} {:<10} {:<8}'.format(menu[0], cpu, form, board, disp, os, ver, _prettySize(uncompsize)))
     while True:
         srcNum = input('Choose a file to download ([Q]uit): ')
