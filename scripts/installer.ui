@@ -715,6 +715,16 @@
     </rect>
    </property>
   </widget>
+  <widget class="QProcessSlot" name="postDownload" native="true">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>100</width>
+     <height>30</height>
+    </rect>
+   </property>
+  </widget>
   <widget class="QProcessSlot" name="chooseOS" native="true">
    <property name="geometry">
     <rect>
@@ -898,6 +908,22 @@
    <sender>diaWidget</sender>
    <signal>initialised()</signal>
    <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>496</x>
+     <y>338</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>29</x>
+     <y>38</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>postDownload</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1217,8 +1243,8 @@
   <connection>
    <sender>downloadImage</sender>
    <signal>success()</signal>
-   <receiver>progressBarStatus</receiver>
-   <slot>setValue()</slot>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>29</x>

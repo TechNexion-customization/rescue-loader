@@ -1490,7 +1490,8 @@ class downloadImageSlot(QProcessSlot):
     Handles button click event to issue cmd to download and flash
     """
     request = pyqtSignal(dict)
-    success = pyqtSignal(int)
+    progress = pyqtSignal(int)
+    success = pyqtSignal(dict)
     fail = pyqtSignal(str)
 
     def __init__(self, parent = None):
@@ -1507,8 +1508,8 @@ class downloadImageSlot(QProcessSlot):
         self.mTimer.timeout.connect(self._queryResult)
         self.mLblRemain = None
         #self.mLblDownloadFlash = None
-        self.mQRCode = None
         self.mLstWgtSelection = None
+        self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
 
     def _queryResult(self):
@@ -1529,21 +1530,17 @@ class downloadImageSlot(QProcessSlot):
                 self.mMsgBox.clearMessage()
                 return
 
-            self.mResults.update(res)
-            if 'total_uncompressed' in self.mResults and 'bytes_written' in self.mResults:
+            if 'total_uncompressed' in res and 'bytes_written' in res:
                 smoothing = 0.005
-                lastSpeed = int(self.mResults['bytes_written']) - self.mLastWritten
+                lastSpeed = int(res['bytes_written']) - self.mLastWritten
                 # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
                 self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
-                self.mRemaining = float((int(self.mResults['total_uncompressed']) - int(self.mResults['bytes_written'])) / self.mAvSpeed)
-                self.mLastWritten = int(self.mResults['bytes_written'])
-                _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(self.mResults['total_uncompressed']), int(self.mResults['bytes_written']), self.mAvSpeed, self.mRemaining))
+                self.mRemaining = float((int(res['total_uncompressed']) - int(res['bytes_written'])) / self.mAvSpeed)
+                self.mLastWritten = int(res['bytes_written'])
+                _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_uncompressed']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
                 self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
-                pcent = int(round(float(self.mResults['bytes_written']) / float(self.mResults['total_uncompressed']) * 100))
-                self.success.emit(pcent)
-
-            if 'status' in self.mResults and self.mResults['status'] == 'success':
-                self.success.emit(100)
+                pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
+                self.progress.emit(pcent)
 
     def process(self, inputs):
         """
@@ -1553,6 +1550,10 @@ class downloadImageSlot(QProcessSlot):
         if self.mLblRemain is None: self.mLblRemain = self._findChildWidget('lblRemaining')
         #if self.mLblDownloadFlash is None: self.mLblDownloadFlash = self._findChildWidget('lblDownloadFlash')
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
+        if self.mProgressBar is None:
+            self.mProgressBar = self._findChildWidget('progressBarStatus')
+            if self.mProgressBar:
+                self.progress.connect(self.mProgressBar.setValue)
 
         if not self.mFlashFlag:
             _logger.debug('downloadImageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
@@ -1569,14 +1570,9 @@ class downloadImageSlot(QProcessSlot):
                 # extract URL and Target
                 self.__getUrlStorageFromPick(inputs)
                 # reset the progress bar
-                self.success.emit(0)
+                self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
-                    _logger.info('generate qrcode from from URL {} and STORAGE {}'.format(self.mFileUrl, self.mTgtStorage))
-                    self._setCommand({'cmd': 'qrcode', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'img_filename': '/tmp/qrcode.svg'})
-                    # send request to installerd
-                    self.request.emit(self.mCmds[-1])
-
                     _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
                     self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
                     # send request to installerd
@@ -1651,53 +1647,175 @@ class downloadImageSlot(QProcessSlot):
             self.mTimer.stop()
             self.mFlashFlag = False
 
-        # Get qrcode and display
-        if results['status'] == 'success' and results['cmd'] == 'qrcode':
-            if 'svg_buffer' in results:
-#                 self.mQRCode = io.BytesIO(results['svg_buffer'])
-#                 qrSvg = QtSvg.QSvgRenderer(self.mQRCode.getvalue())
-#                 qrImage = QtGui.QImage(qrSvg.defaultSize().width(), qrSvg.defaultSize().height(), QtGui.QImage.Format_ARGB32)
-#                 painter = QtGui.QPainter(qrImage)
-#                 qrSvg.render(painter)
-#                 painter.end()
-#                 self._findChildWidget('lblArrow').setPixmap(qrImage)
-                qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
-                self.mMsgBox.setQrCode(qrIcon)
+    def validateResult(self):
+        # flow comes here (gets called) after self.finish.emit()
+        _logger.debug('validateResult: {}'.format(self.mResults))
 
-        # Check for flash complete and send another command for setting emmc boot sequence
-        if results['status'] == 'success' and results['cmd'] == 'download':
+        # if download and flash is successful, emit success signal to go to next stage
+        if isinstance(self.mResults, dict) and 'status' in self.mResults and self.mResults['status'] == 'success':
+            if self.mResults['cmd'] == 'download' and self.mResults['bytes_written'] == self.mResults['total_uncompressed']:
+                self.progress.emit(100)
+                self.mLblRemain.setText('Remaining Time: 00:00')
+            self.mPick.update({'target': self.mTgtStorage, 'url': self.mFileUrl})
+            self.success.emit(self.mPick)
+        elif self.mResults['status'] == 'failure':
+            self.mMsgBox.setMessage('Retry')
+            self.mMsgBox.setModal(True) # modal dialog
+            ret = self.mMsgBox.display(True)
+            if ret:
+                try:
+                    # reset/reboot the system
+                    subprocess.check_call(['systemctl', 'restart', 'guiclientd.service'])
+                except:
+                    raise
+            self.mMsgBox.clearMessage()
+
+    def _updateDisplay(self):
+        # show and hide some Gui elements
+        self.mLstWgtSelection.setDisabled(True)
+        self._findChildWidget('btnFlash').hide()
+        self._findChildWidget('progressBarStatus').show()
+        self.mLblRemain.show()
+        self._findChildWidget('lblInstruction').setText('Downloading and flashing...')
+
+
+
+@QProcessSlot.registerProcessSlot('postDownload')
+class postDownloadSlot(QProcessSlot):
+    """
+    Handles post actions after success download and flash
+    """
+    request = pyqtSignal(dict)
+    progress = pyqtSignal(int)
+    success = pyqtSignal(dict)
+    fail = pyqtSignal(str)
+
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        self.mResults = {}
+        self.mFlashFlag = False
+        self.mAvSpeed = 0
+        self.mLastWritten = 0
+        self.mRemaining = 0
+        self.mTimer = QtCore.QTimer()
+        self.mTimer.timeout.connect(self._queryResult)
+        self.mLblRemain = None
+        self.mProgressBar = None
+        self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
+
+    def _queryResult(self):
+        """
+        A callback function acting as a slot for timer's timeout signal.
+        Here we calculate the remaining time for the download and flash and update UI accordingly.
+        """
+        if self.mViewer:
+            try:
+                res = self.mViewer.queryResult()
+            except:
+                self.mMsgBox.setMessage('NoDbus')
+                self.mMsgBox.setCheckFlags({'NoDbus': True})
+                self.mMsgBox.setModal(True) # modal dialog
+                ret = self.mMsgBox.display(True)
+                if ret:
+                    pass
+                self.mMsgBox.clearMessage()
+                return
+
+            if 'total_size' in res and 'bytes_written' in res:
+                smoothing = 0.005
+                lastSpeed = int(res['bytes_written']) - self.mLastWritten
+                # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
+                self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
+                self.mRemaining = float((int(res['total_size']) - int(res['bytes_written'])) / self.mAvSpeed)
+                self.mLastWritten = int(res['bytes_written'])
+                _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_size']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
+                self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
+                pcent = int(round(float(res['bytes_written']) / float(res['total_size']) * 100))
+                self.progress.emit(pcent)
+
+    def process(self, inputs):
+        """
+        Called by downloadImage's success signal, do post actions, i.e. get qrcode and determine whether to clear
+        emmc boot partition option 1 or enable it
+        """
+        if self.mLblRemain is None: self.mLblRemain = self._findChildWidget('lblRemaining')
+        if self.mProgressBar is None:
+            self.mProgressBar = self._findChildWidget('progressBarStatus')
+            if self.mProgressBar:
+                self.progress.connect(self.mProgressBar.setValue)
+
+        if self.sender().objectName() == 'downloadImage':
+            # get the pick choices and target torage and url from downloadImage
+            self.mPick.update(inputs)
+            # gen qrcode save it in /tmp/qrcode.svg and display it before reboot
+            _logger.info('generate qrcode from from URL {} and STORAGE {}'.format(self.mPick['url'], self.mPick['target']))
+            self._setCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['target'], 'img_filename': '/tmp/qrcode.svg'})
+            self.request.emit(self.mCmds[-1])
+
             # check for sdcard or emmc
+            _logger.info('check whether target storage {} is emmc'.format(self.mPick['target']))
             self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
             self.request.emit(self.mCmds[-1])
 
-        if results['status'] == 'success' and results['cmd'] == 'info':
+    def parseResult(self, results):
+
+        self.mResults.update(results)
+
+        # Get qrcode and display
+        if results['cmd'] == 'qrcode' and results['status'] == 'success':
+            if 'svg_buffer' in results:
+                qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
+                self.mMsgBox.setQrCode(qrIcon)
+
+        # Get controller info back and determine whether target storage is emmc
+        if results['cmd'] == 'info' and results['status'] == 'success':
             # determine whether target device is an emmc, if it is, then do the mmc boot partition clearing
             if self._isTargetEMMC(results):
+                self.progress.emit(0)
+                if 'androidthings' in self.mPick['os']:
+                    self._findChildWidget('lblInstruction').setText('Flash target emmc boot partition...')
+                else:
+                    self._findChildWidget('lblInstruction').setText('Clearing target emmc boot partition...')
                 # 1. disable readonly for mmc boot partition
                 # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
+                _logger.debug('issue command to enable emmc boot partition with write access'.format(self.mPick['target']))
                 self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
-                                  'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
-                                  'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+                                  'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['target']})
                 self.request.emit(self.mCmds[-1])
 
-        if results['status'] == 'success' and results['cmd'] == 'config' and results['config_id'] == 'readonly':
-            # 2. clear the mmc boot partition
-            # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mTgtStorage + 'boot0'}
-            self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mTgtStorage + 'boot0'})
-            self.request.emit(self.mCmds[-1])
+        # target emmc has been set to writable
+        if not self.mFlashFlag and results['cmd'] == 'config' and results['config_id'] == 'readonly' and results['status'] == 'success':
+            if 'androidthings' in self.mPick['os']:
+                _logger.debug('issue command to flash androidthings emmc boot partition')
+                self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['target'] + 'boot0'})
+                self.request.emit(self.mCmds[-1])
+            else:
+                # 2. clear the mmc boot partition
+                # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['target'] + 'boot0'}
+                _logger.debug('issue command to clear {} boot partition'.format(self.mPick['target']))
+                self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['target'] + 'boot0'})
+                self.request.emit(self.mCmds[-1])
 
-        if results['status'] == 'success' and results['cmd'] == 'flash':
+        if results['cmd'] == 'flash' and results['status'] == 'processing':
+            _logger.debug('start timer to update progressbar for clearing emmc {} boot partition'.format(self.mPick['target']))
+            self.mTimer.start(1000) # 1000 ms
+            self.mFlashFlag = True
+        elif results['cmd'] == 'flash' and results['status'] == 'success':
+            # flash job either success or failure
+            self.mTimer.stop()
+            self.mFlashFlag = False
+            # target emmc has been flashed with zeros, so
             # 3. set the mmc boot partition option
             # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
+            _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
             self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
                               'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
-                              'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage})
+                              'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['target']})
             self.request.emit(self.mCmds[-1])
-
-#         # Check for success of the config mmc command
-#         if results['status'] == 'successs' and results['cmd'] == 'config' and results['subcmd'] == 'mmc':
-#             self.finish.emit()
-
+        elif results['cmd'] == 'flash' and results['status'] == 'failure':
+            # flash job either success or failure
+            self.mTimer.stop()
+            self.mFlashFlag = False
 
     def _isTargetEMMC(self, result):
         def parse_target_controller(res):
@@ -1720,7 +1838,7 @@ class downloadImageSlot(QProcessSlot):
         for tgt in lstTargets:
             sysname, sysno = tgt[1]['sys_name'].split(':', 1)
             nodepath = tgt[1]['driver'] + sysname.lstrip(tgt[1]['subsystem'])
-            if nodepath in self.mTgtStorage and tgt[1]['type'] == 'MMC':
+            if nodepath in self.mPick['target'] and tgt[1]['type'] == 'MMC':
                 return True
         return False
 
@@ -1728,8 +1846,12 @@ class downloadImageSlot(QProcessSlot):
         # flow comes here (gets called) after self.finish.emit()
         _logger.debug('validateResult: {}'.format(self.mResults))
 
+        if self.mResults['cmd'] == 'flash' and self.mResults['bytes_written'] == self.mResults['total_size'] and self.mResults['status'] == 'success':
+            self.progress.emit(100)
+            self.mLblRemain.setText('Remaining Time: 00:00')
+
         # Final notification
-        if isinstance(self.mResults, dict) and (self.mResults['status'] == 'success' or self.mResults['status'] == 'failure'):
+        if isinstance(self.mResults, dict) and self.mResults['config_id'] == 'bootpart' and self.mResults['status'] == 'success':
             #ret = QtGui.QMessageBox.warning(self, 'TechNexion Rescue System', 'Installation {}...\nSet boot jumper to boot from sdcard/emmc,\nAnd click RESET to reboot sytem!'.format('Complete' if (self.mResults['status'] == 'success') else 'Failed'), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Reset, QtGui.QMessageBox.Ok)
             self.mMsgBox.setMessage('Reboot')
             self.mMsgBox.setModal(True) # modal dialog
@@ -1741,15 +1863,17 @@ class downloadImageSlot(QProcessSlot):
                 except:
                     raise
             self.mMsgBox.clearMessage()
-
-    def _updateDisplay(self):
-        # show and hide some Gui elements
-        self.mLstWgtSelection.setDisabled(True)
-        self._findChildWidget('btnFlash').hide()
-        self._findChildWidget('progressBarStatus').show()
-        self.mLblRemain.show()
-        self._findChildWidget('lblInstruction').setText('')
-        #self.mLblDownloadFlash.setText('URL: {}'.format(self.mFileUrl.replace('http://rescue.technexion.net/rescue', '')))
+        elif self.mResults['config_id'] == 'bootpart' and self.mResults['status'] == 'failure':
+            self.mMsgBox.setMessage('Retry')
+            self.mMsgBox.setModal(True) # modal dialog
+            ret = self.mMsgBox.display(True)
+            if ret:
+                try:
+                    # reset/reboot the system
+                    subprocess.check_call(['systemctl', 'restart', 'guiclientd.service'])
+                except:
+                    raise
+            self.mMsgBox.clearMessage()
 
 
 
@@ -2082,6 +2206,12 @@ class QMessageDialog(QtGui.QDialog):
 #             self.setContent(movie)
             self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
             self.setButtons({'accept': 'REBOOT'})
+
+        elif msgtype == 'Retry':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, "SP_MessageBoxWarning")))
+            self.setTitle("Flash failed")
+            self.setContent('Please retry to flash the image again')
+            self.setButtons({'accept': 'RETRY'})
 
         elif msgtype == 'InputError':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
