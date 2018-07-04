@@ -327,9 +327,11 @@ class BaseInputOutput(object):
         """
         statinfo = os.stat(self.mFilename)
         if int(statinfo.st_size) > 0:
+            _logger.debug('{} {} - getFileSize: {}'.format(self.__class__, self.mFilename, statinfo.st_size))
             return int(statinfo.st_size)
         else:
             if self.mHandle:
+                _logger.debug('{} {} - getFileSize: {}'.format(self.__class__, self.mFilename, os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)))
                 return os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)
         return 0
 
@@ -339,6 +341,7 @@ class BaseInputOutput(object):
         """
         if self.mFilename:
             statinfo = os.stat(self.mFilename)
+            _logger.debug('{} {} - getBlockSize: {}'.format(self.__class__, self.mFilename, statinfo.st_blksize))
             return int(statinfo.st_blksize)
         return 0
 

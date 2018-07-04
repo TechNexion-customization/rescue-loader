@@ -1573,6 +1573,9 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
+                    # copy the first 69632 sectors - 35,651,584 bytes out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mTgtStorage, 'tgt_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '16384'})
+                    self.request.emit(self.mCmds[-1])
                     _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
                     self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
                     # send request to installerd
@@ -1639,7 +1642,7 @@ class downloadImageSlot(QProcessSlot):
         # step 7: parse the result in a loop until result['status'] != 'processing'
         # Start a timer to query results every 1 second
         self.mResults.update(results)
-        if results['status'] == 'processing':
+        if results['status'] == 'processing' and results['cmd'] == 'download':
             self.mTimer.start(1000) # 1000 ms
             self.mFlashFlag = True
         else:
@@ -1652,13 +1655,16 @@ class downloadImageSlot(QProcessSlot):
         _logger.debug('validateResult: {}'.format(self.mResults))
 
         # if download and flash is successful, emit success signal to go to next stage
-        if isinstance(self.mResults, dict) and 'status' in self.mResults and self.mResults['status'] == 'success':
-            if self.mResults['cmd'] == 'download' and self.mResults['bytes_written'] == self.mResults['total_uncompressed']:
-                self.progress.emit(100)
-                self.mLblRemain.setText('Remaining Time: 00:00')
+        if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults and self.mResults['status'] == 'success':
+            # self.mResults['bytes_written'] == self.mResults['total_uncompressed']:
+            self.progress.emit(100)
+            self.mLblRemain.setText('Remaining Time: 00:00')
             self.mPick.update({'target': self.mTgtStorage, 'url': self.mFileUrl})
             self.success.emit(self.mPick)
-        elif self.mResults['status'] == 'failure':
+        elif isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults and self.mResults['status'] == 'failure':
+            # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
+            self._setCommand({'cmd': 'flash', 'tgt_filename': self.mTgtStorage, 'src_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '16384'})
+            self.request.emit(self.mCmds[-1])
             self.mMsgBox.setMessage('Retry')
             self.mMsgBox.setModal(True) # modal dialog
             ret = self.mMsgBox.display(True)
@@ -1846,7 +1852,7 @@ class postDownloadSlot(QProcessSlot):
         # flow comes here (gets called) after self.finish.emit()
         _logger.debug('validateResult: {}'.format(self.mResults))
 
-        if self.mResults['cmd'] == 'flash' and self.mResults['bytes_written'] == self.mResults['total_size'] and self.mResults['status'] == 'success':
+        if self.mResults['cmd'] == 'flash' and self.mResults['status'] == 'success': # and self.mResults['bytes_written'] == self.mResults['total_size']
             self.progress.emit(100)
             self.mLblRemain.setText('Remaining Time: 00:00')
 

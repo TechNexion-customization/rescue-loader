@@ -154,7 +154,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         self.mResult['bytes_written'] = 0
         # setup the input/output objects
         # chunk_size in bytes default 1MB, i.e. 1048576
-        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576
+        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0) else 1048576
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
             try:
@@ -216,7 +216,7 @@ class CopyBlockActionModeller(BaseActionModeller):
                 self.mResult['total_size'] = totalbytes
                 # sector addresses of a very large file for looping
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-                _logger.debug('list of addresses to copy: {}'.format(address))
+                _logger.debug('total_size: {} block_size: {} list of addresses to copy: {}'.format(totalbytes, blksize, [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
                         self.__copyChunk(srcaddr, tgtaddr, 1)

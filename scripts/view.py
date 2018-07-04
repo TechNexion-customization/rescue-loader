@@ -365,6 +365,8 @@ if __name__ == "__main__":
                               action='store', default='0', help='Specify starting locations on the source storage media')
     flash_parser.add_argument('-n', '--total-sectors', dest='src_total_sectors', \
                               action='store', default='-1', help='Specify total number of sectors to copy')
+    flash_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
+                              action='store', default='-1', help='Specify the chunk size (sector size) in bytes to copy')
 
     # qrcode commands
     # 'dl_url', 'tgt_filename', receiver, lvl, mode

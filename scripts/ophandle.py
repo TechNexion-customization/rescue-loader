@@ -236,6 +236,10 @@ class FlashOperationHandler(BaseOperationHandler):
                     self.mActionParam['src_total_sectors'] = int(OpParams['src_total_sectors'])
                 else:
                     self.mActionParam['src_total_sectors'] = -1
+                if 'chunk_size' in OpParams.keys():
+                    self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
+                else:
+                    self.mActionParam['chunk_size'] = -1
                 return True
         else:
             return False
