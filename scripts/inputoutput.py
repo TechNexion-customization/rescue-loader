@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import os
 import abc
@@ -59,7 +60,7 @@ class CompressedFile (object):
 
     def decomp(self, data):
         pass
-    
+
     def flush(self):
         pass
 
@@ -240,10 +241,10 @@ class GZFile (CompressedFile):
 class BaseInputOutput(object):
     """
     BaseInputOutput
-    
+
     """
     __metaclass__ = abc.ABCMeta
-    
+
     def __init__(self, filename, mode='rb+'):
         super().__init__()
         self.mHandle = None
@@ -272,7 +273,7 @@ class BaseInputOutput(object):
             _logger.error('{} write exception: {}'.format(self.__class__, ex))
             raise
         return 0
-    
+
     def _read(self, start, size):
         try:
             if (self._open()):
@@ -450,7 +451,7 @@ class CompressInputOutput(BaseInputOutput):
 class BlockInputOutput(CompressInputOutput):
     """
     BlockInputOutput
-    
+
     """
     def __init__(self, chunksize, filename, mode='rb+'):
         super().__init__(filename, mode)
@@ -460,7 +461,7 @@ class BlockInputOutput(CompressInputOutput):
     def Write(self, chunkdata, byteoffset):
         """
         writing raw binary chunkdata, (which is a string of bytes), also support
-        a dictionary of { sector_num, binary_data } too. 
+        a dictionary of { sector_num, binary_data } too.
         """
         try:
             return super().Write(chunkdata, byteoffset)
@@ -484,7 +485,7 @@ class BlockInputOutput(CompressInputOutput):
 class FileInputOutput(BaseInputOutput):
     """
     FileInputOutput
-    
+
     """
     def __init__(self, filename, mode='rt+'):
         super().__init__(filename, mode)
@@ -520,7 +521,7 @@ class WebInputOutput(BaseInputOutput):
         # and the overridden _open() will be called first for WebInputOutput
         self.mCFHandle = self.__getCompressedFile()
         _logger.debug('{}: open_url:{} handle:{} CFhandle:{}'.format(self.__class__, self.mUrl, self.mHandle, self.mCFHandle))
-        
+
     # factory function to create a suitable instance for accessing files
     def __getCompressedFile(self):
         #self.mCFHandle = XZFile(filename, 'rb+')

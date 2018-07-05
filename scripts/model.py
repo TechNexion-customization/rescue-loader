@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import io
 import re
@@ -61,17 +62,17 @@ class HtmlFileLinkParser(HTMLParser):
 class BaseActionModeller(object):
     """
     Base Action Model for modelling actions to be taken from users commands
-    
     """
-    
+
     def __init__(self):
         super().__init__()
         self.mParam = {}
         self.mResult = {}
-        self.mRecoverable = False
+        self.mInterruptedFlag = False
 
-    def isRecoverable(self):
-        return self.mRecoverable
+    def checkInterruptAndExit(self):
+        if self.mInterruptedFlag:
+            raise Exception("Interrupted by User Request")
 
     def getResult(self):
         return self.mResult
@@ -81,35 +82,32 @@ class BaseActionModeller(object):
             if len(param) > 0:
                 self.mParam.clear()
                 self.mParam.update(param)
-                _logger.debug('Model mParam: {}'.format(self.mParam))
+                _logger.debug('{} - set mParam: {}'.format(self, self.mParam))
         else:
-            raise TypeError('Param must be a dictionary')
-    
+            raise ValueError('{} - no action params for model'.format(self))
+
     def performAction(self):
         self.mResult.clear()
         ret = False
         try:
             ret = self._preAction()
-            _logger.debug('_preAction(): {}'.format(ret))
+            _logger.debug('{} _preAction(): {}'.format(self, ret))
             if (ret):
                 ret = self._mainAction()
-                _logger.debug('_mainAction(): {}'.format(ret))
+                _logger.debug('{} _mainAction(): {}'.format(self, ret))
                 if(ret):
                     ret = self._postAction()
-                    _logger.debug('_postAction(): {}'.format(ret))
+                    _logger.debug('{} _postAction(): {}'.format(self, ret))
         except Exception as ex:
-            _logger.info('performAction exception: {}'.format(ex))
+            _logger.info('{} performAction exception: {}'.format(self, ex))
             ret = False
             raise
         finally:
             return ret
 
-    def recoverAction(self):
-        """
-        To be overriden
-        """
-        # no need to recover
-        return False
+    def interruptAction(self, parsedInputs):
+        # set the interrupted flag
+        self.mInterruptedFlag = True
 
     def _preAction(self):
         """
@@ -139,15 +137,6 @@ class CopyBlockActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIOs = []
-        self.mOrigData = {}
-    
-    def recoverAction(self):
-        # recover from the self.mOrigData
-        try:
-            self.mIOs[1].Write(self.mOrigData, self.mParam['src_start_sector'])
-            return True
-        except Exception:
-            raise
 
     def _preAction(self):
         self.mResult['bytes_read'] = 0
@@ -176,27 +165,7 @@ class CopyBlockActionModeller(BaseActionModeller):
                         self.mParam['src_total_sectors'] = int(filesize/blksize) + 0 if (filesize % blksize) else 1
                     self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
             except Exception as ex:
-                _logger.error('Cannot create block inputoutput: {}'.format(ex))
-                raise
-#             mode = 'rb+'
-#             while True:
-#                 try:
-#                     # default mode is rb+, if failed, retry to open with 'wb+' mode
-#                     self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], mode))
-#                 except FileNotFoundError as err:
-#                     # retry with wb+ mode to create the file and write to
-#                     # offset in the file, append mode only append at the end
-#                     _logger.error('Target file does not exist, re-try with \'wb+\' mode: {}'.format(err))
-#                     mode = 'wb+'
-#                     continue
-#                 except PermissionError as err:
-#                     _logger.error('No permission to access target file: {}'.format(err))
-#                     raise
-#                 except Exception as ex:
-#                     _logger.error('pre-action exception: {}'.format(ex))
-#                     raise
-#                 else:
-#                     break
+                raise IOError('Cannot create block inputoutput: {}'.format(ex))
         else:
             raise ArgumentTypeError('No src or tgt file specified')
 
@@ -205,7 +174,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         return False
 
     def _mainAction(self):
-        # TODO: copy specified address range from src file to target file
+        # copy specified address range from src file to target file
         try:
             if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
                 chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576
@@ -219,32 +188,25 @@ class CopyBlockActionModeller(BaseActionModeller):
                 _logger.debug('total_size: {} block_size: {} list of addresses to copy: {}'.format(totalbytes, blksize, [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
+                        self.checkInterruptAndExit()
                         self.__copyChunk(srcaddr, tgtaddr, 1)
                 else:
-                    self.__copyChunk(srcstart, \
-                                     tgtstart, \
-                                     totalbytes)
+                    self.__copyChunk(srcstart, tgtstart, totalbytes)
                 return True
             else:
                 raise ArgumentTypeError('Not specified source/target start sector, or total sectors')
         except Exception as ex:
-            _logger.error('main-action exception: {}'.format(ex))
+            _logger.error('CopyBlock main-action exception: {}'.format(ex))
             raise
-        return False
-    
-    def _postAction(self):
-        for ioobj in self.mIOs:
-            ioobj._close()
-        del self.mOrigData
-        return True
+        else:
+            return False
+        finally:
+            # close the block device
+            for ioobj in self.mIOs:
+                ioobj._close()
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks):
         try:
-            # read from target first
-            #origdata, origsize = self.mIOs[1].Read(tgtaddr, chunksize)
-            #self.mOrigData.update(origdata)
-            # if read something back, then set recoverable
-            #self.mRecoverable = True if len(self.mOrigData) > 0 else False
             # read src and write to the target
             data = self.mIOs[0].Read(srcaddr, numChunks)
             self.mResult['bytes_read'] += len(data)
@@ -268,7 +230,7 @@ class QueryFileActionModeller(BaseActionModeller):
     """
     Query File Action Model to query information from a file
     """
-    
+
     def __init__(self):
         super().__init__()
         self.mIO = None
@@ -277,18 +239,16 @@ class QueryFileActionModeller(BaseActionModeller):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         # setup the input output
-        if self.mIO is None and 'src_filename' in self.mParam:
-            try:
-                self.mIO = FileInputOutput(self.mParam['src_filename'], 'rt')
+        if 'src_filename' in self.mParam:
+            self.mIO = FileInputOutput(self.mParam['src_filename'], 'rt')
+            if self.mIO:
                 return True
-            except Exception:
-                raise
+            else:
+                raise ReferenceError('Cannot create FileInputOutput')
         else:
-            if isinstance(self.mIO, FileInputOutput):
-                return True
-            raise ReferenceError('No File Input Output')
+            raise ReferenceError('No Valid Source File')
         return False
-    
+
     def _mainAction(self):
         # read the file, and return read lines
         # TODO: should implement writing files in the future
@@ -311,7 +271,7 @@ class QueryFileActionModeller(BaseActionModeller):
         except Exception:
             raise
         return False
-    
+
     def _postAction(self):
         if 're_pattern' in self.mParam:
             # if there is a regular express pattern passed in, return the
@@ -323,7 +283,7 @@ class QueryFileActionModeller(BaseActionModeller):
                     _logger.debug('from pattern {} found_match: {}'.format(self.mParam['re_pattern'], m.groups()))
                     self.mResult['found_match'] = ','.join([g for g in m.groups()])
         # clear the mIO
-        del self.mIO
+        if self.mIO: del self.mIO
         return True
 
 
@@ -486,6 +446,7 @@ class WebDownloadActionModeller(BaseActionModeller):
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
+
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535
         srcPath = '/rescue/' + self.mParam['src_directory'].strip('/') + '/' + self.mParam['src_filename'].lstrip('/')
@@ -526,28 +487,23 @@ class WebDownloadActionModeller(BaseActionModeller):
             _logger.debug('list of addresses to copy: {}'.format(address))
             if len(address) > 1:
                 for (srcaddr, tgtaddr) in address:
+                    self.checkInterruptAndExit()
                     self.__copyChunk(srcaddr, tgtaddr, 1)
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             return True
         except Exception as ex:
-            _logger.error('main-action exception: {}'.format(ex))
+            _logger.error('WebDownload main-action exception: {}'.format(ex))
             raise
-        return False
-
-    def _postAction(self):
-        for ioobj in self.mIOs:
-            ioobj._close()
-#        del self.mOrigData
-        return True
+        else:
+            return False
+        finally:
+            # close the block device
+            for ioobj in self.mIOs:
+                ioobj._close()
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks):
         try:
-            # read from target first
-            #origdata, origsize = self.mIOs[1].Read(tgtaddr, numChunks)
-            #self.mOrigData.update(origdata)
-            # if read something back, then set recoverable
-            #self.mRecoverable = True if len(self.mOrigData) > 0 else False
             # read src and write to the target
             data = self.mIOs[0].Read(srcaddr, numChunks)
             self.mResult['bytes_read'] += len(data)
@@ -565,6 +521,8 @@ class WebDownloadActionModeller(BaseActionModeller):
         parts = int(totalbytes / chunksize) + (1 if (totalbytes % chunksize) else 0)
         return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
 
+
+
 class QueryWebFileActionModeller(BaseActionModeller):
     """
     Query Action Model to query file information on a website
@@ -572,7 +530,6 @@ class QueryWebFileActionModeller(BaseActionModeller):
 
     def __init__(self):
         super().__init__()
-        self.mIO = None
 
     def _preAction(self):
         self.mResult['lines_read'] = 0
@@ -590,47 +547,39 @@ class QueryWebFileActionModeller(BaseActionModeller):
                         self.mSrcPath = '/rescue/' + self.mParam['src_directory'].strip('/') + '/'
                     else:
                         self.mSrcPath = '/rescue/' + self.mParam['src_directory'].lstrip('/')
-            # setup the web input output
-            if self.mIO is None:
-                try:
-                    self.mIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
-                except Exception:
-                    _logger.error('Cannot create WebInputOutput with {}, {}'.format(self.mSrcPath, self.mWebHost))
-                    raise
-            return True if isinstance(self.mIO, WebInputOutput) else False
-        else:
-            return False
-
-    def _mainAction(self):
-        # read the file, and return read lines
-        # TODO: should implement writing files in the future
-        try:
-            _logger.debug('File Type: {}'.format(self.mIO.getFileType()))
-            if 'html' in self.mIO.getFileType():
-                webpage = self.mIO.Read(0, 0)
-                # parse the web pages
-                dctFiles = self.__parseWebPage(webpage)
-                if len(dctFiles) > 0:
-                    self.mResult['file_list'] = dctFiles
-                    self.mResult['lines_read'] += len(webpage)
-                    return True
-            elif 'xz' in self.mIO.getFileType():
-                self.mResult['header_info'] = self.mIO.getHeaderInfo()
-                self.mResult['file_type'] = self.mIO.getFileType()
-                self.mResult['total_size'] = self.mIO.getFileSize()
-                self.mResult['total_uncompressed'] = self.mIO.getUncompressedSize()
+            if self.mWebHost and self.mSrcPath:
                 return True
-            else:
-                raise IOError('Cannot read none text base web files')
-        except Exception as ex:
-            _logger.error('Exception: {}'.format(ex))
-            raise
         return False
 
-    def _postAction(self):
-        # clear the mIO
-        del self.mIO
-        return True
+    def _mainAction(self):
+        # TODO: should implement writing files in the future
+        try:
+            # setup the web input output
+            webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
+            if webIO:
+                _logger.debug('Host: {} Path: {} File Type: {}'.format(self.mWebHost, self.mSrcPath, webIO.getFileType()))
+                if 'html' in webIO.getFileType():
+                    webpage = webIO.Read(0, 0)
+                    # parse the web pages
+                    dctFiles = self.__parseWebPage(webpage)
+                    if len(dctFiles) > 0:
+                        self.mResult['file_list'] = dctFiles
+                        self.mResult['lines_read'] += len(webpage)
+                        return True
+                elif 'xz' in webIO.getFileType():
+                    self.mResult['header_info'] = webIO.getHeaderInfo()
+                    self.mResult['file_type'] = webIO.getFileType()
+                    self.mResult['total_size'] = webIO.getFileSize()
+                    self.mResult['total_uncompressed'] = webIO.getUncompressedSize()
+                    return True
+                else:
+                    raise IOError('Cannot read none text base web files')
+            else:
+                raise IOError('Cannot create WebInputOutput with {} {}'.format(self.mSrcPath, self.mWebHost))
+        except Exception as ex:
+            _logger.error('QueryWebFile Exception: {}'.format(ex))
+            raise
+        return False
 
     def __parseWebPage(self, page):
         """
@@ -646,6 +595,8 @@ class QueryWebFileActionModeller(BaseActionModeller):
         parser.feed(strPage)
         ret.update(parser.mData)
         return ret
+
+
 
 class QueryLocalFileActionModeller(BaseActionModeller):
     def __init__(self):
@@ -679,18 +630,19 @@ class QueryLocalFileActionModeller(BaseActionModeller):
                                                                              'file_path': os.path.join(dirpath, file), \
                                                                              'total_size': self.mIO.getFileSize(), \
                                                                              'total_uncompressed': self.mIO.getUncompressedSize()}})
-                                    del self.mIO
-                                    self.mIO = None
                                 else:
                                     self.mResult['file_list'].update({file: {'file_name': file, \
                                                                              'file_path': os.path.join(dirpath, file)}})
                             except Exception:
                                 _logger.error('Cannot create BlockInputOutput with {}'.format(self.mSrcPath))
                                 raise
+                            finally:
+                                if self.mIO: del self.mIO
+                                self.mIO = None
                         _logger.debug('QueryLocalFile: {}: {}'.format(file, os.path.join(dirpath, file)))
             return True
         except Exception as ex:
-            _logger.error('Exception: {}'.format(ex))
+            _logger.error('QueryLocalFile Exception: {}'.format(ex))
             raise
         return False
 
@@ -706,13 +658,12 @@ class ConfigMmcActionModeller(BaseActionModeller):
     """
     def __init__(self):
         super().__init__()
-        self.mIO = None
         self.mResult['retcode'] = 0
         self.mSubProcCmd = []
 
     def _preAction(self):
         if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']) and self.mParam['subcmd'] == 'mmc':
-            # subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+            # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
             if any(value in self.mParam['config_id'] for value in ['bootpart', 'bootbus', 'bkops', 'cache', 'csd', 'cid', 'extcsd', \
                                                                    'enh_area', 'hwreset', 'rpmb', 'scr', 'ffu', 'sanitize', 'status', \
                                                                    'write_reliability', 'writeprotect']):
@@ -757,7 +708,7 @@ class ConfigMmcActionModeller(BaseActionModeller):
                 _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
                 return True
         except Exception as ex:
-            _logger.error('Exception: {}'.format(ex))
+            _logger.error('ConfigMmc Exception: {}'.format(ex))
             raise
         return False
 
@@ -888,7 +839,7 @@ class ConfigNicActionModeller(BaseActionModeller):
             _logger.info('retcode: {}, unpack: {}'.format(self.mResult['retcode'], struct.unpack('16s240s', self.mResult['retcode'])))
             return True
         except Exception as ex:
-            _logger.error('Exception: {}'.format(ex))
+            _logger.error('ConfigNic Exception: {}'.format(ex))
             raise
         return False
 
@@ -982,8 +933,9 @@ class QRCodeActionModeller(BaseActionModeller):
 
     def _postAction(self):
         # clear the mIO
-        self.mIO.close()
-        del self.mIO
+        if self.mIO:
+            self.mIO.close()
+            del self.mIO
         return True
 
 

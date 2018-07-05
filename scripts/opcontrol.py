@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # ============================================================
 # installer operation controller daemon
@@ -10,16 +11,15 @@
 # ============================================================
 
 import logging
-
-from queue import Queue
+import time
+import queue
 from threading import Thread, Event, Lock
 from defconfig import DefConfig, SetupLogging
 from ophandle import FlashOperationHandler, \
                      InfoOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
-                     QRCodeOperationHandler, \
-                     InteractiveOperationHandler
+                     QRCodeOperationHandler
 
 from messenger import DbusMessenger, SocketMessenger
 
@@ -31,36 +31,35 @@ _logger = logging.getLogger(__name__)
 
 class Worker(object):
 
-    def __init__(self, cmd, handle, cbSetResult):
+    def __init__(self, cmd, handler, cbSetResult):
         super().__init__()
         self.mCmd = {}
         self.mCmd.update(cmd)
-        self.mHandle = handle
+        self.mHandler = handler
         self.mCbSetResult = cbSetResult
 
-    def doWork(self, workEvt):
-        _logger.info("worker: perform command: {}".format(self.mCmd))
-
+    def doWork(self):
+        _logger.debug("worker: perform command: {}".format(self.mCmd))
+        # wait for the handler's event to be set
+        if callable(self.mHandler.waitEvent):
+            self.mHandler.waitEvent()
+        # return {'status':'processing', ...} before performOperation
         result = {}
         result.update(self.mCmd)
         result.update({'status': 'processing'})
-        _logger.debug('worker: return status=processing as result: {}'.format(result))
         self.mCbSetResult(result)
-
-        if callable(self.mHandle.performOperation):
-            self.mHandle.performOperation(self.mCmd)
-
-        if callable(self.mCbSetResult) and callable(self.mHandle.getStatus) and callable(self.mHandle.getResult):
-            result = {}
-            result.update(self.mCmd)
-            result.update(self.mHandle.getStatus())
-            result.update(self.mHandle.getResult())
+        # perform handler's operation
+        if callable(self.mHandler.performOperation):
+            self.mHandler.performOperation(self.mCmd)
+        # gets the results no matter if succeeded or failed
+        if callable(self.mCbSetResult) and callable(self.mHandler.getStatus) and callable(self.mHandler.getResult):
+            result.update(self.mHandler.getStatus())
+            result.update(self.mHandler.getResult())
             _logger.debug('worker: return result: {}'.format(result))
             self.mCbSetResult(result)
-
-        # set the work event
-        _logger.debug('worker: set Work Event to indicate work complete and return out')
-        workEvt.set()
+        # set the handler's event no matter what result is produced
+        if callable(self.mHandler.setEvent):
+            self.mHandler.setEvent()
 
 
 
@@ -68,27 +67,24 @@ class WorkerThread(Thread):
     def __init__(self, q):
         super().__init__()
         self.mQueue = q
-        self.mWorkEvent = Event()
-        self.mQuitFlag = False
+        self.mWorker = None
+
+    def getWorkerHandler(self):
+        if self.mWorker and self.mWorker.mHandler:
+            return self.mWorker.mHandler
+        return None
 
     def run(self):
         while True:
             try:
-                worker = self.mQueue.get()
-                self.mWorkEvent.clear()
-                worker.doWork(self.mWorkEvent)
-                while True:
-                    # wait for work complete
-                    if self.mWorkEvent.is_set():
-                        self.mQueue.task_done()
-                        break
-                    else:
-                        self.mWorkEvent.wait(1)
-                if self.mQuitFlag:
-                    raise Exception('Quit Gracefully')
-            except Exception as ex:
-                print(ex)
-                pass
+                # get and do the work
+                self.mWorker = self.mQueue.get_nowait()
+                self.mWorker.doWork()
+                self.mQueue.task_done()
+            except queue.Empty:
+                time.sleep(1)
+            finally:
+                self.mWorker = None
 
 
 
@@ -97,13 +93,13 @@ class WorkerThread(Thread):
 # Operation Controller
 #
 # The default daemon running as a system service,
-# controls the flow of the Model View Control for the installer. 
+# controls the flow of the Model View Control for the installer.
 #
 # ============================================================
 class OpController(object):
     """
     OpController
-    
+
     """
     def __init__(self, conf):
         super().__init__()
@@ -114,118 +110,90 @@ class OpController(object):
                                     self.__handleDBusMessage, \
                                     self.__handleGetStatus, \
                                     self.__handleGetResult, \
-                                    self.__handleQuit)
+                                    self.__handleUserInterrupt)
         # initialize an array to hold BaseOpHandlers
         self.mOpHandlers = []
-        self.mUserReqEvent = Event()
-        self.mQueue = Queue()
-        self.mThread = WorkerThread(self.mQueue)
-        self.mThread.daemon = True # thread dies when main thread exits
-        self.mThread.start()
+        # initialize a queue to hold all the worker to perform the command job
+        self.mQueue = queue.Queue()
+        # using 2+ threads to handle the worker queue
+        self.mThreads = [WorkerThread(self.mQueue), WorkerThread(self.mQueue)]
+        for thrd in self.mThreads: thrd.start()
 
     def run(self):
         # setup Operation Handlers from the defconfig
-        self.mOpHandlers.append(FlashOperationHandler(self.__handleUserRequest))
-        self.mOpHandlers.append(InfoOperationHandler(self.__handleUserRequest))
-        self.mOpHandlers.append(DownloadOperationHandler(self.__handleUserRequest))
-        self.mOpHandlers.append(ConfigOperationHandler(self.__handleUserRequest))
-        self.mOpHandlers.append(QRCodeOperationHandler(self.__handleUserRequest))
-        self.mOpHandlers.append(InteractiveOperationHandler(self.__handleUserRequest))
-
+        self.mOpHandlers.append(FlashOperationHandler(self.__sendUserRequest))
+        self.mOpHandlers.append(InfoOperationHandler(self.__sendUserRequest))
+        self.mOpHandlers.append(DownloadOperationHandler(self.__sendUserRequest))
+        self.mOpHandlers.append(ConfigOperationHandler(self.__sendUserRequest))
+        self.mOpHandlers.append(QRCodeOperationHandler(self.__sendUserRequest))
         # finally run the dbusmessenger server, and dbus run is blocking
         self.mMsger.run()
 
-    def __findOpHandle(self, cmds):
+    def __findOpHandler(self, cmds):
         # find the OpHandle for executing command
-        for ophdle in self.mOpHandlers:
-            if ophdle.isOpSupported(cmds):
-                return ophdle
+        for ophdler in self.mOpHandlers:
+            if ophdler.isOpSupported(cmds):
+                return ophdler
+        return None
 
     def __handleDBusMessage(self, msg):
         if isinstance(msg, dict):
-            # manage user commands from client/viewer
-            if 'user_response' in msg.keys():
-                _logger.info("handle dbus msg: user_response: {}".format(msg))
-                if callable(self.mCurrentHandler.updateUserResponse):
-                    self.mCurrentHandler.updateUserResponse(msg)
-                    self.__setEvent(self.mUserReqEvent)
-            else:
-                # find the correct OpHandler
-                ophandle = self.__findOpHandle(msg)
-                if ophandle is not None:
-                    _logger.info("handle dbus msg: else queue the execute operation")
-                    self.mQueue.put(Worker(msg, ophandle, self.setRetResult))
-                    self.mCurrentHandler = ophandle
-                    status = {}
-                    status.update(msg)
-                    status.update({'status': 'pending'})
-                    self.mMsger.setStatus(self.__flatten(status))
-            return True
+            # find the correct OpHandler
+            ophandler = self.__findOpHandler(msg)
+            if ophandler:
+                _logger.info("found a handler: {} and queue a worker with dbus msg/cmd to perform operation later".format(ophandler))
+                self.mQueue.put(Worker(msg, ophandler, self.setRetResult))
+                status = {}
+                status.update(msg)
+                status.update({'status': 'pending'})
+                self.mMsger.setStatus(self.__flatten(status))
+                return True
         return False
 
     def __handleGetResult(self):
-        _logger.debug('callback to get result from {}'.format(self.mCurrentHandler))
-        if self.mCurrentHandler and callable(self.mCurrentHandler.getResult):
-            return self.__flatten(self.mCurrentHandler.getResult())
+        # find the WorkerThread which has taken worker from the queue and called doWork().
+        result = {}
+        for thrd in self.mThreads:
+            thWkrHdlr = thrd.getWorkerHandler()
+            if thWkrHdlr and callable(thWkrHdlr.getResult):
+                _logger.debug('callback to get result from handler: {} of {} result: {}'.format(thWkrHdlr, thrd.name, thWkrHdlr.getResult()))
+                result.update(self.__flatten(thWkrHdlr.getResult()))
+        return result
 
     def __handleGetStatus(self):
-        _logger.debug('callback to get status from {}'.format(self.mCurrentHandler))
-        if self.mCurrentHandler and callable(self.mCurrentHandler.getStatus):
-            return self.__flatten(self.mCurrentHandler.getStatus())
+        # find the WorkerThread that has taken worker from the queue and called doWork().
+        status = {'status': 'idle'}
+        for thrd in self.mThreads:
+            thWkrHdlr = thrd.getWorkerHandler()
+            if thWkrHdlr and callable(thWkrHdlr.getStatus):
+                _logger.debug('callback to get status from handler: {} of {} status:{}'.format(thWkrHdlr, thrd.name, thWkrHdlr.getStatus()))
+                status.update(self.__flatten(thWkrHdlr.getStatus()))
+        return self.__flatten(status)
 
-    def __handleQuit(self):
-        _logger.debug('callback to quit gracefully...')
-        # stop / break out the thread.run()
-        self.mThread.mQuitFlag = True
-        # join the thread in 10 seconds
-        if self.mThread.join(10):
-            # clear up the queue
-            self.mQueue.clean()
-            return self.__flatten({'quit': 'success'})
-        else:
-            return self.__flatten({'quit': 'failure'})
+    def __handleUserInterrupt(self, param):
+        # manage user interrupt from client/viewer
+        for thrd in self.mThreads:
+            thWkrHdlr = thrd.getWorkerHandler()
+            if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
+                _logger.info("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
+                # call handler's updateUserResponse() api with param, and wait for handler to quit itself
+                thWkrHdlr.updateUserResponse(param)
 
-    def __handleUserRequest(self, status, handler):
+    def __sendUserRequest(self, req):
         """
         Handles requesting for more user inputs for the operations
-        This function has to be blocking so the ophandler can continue afterwards.
-        Here, the request for user input has to wait for DBusMessage from client
+        send the req by triggering receive signal, then user should interrupt
+        by calling the DBus interrupt i/f method
         """
         userReq = {}
-        self.__clearEvent(self.mUserReqEvent)
-        if self.mCurrentHandler != handler:
-            self.mCurrentHandler = handler
-        if isinstance(status, dict):
-            userReq.update(status)
-            if 'user_request' in userReq.keys():
-                # call appropriate client/viewer to signal execution result or get user input
-                self.mMsger.sendMsg(self.__flatten(userReq))
-                # wait user response for 25 seconds, same as DBus timeout
-                self.__waitForEventTimeout(self.mUserReqEvent, 25)
+        if isinstance(req, dict):
+            userReq.update(req)
+            # signal client/viewer with receive signal with request to get user input
+            self.mMsger.sendMsg(self.__flatten(userReq))
 
     def setRetResult(self, result):
         if isinstance(result, dict):
             self.mMsger.setResult(self.__flatten(result))
-
-    def __waitForEventTimeout(self, ev, t):
-        _logger.debug('Wait for event {} with timeout: {}s'.format(ev, t))
-        isSet = False
-        while not ev.isSet():
-            isSet = ev.wait(t)
-            if isSet:
-                _logger.debug('Event:{} isSet={}'.format(ev, isSet))
-            else:
-                _logger.debug('Timed Out: isSet={}'.format(isSet))
-                break
-        return isSet
-
-    def __setEvent(self, ev):
-        _logger.debug('Set Event: {}'.format(ev))
-        ev.set()
-
-    def __clearEvent(self, ev):
-        _logger.debug('Clear Event: {}'.format(ev))
-        ev.clear()
 
     def __flatten(self, value, key=''):
         ret = {}
@@ -237,10 +205,11 @@ class OpController(object):
                     ret[k if len(key) == 0 else key+'|'+k] = str(v)
         return ret
 
-
-
-if __name__ == "__main__":
+def opcontrol():
     conf = DefConfig()
     conf.loadConfig("/etc/installer.xml")
     srv = OpController(conf)
     exit(srv.run())
+
+if __name__ == "__main__":
+    opcontrol()

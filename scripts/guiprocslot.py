@@ -236,7 +236,7 @@ class QProcessSlot(QtGui.QWidget):
 
     def _setCommand(self, cmd):
         self.mCmds.append(cmd)
-        _logger.debug("issued request: {}".format(self.mCmds[-1]))
+        _logger.debug("{} queue cmd request: {}".format(self.objectName(), self.mCmds[-1]))
 
     @pyqtSlot()
     @pyqtSlot(bool)
@@ -262,10 +262,8 @@ class QProcessSlot(QtGui.QWidget):
             # call the viewer's setResponseSlot API to setup the callback to self.resultSlot()
             self.mViewer.setResponseSlot(self.resultSlot)
             _logger.debug("initialised: Setup GuiViewer.responseSignal() to connect to {}\n".format(self.resultSlot))
-            self.fail.emit("initialised: Setup GuiViewer.responseSignal() to connect to {}\n".format(self.resultSlot))
             self.request.connect(self.mViewer.request)
             _logger.debug("initialised: Setup {}.request signal to GuiViewer.request()\n".format(self.objectName(), self.sender().objectName()))
-            self.fail.emit("initialised: Setup {}.request signal to GuiViewer.request()\n".format(self.objectName(), self.sender().objectName()))
         self.process(inputs)
 
     def process(self, inputs):
@@ -318,7 +316,7 @@ class QProcessSlot(QtGui.QWidget):
                 #print("{} cmd#{} matched: {}".format(self, i, results))
                 if 'status' in results:
                     if results['status'] == 'success' or results['status'] == 'failure':
-                        _logger.debug("remove returned request (success or failure): {}".format(self.mCmds[-1]))
+                        _logger.debug("{} remove returned request: {} status: {} cmds: {}".format(self.objectName(), self.mCmds[-1], results['status'], len(self.mCmds)))
                         self.mCmds.remove(cmd)
                 return True
         return False
@@ -354,11 +352,15 @@ class detectDeviceSlot(QProcessSlot):
         self.mBaseboard = None
         # use QtNetwork NAMger to send a request to technexion's rescue server
         # when the request is finished, NAMger will signal its "finish" signal
-        # which calls back to self._networkResponse() with reply
+        # which calls back to self._urlResponse() with reply
         # for checking network connectivity
         self.mNetMgr = QtNetwork.QNetworkAccessManager()
         # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
         self.mNetMgr.finished.connect(self._urlResponse)
+        # start the timer to check for network status every 1 second
+        self.mTimerId = None
+        self.mErr = None
+        self.mSentFlag = False
 
     def process(self, inputs = None):
         """
@@ -389,24 +391,27 @@ class detectDeviceSlot(QProcessSlot):
                             self.__hasValidNetworkConnectivity()
                             return
                         else:
-                            err = 'NoCable'
+                            self.mErr = 'NoCable'
                     else:
-                        err = 'NoIface'
+                        self.mErr = 'NoIface'
                     #else:
                     #    err = 'NoNIC'
-                    self.mMsgBox.setMessage(err)
-                    if err == 'NoNIC':
+                    self.mMsgBox.setMessage(self.mErr)
+                    if self.mErr == 'NoNIC':
                         _logger.critical('Network Error No L1 Driver!!! Retrying...')
-                        self.mMsgBox.setCheckFlags({err: True, 'NoIface': True, 'NoCable': True, 'NoServer': True})
-                    elif err == 'NoIface':
+                        self.mMsgBox.setCheckFlags({self.mErr: True, 'NoIface': True, 'NoCable': True, 'NoServer': True})
+                    elif self.mErr == 'NoIface':
                         _logger.critical('Network Error NIC Down!!! Retrying...')
-                        self.mMsgBox.setCheckFlags({err: True, 'NoCable': True, 'NoServer': True})
-                    elif err == 'NoCable':
+                        self.mMsgBox.setCheckFlags({self.mErr: True, 'NoCable': True, 'NoServer': True})
+                    elif self.mErr == 'NoCable':
                         _logger.critical('Network Error No Cable!!! Retrying...')
-                        self.mMsgBox.setCheckFlags({err: True, 'NoServer': True})
+                        self.mMsgBox.setCheckFlags({self.mErr: True, 'NoServer': True})
                     self.mMsgBox.setModal(False) # non-modal dialog
                     self.mMsgBox.display(True)
-                    QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                    # no need to queue another sigle shot timer for 1 second, just emit failure
+                    #QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                    self.fail.emit(self.mErr)
+                    self.mSentFlag = False
             return
 
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and 'status' in results and results['status'] == 'success':
@@ -415,12 +420,14 @@ class detectDeviceSlot(QProcessSlot):
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
-            # check network connections
+            # start the timer to check for network connection every 1 second
             self.__checkNetwork()
+            self.mTimerId = self.startTimer(15000)
 
         self.mResults.update(results)
 
     def validateResult(self):
+        _logger.warning('detectDevice: mResults: {}'.format(self.mResults))
         # flow comes here (gets called) after self.finish.emit()
         # Check for available cpu anf form factor
         if 'cmd' in self.mResults and self.mResults['cmd'] == 'info' and 'found_match' not in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'failure':
@@ -431,7 +438,12 @@ class detectDeviceSlot(QProcessSlot):
             self.mMsgBox.clearMessage()
             if ret: # critical: continue with your own peril
                 _logger.critical('Cannot find CPU or FORM FACTOR!!! Continue at your own peril...')
-                self.success.emit('Cpu and form factor not found.')
+
+        if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and self.mErr == 'NoError':
+            _logger.warning('Success and emit found: {} {}'.format(self.mCpu, self.mForm, self.mBaseboard))
+            if not self.mSentFlag:
+                self.success.emit('Found: {} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
+                self.mSentFlag = True
 
     def __checkNetwork(self):
         # Check for networks, which means sending commands to installerd.service to request for network status
@@ -456,12 +468,20 @@ class detectDeviceSlot(QProcessSlot):
             self.mMsgBox.setModal(False) # none model dialog
             self.mMsgBox.display(True)
             _logger.error('TechNexion rescue server not available!!! Retrying...')
-            QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
-            return
+            # no need to queue anymore, a timer will loop forever to query for network status.
+            # QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
+            self.mErr = 'NoServer'
+        else:
+            self.mMsgBox.setCheckFlags({'NoServer': False})
+            self.mMsgBox.display(False)
+            self.mErr = 'NoError'
+        self.fail.emit(self.mErr)
+        self.mSentFlag = False
+        self.finish.emit()
 
-        self.mMsgBox.setCheckFlags({'NoServer': False})
-        self.mMsgBox.display(False)
-        self.success.emit('Found: {} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
+    def timerEvent(self, event):
+        # check network connections
+        self.__checkNetwork()
 
 
 
@@ -694,18 +714,20 @@ class scanStorageSlot(QProcessSlot):
         super().__init__(parent)
         self.mResults = []
         self.mTimerId = None
+        self.mFlag = False
 
     def process(self, inputs = None):
         """
         step 4: request for list of targets storage device
         """
+        _logger.warning('{} - sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
         if self.sender().objectName() == 'detectDevice':
-            self.__detectStorage()
+            if not self.mFlag:
+                self.mFlag = True
+                self.__detectStorage()
 
     def __detectStorage(self):
         self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
-        self.request.emit(self.mCmds[-1])
-        self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
         self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
@@ -725,6 +747,15 @@ class scanStorageSlot(QProcessSlot):
                     data.update({k: {att[0]:att[1] for att in findAttrs(['device_node', 'device_type', 'size', 'id_bus', 'id_serial', 'id_model'], v)}})
             return [(i, k, v) for i, (k, v) in enumerate(data.items())]
 
+        _logger.warning('{} - parse result {}'.format(self.objectName(), results))
+
+        if 'cmd' in results and results['cmd'] == 'info' and \
+           'target' in results and results['target'] == 'emmc' and \
+           'location' in results and results['location'] == 'disk' and \
+           'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
+            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
+            self.request.emit(self.mCmds[-1])
+
         # step 5: ask user to choose the target to flash
         listTarget = parse_target_list(results)
         if len(listTarget):
@@ -742,6 +773,7 @@ class scanStorageSlot(QProcessSlot):
         self.mMsgBox.setMessage('NoStorage')
         # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
+        _logger.warning('validate scanStorage result: {}'.format(self.mResults))
         if isinstance(self.mResults, list) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
             self.mMsgBox.setCheckFlags({'NoStorage': False})
@@ -769,7 +801,7 @@ class scanStorageSlot(QProcessSlot):
 @QProcessSlot.registerProcessSlot('scanPartition')
 class scanPartitionSlot(QProcessSlot):
     """
-    Can for the mounted points from exiting partitions in the system
+    Search the mounted points from exiting partitions in the system
     """
     request = pyqtSignal(dict)
     success = pyqtSignal(object)
@@ -778,18 +810,32 @@ class scanPartitionSlot(QProcessSlot):
     def __init__(self, parent = None):
         super().__init__(parent)
         self.mResults = []
+        self.mFlag = False
 
     def process(self, inputs):
         """
         issue commands to find partitions with mount points
         """
+        _logger.warning('{} - sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
         if self.sender().objectName() == 'detectDevice':
-            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
-            self.request.emit(self.mCmds[-1])
-            self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
-            self.request.emit(self.mCmds[-1])
+            if not self.mFlag:
+                self.mFlag = True
+                self.__detectMountedPartition()
+
+    def __detectMountedPartition(self):
+        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
+        self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
+        _logger.warning('{} - parse result {}'.format(self.objectName(), results))
+
+        if 'cmd' in results and results['cmd'] == 'info' and \
+           'target' in results and results['target'] == 'emmc' and \
+           'location' in results and results['location'] == 'partition' and \
+           'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
+            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
+            self.request.emit(self.mCmds[-1])
+
         # parse the returned partition results to find mount points
         if isinstance(results, dict) and 'status' in results and results['status'] == "success":
             for k, v in results.items():
@@ -801,7 +847,7 @@ class scanPartitionSlot(QProcessSlot):
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
-        _logger.debug('validateResult scanPartition result: {}'.format(self.mResults))
+        _logger.warning('validate scanPartition result: {}'.format(self.mResults))
         if isinstance(self.mResults, list) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. crawlLocalfs
             self.success.emit(list(set(self.mResults)))
@@ -1555,8 +1601,9 @@ class downloadImageSlot(QProcessSlot):
             if self.mProgressBar:
                 self.progress.connect(self.mProgressBar.setValue)
 
+        _logger.warning('downloadImageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
+
         if not self.mFlashFlag:
-            _logger.debug('downloadImageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
 
             if (self.sender().objectName() == 'crawlWeb' or self.sender().objectName() == 'crawlLocalfs') and isinstance(inputs, list):
                 # keep the available file list for lookup with a self.mPick later
@@ -1594,15 +1641,20 @@ class downloadImageSlot(QProcessSlot):
                     if ret:
                         pass
                     self.mMsgBox.clearMessage()
+
         else:
             # prompt for error message
             #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Hold Your Hourses!!!\nPlease wait until downloading is completed...')
-            self.mMsgBox.setMessage('Flashing')
-            self.mMsgBox.setModal(True) # modal dialog
-            ret = self.mMsgBox.display(True)
-            if ret:
-                pass
-            self.mMsgBox.clearMessage()
+            if self.sender().objectName() == 'detectDevice' and isinstance(inputs, str) and inputs != 'NoError':
+                # handle error from network disconnection
+                _logger.info('from {}, received network status {}'.format(inputs, self.sender().objectName()))
+            else:
+                self.mMsgBox.setMessage('Flashing')
+                self.mMsgBox.setModal(True) # modal dialog
+                ret = self.mMsgBox.display(True)
+                if ret:
+                    pass
+                self.mMsgBox.clearMessage()
 
     def __getUrlStorageFromPick(self, pick):
         # get picked items from lstWgtSelection
@@ -1757,7 +1809,6 @@ class postDownloadSlot(QProcessSlot):
             _logger.info('generate qrcode from from URL {} and STORAGE {}'.format(self.mPick['url'], self.mPick['target']))
             self._setCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['target'], 'img_filename': '/tmp/qrcode.svg'})
             self.request.emit(self.mCmds[-1])
-
             # check for sdcard or emmc
             _logger.info('check whether target storage {} is emmc'.format(self.mPick['target']))
             self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})

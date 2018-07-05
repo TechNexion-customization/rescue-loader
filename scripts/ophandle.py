@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import socket
 import abc
 import logging
-from threading import Thread, Event
-
+import urllib.parse
+from threading import Thread, Event, RLock
 from model import CopyBlockActionModeller, \
                   QueryFileActionModeller, \
                   QueryBlockDevActionModeller, \
@@ -15,7 +16,6 @@ from model import CopyBlockActionModeller, \
                   ConfigNicActionModeller, \
                   QRCodeActionModeller, \
                   BaseActionModeller
-import urllib.parse
 
 _logger = logging.getLogger(__name__)
 
@@ -26,154 +26,120 @@ class BaseOperationHandler(object):
 
     def __init__(self, cbUserRequest):
         super().__init__()
-        self.mUseThread = False
-        self.mThread = None
-        self.mResult = {}
-        self.mStatus = {}
-        self.mActionModellers = []
-        self.mRecoverModellers = []
         # setup the callback function for further user decisions
         self.mUserRequestHandler = cbUserRequest if callable(cbUserRequest) else None
-        self.mUserInputs = {}
+        self.mActionModellers = []
         self.mActionParam = {}
-        self.mRunningModeller = None
-        self.mSuccessModeller = None
-        self.mInteractive = False
+        self.mRunningModel = None
+        self.mResult = {}
+        self.mStatus = {}
+        self.mEvent = Event()
+        self.mEvent.set()
+        self.mReentryLock = RLock()
+
+    def waitEvent(self):
+        _logger.info('wait for handler event to set')
+        self.mReentryLock.acquire()
+        self.mEvent.wait()
+        self.mEvent.clear()
+        self.mReentryLock.release()
+        _logger.info('clear handler event to go ahead')
+
+    def setEvent(self):
+        _logger.info('set handler event')
+        self.mEvent.set()
 
     def getStatus(self):
-        _logger.info('return current status')
+        _logger.info('return handler status: {}'.format(self.mStatus))
         return self.mStatus
 
     def getResult(self):
-        if self.mSuccessModeller and callable(self.mSuccessModeller.getResult):
-            _logger.info('return success result from {}'.format(self.mSuccessModeller))
-            return self.mSuccessModeller.getResult()
-        elif self.mRunningModeller and callable(self.mRunningModeller.getResult):
-            _logger.info('return running result from {}'.format(self.mRunningModeller))
-            return self.mRunningModeller.getResult()
-        else:
-            _logger.info('return performed result')
-            return self.mResult
+        # self.mResult would only contain success results from __run()
+        # need to find out which of model is running, and extract status from it.
+        if self.mRunningModel:
+            self.mResult.update(self.mRunningModel.getResult())
+            _logger.info('return current result: {} current status: {}'.format(self.mResult, self.mStatus))
+        return self.mResult
 
     def __run(self):
-        # clear RunModel and RecoverModel references
-        self.mRunningModeller = None
-        self.mSuccessModeller = None
-        self.mRecoverModellers = []
-        # set the status to failure first, it will be overridden if success
-        self.mStatus.update({'status': 'failure'})
-
+        successFlag = False
         for model in self.mActionModellers:
-            # the running model
-            self.mRunningModeller = model
-
+            # get the current running model
+            self.mRunningModel = model
             # append the executed action models to the recover list
-            self.mRecoverModellers.append(model)
-            if (model.performAction()):
-                # update successful result
+            if model.performAction():
+                # update successful result per model (may have more than 1 success
                 self.mResult.update(model.getResult())
-                self.mStatus.update({'status': 'success'})
-                _logger.info('call performAction success: {}'.format(self.mStatus))
-                self.mSuccessModeller = model
-#                 # FIXME: Do we really need to call user request to pass the current Status?
-#                 if callable(self.mUserRequestHandler):
-#                     # sent success status
-#                     _logger.debug("Call User Request Handler to send success status")
-#                     self.mUserRequestHandler(self.mStatus, self)
-            else:
-                self.mResult.update(model.getResult())
-                _logger.info('call performAction failed: {}'.format(self.mStatus))
-                self.__handleRecoverable(model)
-        return
+                successFlag = True
+        # no more running model
+        self.mRunningModel = None
+        # check if any of the model successfully execute the actions
+        if successFlag:
+            self.mStatus.update({'status': 'success'})
+            _logger.info('call performAction success: {}'.format(self.mStatus))
+            return True
+        else:
+            # when all model fail, update status to failure
+            self.mStatus.update({'status': 'failure'})
+            _logger.info('call performAction failed for all models: {}'.format(self.mStatus))
+            return False
 
     def performOperation(self, OpParams):
         try:
+            # set the status to processing first, it will be overridden if success or failure
             self.mActionParam.clear()
             self.mResult.clear()
             self.mStatus.clear()
+            self.mStatus.update({'status': 'processing'})
             self.mStatus.update(OpParams)
-            # clear old action models for next command
-            if len(self.mActionModellers): del self.mActionModellers[:] #self.mActionModellers = []
-            # if successfully setup an action model, do the work
-            if self._setupActions(OpParams):
-                if all(isinstance(model, BaseActionModeller) for model in self.mActionModellers):
-#                     if self.mUseThread:
-#                         # use thread
-#                         _logger.info('thread run')
-#                         # join the previous finished thread first
-#                         if isinstance(self.mThread, Thread) and not self.mThread.isAlive():
-#                             self.mThread.join()
-#                             del self.mThread
-#                             self.mThread = None
-#                         # start the thread to do work and continue
-#                         if self.mThread == None:
-#                             self.mThread = Thread(name='WorkThread', target=self.__run, args=(workEvt,))
-#                             self.mThread.start()
-#                         # set the status to processing
-#                         self.mStatus.update({'status': 'processing'})
-#                     else:
-#                         # normal run
-                    _logger.info('normal run')
-                    self.__run()
-                    return True
-                else:
-                    raise ReferenceError('Cannot reference all Action Models')
-            else:
-                raise ValueError('Invalid Parameters')
 
+            # clear old action models for next command
+            if len(self.mActionModellers): del self.mActionModellers[:]
+            # setup necessary models to handle the command
+            if self._parseParam(OpParams):
+                if self._setupActions():
+                    # if successfully setup an action model, do the work, else exception
+                    if self.__run():
+                        return True
         except Exception as ex:
-            _logger.error('performOperation exception: {}'.format(ex))
-            # should handle all lower level exceptions here.
-            self.mStatus.update({'status': 'failure', 'error': str(ex)})
+            # handles all lower level exceptions here, except IS NOT raised further to uppre level.
+            _logger.error('handler performOperation exception: {}'.format(ex))
+            self.mStatus.update({'error': '{}'.format(ex)})
         return False
 
-    def __handleRecoverable(self, model):
-        if model.isRecoverable():
-            # recoverable
-            # when there is a need for user request to get user inputs, send request
-            if callable(self.mUserRequestHandler):
-                # NOTE: blocking until a user response is returned from client/viewer
-                # we sent both success status and user_request status through here
-                _logger.debug("Call User Request Handler")
-                prompt = {}
-                prompt.update(self.mStatus)
-                prompt.update({'is_recoverable': 'yes' if model.isRecoverable() else 'no'});
-                prompt.update({'user_request': 'Recover from failed operation? Y/N: '});
-                self.mUserRequestHandler(prompt, self)
-                # after the user request returns, check the user input
-                if self._hasValidUserResponse(self.mUserInputs):
-                    _logger.debug("Has valid user inputs, so recover operation")
-                    # FIXME: Retry or Recover
-                    if self.__recoverOperation():
-                        self.mStatus.update({'status': 'success'})
-                    else:
-                        self.mStatus.update({'status': 'failure', 'error': 'Recover failed'})
-                else:
-                    # no or not valid User Input Response, continue for now
-                    self.mStatus.update({'status': 'failure', 'error': 'Invalid user input'})
-    
-    def __recoverOperation(self):
+    def updateUserResponse(self, userInputs):
         try:
-            for model in self.mRecoverModellers.reverse():
-                if isinstance(model, BaseActionModeller):
-                    return model.recoverAction()
-                else:
-                    raise ReferenceError('Cannot reference a ActionModel')
+            # Store, Parse and Check the user inputs and pass them to models
+            # after the user request returns by calling DBus I/F interrupt, check the user input
+            parsedInputs = {}
+            parsedInputs.update(self._parseUserResponse(userInputs))
+            if parsedInputs:
+                _logger.debug("Has valid user inputs, so interrupts model accordingly")
+                # Retry or Recover or Interrupt
+                if self.__interruptOperation(parsedInputs):
+                    return True
         except Exception as ex:
-            # handle all lower level exceptions here.
-            # even when recover failed
-            self.mStatus.update({'error': str(ex)})
-        finally:
-            self.mStatus.update({'recover': 'False'})
+            # handles all lower level exceptions here.
+            _logger.error('handler updateUserResponse exception: {}'.format(ex))
+            self.mStatus.update({'error': '{}'.format(ex)})
+        else:
             return False
 
-    def updateUserResponse(self, inputs):
-        if isinstance(inputs, dict):
-            self.mUserInputs.update(inputs)
-            return True
+    def __interruptOperation(self, parsedInputs):
+        # set whatever actions/flags needed to set in all the models.
+        # so the actions/flags can be checked within the WorkerThread and
+        # terminate gracefully.
+        try:
+            if self.mRunningModel:
+                if callable(self.mRunningModel.interruptAction):
+                    self.mRunningModel.interruptAction(parsedInputs)
+                    return True
+        except:
+            raise
         else:
-            _logger.error('User inputs must be in a dictionary form')
-        return False
+            return False
+        finally:
+            self.mStatus.update({'status': 'interrupted', 'parsed_input': '{}'.format(parsedInputs)})
 
     def isOpSupported(self, OpParams):
         """
@@ -181,43 +147,48 @@ class BaseOperationHandler(object):
         """
         return False
 
-    def _hasValidUserResponse(self, inputs):
+    def _setupActions(self):
         """
         To be overridden
         """
         return False
 
-    def _setupActions(self, OpParams):
+    def _parseParam(self, OpParams):
         """
         To be overridden
         """
         return False
+
+    def _parseUserResponse(self, userInputs):
+        """
+        To be overridden
+        """
+        return userInputs
 
 
 
 class FlashOperationHandler(BaseOperationHandler):
-    def __init__(self, UserRequestCB, use_thread=True):
+    def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mUseThread = use_thread
         self.mSrcFileOps = ['src_filename', 'tgt_filename']
 
     def isOpSupported(self, OpParams):
+        # Check if cmd is supported
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
             if OpParams['cmd'] == 'flash':
                 return True
         return False
 
-    def _setupActions(self, OpParams):
+    def _setupActions(self):
         # setup "flash" cmd operations
-        if (self.__parseParam(OpParams)):
+        if self.mActionParam:
             self.mActionModellers.append(CopyBlockActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
-        else:
-            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+        return False
 
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if all(s in OpParams.keys() for s in self.mSrcFileOps):
@@ -240,6 +211,7 @@ class FlashOperationHandler(BaseOperationHandler):
                     self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
                 else:
                     self.mActionParam['chunk_size'] = -1
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
                 return True
         else:
             return False
@@ -247,28 +219,27 @@ class FlashOperationHandler(BaseOperationHandler):
 
 
 class QRCodeOperationHandler(BaseOperationHandler):
-    def __init__(self, UserRequestCB, use_thread=True):
+    def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mUseThread = use_thread
         self.mSrcFileOps = ['dl_url', 'tgt_filename']
 
     def isOpSupported(self, OpParams):
+        # Check if cmd is supported
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
             if OpParams['cmd'] == 'qrcode':
                 return True
         return False
 
-    def _setupActions(self, OpParams):
-        # setup "flash" cmd operations
-        if (self.__parseParam(OpParams)):
+    def _setupActions(self):
+        # setup "qrcode" cmd operations
+        if self.mActionParam:
             self.mActionModellers.append(QRCodeActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
-        else:
-            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+        return False
 
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if all(s in OpParams.keys() for s in self.mSrcFileOps):
@@ -283,6 +254,7 @@ class QRCodeOperationHandler(BaseOperationHandler):
                     self.mActionParam['encmode'] = str(OpParams['mode'])
                 if 'img_filename' in OpParams:
                     self.mActionParam['img_filename'] = str(OpParams['img_filename'])
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
                 return True
         else:
             return False
@@ -295,15 +267,15 @@ class InfoOperationHandler(BaseOperationHandler):
         self.mOptions = ['target', 'location']
 
     def isOpSupported(self, OpParams):
-        # Check if User Response is valid
+        # Check if cmd is supported
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
             if OpParams['cmd'] == 'info':
                 return True
         return False
 
-    def _setupActions(self, OpParams):
+    def _setupActions(self):
         # setup "info" cmd operations
-        if (self.__parseParam(OpParams)):
+        if self.mActionParam:
             self.mActionModellers.append(QueryBlockDevActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(QueryWebFileActionModeller())
@@ -313,11 +285,10 @@ class InfoOperationHandler(BaseOperationHandler):
             self.mActionModellers.append(QueryLocalFileActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
-        else:
-            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+        return False
 
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         self.mActionParam.clear()
 #         # default values for type and for all locations
 #         self.mActionParam['tgt_type'] = 'mmc'
@@ -366,16 +337,16 @@ class InfoOperationHandler(BaseOperationHandler):
             if 'tgt_type' in self.mActionParam and not 'dst_pos' in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1
         if all(s in self.mActionParam.keys() for s in ['tgt_type', 'dst_pos']):
-            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
             return True
         elif all(s in self.mActionParam.keys() for s in ['host_name', 'src_directory']):
-            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
             return True
         elif all(s in self.mActionParam.keys() for s in ['local_fs', 'src_directory']):
-            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
             return True
         elif all(s in self.mActionParam.keys() for s in ['src_filename', 're_pattern']):
-            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
             return True
         else:
             return False
@@ -383,29 +354,28 @@ class InfoOperationHandler(BaseOperationHandler):
 
 
 class DownloadOperationHandler(BaseOperationHandler):
-    def __init__(self, UserRequestCB, use_thread=True):
+    def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mUseThread = use_thread
         self.mDlFileOps = ['dl_module',  'dl_baseboard', 'dl_os', 'dl_version', \
                            'dl_display', 'dl_filetype', 'dl_host', 'dl_protocol']
 
     def isOpSupported(self, OpParams):
+        # Check if cmd is supported
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
             if OpParams['cmd'] == 'download':
                 return True
         return False
 
-    def _setupActions(self, OpParams):
+    def _setupActions(self):
         # setup "download" cmd operations
-        if (self.__parseParam(OpParams)):
+        if self.mActionParam:
             self.mActionModellers.append(WebDownloadActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
-        else:
-            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+        return False
 
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if 'tgt_filename' in OpParams.keys():
@@ -437,7 +407,7 @@ class DownloadOperationHandler(BaseOperationHandler):
                 self.mActionParam['src_directory'] = str(OpParams['dl_module']) + '/' + \
                                                  str(OpParams['dl_baseboard']) + '-' + \
                                                  str(OpParams['dl_display'])
-                _logger.debug('mActionParam: {}'.format(self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam: {}'.format(self, self.mActionParam))
                 return True
             elif 'dl_url' in OpParams.keys():
                 urlobj = urllib.parse.urlparse(OpParams['dl_url'])
@@ -445,7 +415,7 @@ class DownloadOperationHandler(BaseOperationHandler):
                 self.mActionParam['host_name'] = urlobj.hostname
                 self.mActionParam['src_filename'] = urlobj.path.split('/')[-1]
                 self.mActionParam['src_directory'] = '/'.join(urlobj.path.split('/')[2:-1])
-                _logger.debug('mActionParam: {}'.format(self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam: {}'.format(self, self.mActionParam))
                 return True
         else:
             return False
@@ -457,29 +427,30 @@ class ConfigOperationHandler(BaseOperationHandler):
         super().__init__(UserRequestCB)
 
     def isOpSupported(self, OpParams):
-        # Check if User Response is valid
+        # Check if cmd is supported
         if isinstance(OpParams, dict) and 'cmd' in OpParams.keys() and 'subcmd' in OpParams.keys():
             if OpParams['cmd'] == 'config':
                 if any(k in OpParams['subcmd'] for k in ['mmc', 'nic']):
                     return True
         return False
 
-    def _setupActions(self, OpParams):
+    def _setupActions(self):
         # setup "config" cmd operation:
-        # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_setting': 'enable', 'boot_part_no': 1, 'send_ack': '1', 'target': '/dev/mmcblk2'}
-        if (self.__parseParam(OpParams)):
+        if self.mActionParam:
             self.mActionModellers.append(ConfigMmcActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(ConfigNicActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
-        else:
-            raise SyntaxError('Invalid Operation Parameters: {}'.format(OpParams))
+        return False
 
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         self.mActionParam.clear()
         # Parse the OpParams and Setup mActionParams
+        # e.g. {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart',
+        #       'config_setting': 'enable', 'boot_part_no': 1, 'send_ack': '1',
+        #       'target': '/dev/mmcblk2'}
         if isinstance(OpParams, dict):
             # required params
             for k in ['subcmd', 'target', 'config_id', 'config_action']:
@@ -493,136 +464,10 @@ class ConfigOperationHandler(BaseOperationHandler):
 
         # verify the ActionParam to pass to modeller
         if all(s in self.mActionParam.keys() for s in ['subcmd', 'target', 'config_id', 'config_action']):
-            _logger.debug('__parseParam: mActionParam:{}'.format(self.mActionParam))
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
             return True
         else:
             return False
-
-
-
-class InteractiveOperationHandler(BaseOperationHandler):
-    def __init__(self, UserRequestCB, use_thread=True):
-        super().__init__(UserRequestCB)
-        self.mUseThread = use_thread
-
-    def __interactiveMode(self, ActParams, StatusEvt):
-        try:
-            while True:
-                # clear old action models for next command
-                if len(self.mActionModellers):
-                    self.mActionModellers = []
-                    # del self.mActionModellers
-
-                # if successfully setup an action model, do the work
-                if self._setupActions(ActParams):
-                    if all(isinstance(model, BaseActionModeller) for model in self.mActionModellers):
-                        _logger.info('interactive run')
-                        self._BaseOperationHandler__run(StatusEvt)
-
-                if not self.mInteractive:
-                    _logger.info('Quit interactive mode')
-                    # break out of loop when self.mInteractive is set to false
-                    self.mStatus.clear()
-                    self.mStatus.update({'error': 'Quit interactive mode'})
-                    self.mStatus.update({'status': 'success'})
-                    break
-
-        except Exception as ex:
-            # handle all lower level exceptions here.
-            self.mStatus.clear()
-            self.mStatus.update({'error': str(ex)})
-            self.mStatus.update({'status': 'failure'})
-
-        # send last message before return out of InteractiveThread
-        if self.mUserRequestHandler:
-            self.mUserRequestHandler(self.mStatus, self)
-        return
-
-    def performOperation(self, OpParams, WorkEvt = Event()):
-        """
-        Override performOperation for interactive operations
-        """
-        self.__parseParam(OpParams)
-        # Use thread to handle setup action as well as running operations
-        if self.mUseThread:
-            # join the previous finished thread first
-            if isinstance(self.mThread, Thread) and not self.mThread.isAlive():
-                self.mThread.join()
-                del self.mThread
-                self.mThread = None
-            # use a thread to run interactive mode
-            if self.mThread == None:
-                self.mThread = Thread(name='InteractiveThread', \
-                                      target=self.__interactiveMode, \
-                                      args=(self.mActionParam, WorkEvt,))
-                self.mThread.start()
-                # set the status to processing
-                self.mStatus.update({'status': 'processing'})
-        else:
-            self.mStatus.update({'error': 'Cannot start interactive mode without using thread'})
-            self.mStatus.update({'status': 'failure'})
-        return False
-
-    def isOpSupported(self, OpParams):
-        if isinstance(OpParams, dict):
-            if ('interactive' in OpParams.keys()):
-                self.mInteractive = True
-                return True
-        return False
-
-    def _hasValidUserResponse(self, inputs):
-        # Check if User Response is valid
-        _logger.debug('_hasValidUserResponse: {}'.format(inputs))
-        if isinstance(inputs, dict) and 'user_response' in inputs.keys():
-            return self.__parseInput(inputs['user_response'])
-        return False
-
-    def _setupActions(self, ActParams):
-        _logger.warning('_setupActions: {}'.format(ActParams))
-        # setup "interactive" cmd operations
-        # if parse operation succuessful, ask for what to do next
-        if callable(self.mUserRequestHandler):
-            # NOTE: blocking until a user response is returned from client/viewer
-            # we sent both success status and user_request status through here
-            _logger.warning("Call User Request Handler to ask for what to do next")
-            self.mStatus.update({'user_request': 'What do you want to do next?'});
-            self.mUserRequestHandler(self.mStatus, self)
-            # after the handler returns, check the user input after user
-            # responded from client/viewer, handle a valid user response
-            # if we have one
-            if self._hasValidUserResponse(self.mUserInputs):
-                _logger.warning("Has valid user inputs")
-                # FIXME: Retry or Recover
-                self.mStatus.update({'status': 'success'})
-                # if still in interactive mode, set up action models
-                if self.mInteractive:
-                    # setup cmd operations from new user input
-                    self.mActionModellers.append(WebDownloadActionModeller())
-                    self.mActionModellers[-1].setActionParam(self.mActionParam)
-                    return True
-            else:
-                # no or not valid User Input Response, what to do next?
-                self.mStatus.update({'error': 'Not valid user input'})
-                self.mStatus.update({'status': 'failure'})
-        return False
-
-    def __parseParam(self, OpParams):
-        _logger.debug('__parseParam: OpParams: {}'.format(OpParams))
-        # Parse the OpParams and Setup mActionParams
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
-            OpParams.pop('interactive')
-            self.mActionParam.update(OpParams)
-
-    def __parseInput(self, UserResponse):
-        """
-        Check additional user inputs, if valid return True else False
-        """
-        _logger.debug('__parseInput: {}'.format(UserResponse))
-        if UserResponse.upper() == 'Q' or UserResponse.upper() == 'QUIT':
-            # quit the interactive mode
-            self.mInteractive = False
-            return True
-        return False
 
 
 

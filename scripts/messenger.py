@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-import abc
 import logging
 import dbus
 import gobject
@@ -13,26 +13,6 @@ from dbus.mainloop.glib import DBusGMainLoop as DBusMainLoop
 
 _logger = logging.getLogger(__name__)
 
-class MergeMeta(type):
-    def __new__(cls, name, bases, members):
-        #collect up the metaclasses
-        metas = [type(base) for base in bases]
-
-        # prune repeated or conflicting entries
-        metas = [meta for index, meta in enumerate(metas)
-            if not [later for later in metas[index+1:]
-                if issubclass(later, meta)]]
-
-        # whip up the actual combined meta class derive off all of these
-        meta = type(name, tuple(metas), dict(combined_metas = metas))
-
-        # make the actual object
-        return meta(name, bases, members)
-
-    def __init__(self, name, bases, members):
-        for meta in self.combined_metas:
-            meta.__init__(self, name, bases, members)
-
 # ============================================================
 #
 # BaseMessenger
@@ -43,22 +23,23 @@ class MergeMeta(type):
 # ============================================================
 class BaseMessenger(object):
     """
-        BaseMessenger
-    
+    BaseMessenger
     """
-    __metaclass__ = abc.ABCMeta
-    
     def __init__(self, config):
         super().__init__()
         self.mConfig = {}
         self.mConfig.update(config)
 
-    @abc.abstractmethod
     def sendMsg(self, msg):
+        """
+        To be overridden
+        """
         pass
 
-    @abc.abstractmethod
     def receiveMsg(self):
+        """
+        To be overridden
+        """
         pass
 
 
@@ -67,10 +48,8 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
     """
     The DbusMessenger class that handles the DBus IPC messages
     """
-    
-    __metaclass__ = MergeMeta
-    
-    def __init__(self, config, cbExecHdl=None, cbStatusHdl=None, cbResultHdl=None, cbQuitHdl=None):
+
+    def __init__(self, config, cbExecHdl=None, cbStatusHdl=None, cbResultHdl=None, cbInterruptHdl=None):
         super().__init__(config)
         # set the dbus.mainloop.glib.DBusGMainLoop() as default event loop mechanism
         gobject.threads_init() # Must Do this first if use gobject.MainLoop()
@@ -79,9 +58,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         self.mCbExecHandler = cbExecHdl
         self.mCbStatusHandler = cbStatusHdl
         self.mCbResultHandler = cbResultHdl
-        self.mCbQuitHandler = cbQuitHdl
-        self.mRetStatus = {}
-        self.mRetResult = {}
+        self.mCbInterruptHandler = cbInterruptHdl
         self.mIsServer = self.mConfig['IS_SERVER'] if ('IS_SERVER' in self.mConfig.keys()) else False
         self.__initialize()
 
@@ -113,11 +90,10 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='a{sv}', out_signature='b')
     def send(self, request):
         """
-        provide sent request RPC call_method on the server
+        provide sent(request) RPC call_method on the DBus server
         """
-        _logger.debug('dbus send method: {}'.format(request))
+        _logger.debug('dbus i/f send method: callback to {} with {}'.format(self.mCbExecHandler.__name__, request))
         params = {}
-        #called through the Dbus with request
         if callable(self.mCbExecHandler):
             # parse the serialized second string back to dict
             params.update(request)
@@ -127,30 +103,42 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
     def status(self):
+        """
+        provide status() RPC call_method on the DBus server
+        """
+        _logger.debug('dbus i/f status method: callback to {}'.format(self.mCbStatusHandler.__name__))
+        status = {}
         if callable(self.mCbStatusHandler):
-            self.mRetStatus.update(self.mCbStatusHandler())
-        return self.mRetStatus
+            status.update(self.mCbStatusHandler())
+        return status
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
     def result(self):
-        self.mRetResult.clear()
+        """
+        provide result() RPC call_method on the DBus server
+        """
+        _logger.debug('dbus i/f result method: callback to {}'.format(self.mCbResultHandler.__name__))
+        result = {}
         if callable(self.mCbResultHandler):
-            self.mRetResult.update(self.mCbResultHandler())
-        return self.mRetResult
+            result.update(self.mCbResultHandler())
+        return result
 
-    @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
-    def quit(self):
-        self.mResult.clear()
-        if callable(self.mCbQuitHandler):
-            self.mRetResult.update(self.mCbQuitHandler())
-        return self.mRetResult
+    @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='a{sv}', out_signature='b')
+    def interrupt(self, param):
+        """
+        provide interrupt() RPC call_method on the DBus server
+        """
+        _logger.debug('dbus i/f interrupt method: callback to {} with {}'.format(self.mCbInterruptHandler.__name__, param))
+        if callable(self.mCbInterruptHandler):
+            return self.mCbInterruptHandler(param)
+        return False
 
     @dbus.service.signal(dbus_interface="com.technexion.dbus.interface", signature='a{sv}')
     def receive(self, response):
         """
-        provide receive response RPC notify_signal on the server
+        provide receive(response) RPC notify_signal on the DBus server
         """
-        _logger.debug('dbus receive signal: {}'.format(response))
+        _logger.debug('dbus i/f trigger receive signal: {}'.format(response))
         pass
 
     def run(self):
@@ -166,9 +154,14 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             self.mSignal.remove()
 
     def sendMsg(self, msg):
+        """
+        override sendMsg()
+        API function to send message via DBus client
+        """
         if isinstance(msg, dict):
             if self.mIsServer:
-                self.receive(msg) # call receive() to signal client with param
+                # call receive() to signal client with param
+                self.receive(msg)
             else:
                 # called by the CLI/WEB/GUI viewer to send param to server
                 if self.mServerObj:
@@ -180,7 +173,8 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
 
     def receiveMsg(self, response):
         """
-        signal handler for the receive() signal from server
+        override receiveMsg()
+        callback signal handler fn for receiving DBus server's receive(response) signal
         """
         params = {}
         #called through the Dbus with response
@@ -190,24 +184,35 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             return self.mCbExecHandler(params)
         return False
 
+    def setInterrupt(self, param):
+        if isinstance(param, dict):
+            if not self.mIsServer:
+                # called by the CLI/WEB/GUI viewer to interrupt server jobs
+                if self.mServerObj:
+                    self.mServerObj.interrupt(param)
+                else:
+                    raise ReferenceError('Unable to access DBUS exported object')
+        else:
+            raise TypeError('Interrupt Param has to be packaged in a dictionary')
+
     def setStatus(self, status):
         if self.mIsServer:
-            # called by the Installer server to set param to server
+            # called by the installer server to pass status to return to client
+            # by triggering the receive(response) signal
             if isinstance(status, dict):
-                self.mRetStatus.clear()
-                #if 'status' not in self.mRetStatus.keys() or self.mRetStatus['status'] != status['status']:
-                self.mRetStatus.update(status)
-                self.sendMsg(self.mRetStatus)
+                retstatus = {}
+                retstatus.update(status)
+                self.sendMsg(retstatus)
             else:
                 raise TypeError('Setting status must pass in a dictionary format')
         else:
             raise IOError("This method call is for dbus server only!")
 
     def getStatus(self):
-        retStatus = {}
         if not self.mIsServer:
-            # called by the CLI/WEB/GUI viewer to send param to server
+            # called by the CLI/WEB/GUI viewer to ask status from installer server
             if self.mServerObj:
+                retStatus = {}
                 retStatus.update(self.mServerObj.status())
                 return retStatus
             else:
@@ -216,22 +221,23 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             raise IOError("This method call is for dbus client only!")
 
     def setResult(self, result):
-        self.mRetResult.clear()
         if self.mIsServer:
-            # called by the Installer server to set param to server
+            # called by the installer server to pass result to return to client
+            # by triggering the receive(response) signal
             if isinstance(result, dict):
-                self.mRetResult.update(result)
-                self.sendMsg(self.mRetResult)
+                retResult = {}
+                retResult.update(result)
+                self.sendMsg(retResult)
             else:
                 raise TypeError('Setting result must pass in a dictionary format')
         else:
             raise IOError("This method call is for dbus server only!")
 
     def getResult(self):
-        retResult = {}
         if not self.mIsServer:
-            # called by the CLI/WEB/GUI viewer to send param to server
+            # called by the CLI/WEB/GUI viewer to ask status from installer server
             if self.mServerObj:
+                retResult = {}
                 retResult.update(self.mServerObj.result())
                 return retResult
             else:
@@ -243,15 +249,14 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
 
 class SocketMessenger(BaseMessenger):
     """
-        SocketMessenger(BaseMessenger)
-    
+    SocketMessenger(BaseMessenger)
     """
     def __init__(self, config, cbhandle):
         super().__init__(config, cbhandle)
 
     def sendMsg(self, msg):
         pass
-    
+
     def receiveMsg(self):
         return {}
 
@@ -308,12 +313,12 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--verbose', dest='verbose', default=False, help='Show more information')
     parser.add_argument('-t', dest='type', choices=['srv', 'flash', 'cli'], help='start the dbusmessage server, client_server, or client')
     args = parser.parse_args()
-    
+
     from defconfig import DefConfig
     conf = DefConfig()
     conf.loadConfig("/etc/installer.xml")
     setting = conf.getSettings(flatten=True)
-    
+
     if args.type == 'srv':
         setting.update({'IS_SERVER': True})
         server(setting)

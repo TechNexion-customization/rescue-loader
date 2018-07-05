@@ -865,9 +865,7 @@ class GuiViewer(QObject, BaseViewer):
         return self.mMsger.getResult()
 
 
-
-if __name__ == '__main__':
-
+def guiview():
     app = QtGui.QApplication(sys.argv)
     sighdl = SignalHandler(app)
     sighdl.activate([signal.SIGTERM, signal.SIGUSR1], app.exit)
@@ -881,3 +879,6 @@ if __name__ == '__main__':
     ret = app.exec_()
     sighdl.deactivate()
     sys.exit(ret)
+
+if __name__ == '__main__':
+    guiview()

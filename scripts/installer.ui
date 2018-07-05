@@ -1001,6 +1001,22 @@
    </hints>
   </connection>
   <connection>
+   <sender>detectDevice</sender>
+   <signal>fail()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>46</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
    <sender>scanStorage</sender>
    <signal>success()</signal>
    <receiver>chooseStorage</receiver>
