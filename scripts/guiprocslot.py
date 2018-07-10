@@ -316,7 +316,7 @@ class QProcessSlot(QtGui.QWidget):
                 #print("{} cmd#{} matched: {}".format(self, i, results))
                 if 'status' in results:
                     if results['status'] == 'success' or results['status'] == 'failure':
-                        _logger.debug("{} remove returned request: {} status: {} cmds: {}".format(self.objectName(), self.mCmds[-1], results['status'], len(self.mCmds)))
+                        _logger.debug("{} remove returned request: {} status: {} cmds: {}".format(self.objectName(), cmd, results['status'], len(self.mCmds)))
                         self.mCmds.remove(cmd)
                 return True
         return False
@@ -1403,6 +1403,7 @@ class chooseSelectionSlot(QChooseSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
+        self.mResults = {}
         self.mLstWgtSelection =None
         self.mLstWgtStorage = None
         self.mLstWgtOS = None
@@ -1429,11 +1430,12 @@ class chooseSelectionSlot(QChooseSlot):
                 self._updateOutputLabel()
 
         if self.sender().objectName() == 'btnFlash':
-            # receive the btnFlash click signal, and send the mPick to downloadImage procslot
-            if all(p is not None for p in self.mPick if (key in self.mPick for key in ['os', 'board', 'display', 'storage'])):
-                if hasattr(self._findChildWidget('downloadImage'), 'processSlot'):
-                    self.chosen.connect(getattr(self._findChildWidget('downloadImage'), 'processSlot'))
-                    self.chosen.emit(self.mPick)
+            # receive the btnFlash click signal
+            # issue command to copy first 33MB of target storage
+            # copy the first 69632 sectors - 35,651,584 bytes out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
+            if 'storage' in self.mPick and self.mPick['storage'] is not None:
+                self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                self.request.emit(self.mCmds[-1])
 
         if self.sender() == self.mLstWgtSelection:
             # parse the QListWidgetItem to get data that indicate which choice it came from
@@ -1453,21 +1455,25 @@ class chooseSelectionSlot(QChooseSlot):
                 self.mRowToRemove = self.mLstWgtSelection.row(inputs)
                 if inputs.flags() & QtCore.Qt.ItemIsEnabled:
                     inputs.setFlags(inputs.flags() & ~QtCore.Qt.ItemIsEnabled)
-                self.finish.emit()
+                # show/hide GUI components
+                self.mLstWgtSelection.clearSelection()
+                self._updateDisplay()
+                # send the self.mPick to appropriate QProcSlot so picking
+                # process can be restarted from where it is disgarded
+                self.success.emit(self.mPick)
 
-    # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
-    # to get results from installerd
-    #def parseResult(self, results):
-    #    pass
+    def parseResult(self, results):
+        # flash command complete and the results are updated/parsed here
+        self.mResults.update(results)
 
     def validateResult(self):
-        # flow comes here (gets called) after self.finish.emit()
-        # show/hide GUI components
-        self.mLstWgtSelection.clearSelection()
-        self._updateDisplay()
-        # send the self.mPick to appropriate QProcSlot so picking
-        # process can be restarted from where it is disgarded
-        self.success.emit(self.mPick)
+        # flow comes here after self.finish.emit() - gets called or when cmd is removed from self.mCmds 
+        if self.mResults['status'] == 'success' and self.mResults['cmd'] == 'flash':
+            # send the mPick to downloadImage procslot
+            if all(p is not None for p in self.mPick if (key in self.mPick for key in ['os', 'board', 'display', 'storage'])):
+                if hasattr(self._findChildWidget('downloadImage'), 'processSlot'):
+                    self.chosen.connect(getattr(self._findChildWidget('downloadImage'), 'processSlot'))
+                    self.chosen.emit(self.mPick)
 
     def _updateDisplay(self):
         if 'os' in self.mUserData:
@@ -1620,9 +1626,6 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
-                    # copy the first 69632 sectors - 35,651,584 bytes out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mTgtStorage, 'tgt_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '16384'})
-                    self.request.emit(self.mCmds[-1])
                     _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
                     self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
                     # send request to installerd
@@ -1647,8 +1650,14 @@ class downloadImageSlot(QProcessSlot):
             #QtGui.QMessageBox.information(self, 'TechNexion Rescue System', 'Hold Your Hourses!!!\nPlease wait until downloading is completed...')
             if self.sender().objectName() == 'detectDevice' and isinstance(inputs, str) and inputs != 'NoError':
                 # handle error from network disconnection
-                _logger.info('from {}, received network status {}'.format(inputs, self.sender().objectName()))
-            else:
+                _logger.info('from {}, received network error status {}'.format(inputs, self.sender().objectName()))
+                #self._cancelCommand()
+                self.mTimer.stop()
+                self.mFlashFlag = False
+                self.mResults['status'] = 'failure'
+                self.finish.emit()
+
+            if self.sender().objectName() != 'detectDevice':
                 self.mMsgBox.setMessage('Flashing')
                 self.mMsgBox.setModal(True) # modal dialog
                 ret = self.mMsgBox.display(True)
@@ -1702,6 +1711,19 @@ class downloadImageSlot(QProcessSlot):
             self.mTimer.stop()
             self.mFlashFlag = False
 
+        if results['status'] == 'success' and results['cmd'] == 'flash':
+            self.mMsgBox.setMessage('Retry')
+            self.mMsgBox.setModal(True) # modal dialog
+            ret = self.mMsgBox.display(True)
+            if ret:
+                try:
+                    # reset/reboot the system
+                    subprocess.check_call(['systemctl', 'restart', 'installerd.service'])
+                    subprocess.check_call(['systemctl', 'restart', 'guiclientd.service'])
+                except:
+                    raise
+            self.mMsgBox.clearMessage()
+
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         _logger.debug('validateResult: {}'.format(self.mResults))
@@ -1715,18 +1737,8 @@ class downloadImageSlot(QProcessSlot):
             self.success.emit(self.mPick)
         elif isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults and self.mResults['status'] == 'failure':
             # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-            self._setCommand({'cmd': 'flash', 'tgt_filename': self.mTgtStorage, 'src_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '16384'})
+            self._setCommand({'cmd': 'flash', 'tgt_filename': self.mTgtStorage, 'src_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '32768'})
             self.request.emit(self.mCmds[-1])
-            self.mMsgBox.setMessage('Retry')
-            self.mMsgBox.setModal(True) # modal dialog
-            ret = self.mMsgBox.display(True)
-            if ret:
-                try:
-                    # reset/reboot the system
-                    subprocess.check_call(['systemctl', 'restart', 'guiclientd.service'])
-                except:
-                    raise
-            self.mMsgBox.clearMessage()
 
     def _updateDisplay(self):
         # show and hide some Gui elements
@@ -2266,8 +2278,7 @@ class QMessageDialog(QtGui.QDialog):
 
         elif msgtype == 'Retry':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, "SP_MessageBoxWarning")))
-            self.setTitle("Flash failed")
-            self.setContent('Please retry to flash the image again')
+            self.setTitle("Flash failed\nPlease retry to flash the image again")
             self.setButtons({'accept': 'RETRY'})
 
         elif msgtype == 'InputError':

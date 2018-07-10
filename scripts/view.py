@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import abc
 import logging
@@ -66,14 +67,14 @@ class BaseViewer(object):
         return True
 
     def _waitForEventTimeout(self, t):
-        _logger.debug('Client Wait for Response Event Timeout {}s'.format(t))
+        _logger.debug('Wait for Response Event Timeout in {}s'.format(t))
         isSet = False
-        while not self.mResponseEvent.isSet():
+        while not self.mResponseEvent.is_set():
             isSet = self.mResponseEvent.wait(t)
             if isSet:
-                _logger.debug('Client Processing event')
+                _logger.debug('Response Event has been set, continue')
             else:
-                _logger.debug('Timed Out: Client Doing other things')
+                _logger.debug('Wait for Response Event Timed Out')
                 break
         return isSet
 
@@ -129,10 +130,6 @@ class CliViewer(BaseViewer):
             else:
                 params.update({'verbose': 'False'})
 
-            if 'interactive' in params:
-                params.pop('interactive')
-                params.update({'interactive': 'True'})
-
             if params['cmd'] is None:
                 params.pop('cmd')
 
@@ -143,10 +140,11 @@ class CliViewer(BaseViewer):
         else:
             return False
 
-    def _isStatusProcessing(self):
-        status ={}
+    def _isStillProcessing(self):
+        status = {}
         status.update(self._unflatten(self.mMsger.getStatus()))
-        if status['status'] == 'processing':
+        _logger.info('Is Still processing? Status: {}'.format(status))
+        if 'status' in status and status['status'] == 'processing':
             return True
         return False
 
@@ -155,6 +153,16 @@ class CliViewer(BaseViewer):
             self.__dump(result)
         else:
             self.__dump(self.mResponse)
+
+    def _preExec(self):
+        """
+        Override BaseView::_preExec()
+        """
+        if 'cmd' in self.mCmd and self.mCmd['cmd'] == 'stop':
+            # use interrupt
+            self.mMsger.setInterrupt(self.mCmd)
+            return False
+        return True
 
     def _mainExec(self):
         """
@@ -170,7 +178,7 @@ class CliViewer(BaseViewer):
             else:
                 raise TypeError('cmd must be in a dictionary format')
         except Exception as ex:
-            _logger.info('Error: {}'.format(ex))
+            _logger.error('Error: {}'.format(ex))
         return False
 
     def _postExec(self):
@@ -186,43 +194,37 @@ class CliViewer(BaseViewer):
                 # The server will signal a 'pending' response first.
                 # Then a 'processing' response
                 # and finally a 'success' or a 'failure' response
-                if 'user_request' in self.mResponse.keys():
-                    # if it is a user_request, then get user inputs,
-                    # pass them to the server again and return false
-                    self.mInputs.update({'user_response': self.__getUserInput(self.mResponse['user_request'])})
-                    self.mInput.update(self.mCmd)
-                    if len(self.mInputs) > 0:
-                        _logger.info('get more user inputs: {}'.format(self.mInputs))
-                        self.mMsger.sendMsg(self.mInputs)
-                    self._clearEvent()
-                    continue
-                elif 'status' in self.mResponse.keys():
+                if 'status' in self.mResponse.keys():
                     if self.mResponse['status'] == 'pending':
                         # clear the event and wait until server send another response with status==processing
+                        _logger.debug('status just becomes pending')
                         self._clearEvent()
                         continue
                     elif self.mResponse['status'] == 'processing':
                         # keep getting results after it becomes 'processing'
                         # and until status in success or failure, so don't clear the event
                         # but continue the loop to come back here again
-                        _logger.debug('event set, status just becomes processing')
+                        _logger.debug('status just becomes processing')
                         self._clearEvent()
                         continue
                     else:
-                        if self._isStatusProcessing():
-                            _logger.debug("event set but still processing")
+                        if self._isStillProcessing():
+                            _logger.debug("event is set, but still processing")
                             self._parseResult(self._unflatten(self.mMsger.getResult()))
                             self._clearEvent()
                             continue
                         else:
                             # get and parse the result, and break out of loop
                             if self.mResponse['status'] == 'success':
+                                _logger.debug("status just become success, so parse result")
                                 self._parseResult()
                             else:
+                                # idle, pending, processing, failure, etc.
+                                _logger.debug("status just becomes {}, so get and parse result".format(self.mResponse['status']))
                                 self._parseResult(self._unflatten(self.mMsger.getResult()))
                             break
             else:
-                _logger.debug("Wait Timed Out")
+                _logger.debug("Waiting for server response timed out. status: {}".format(self.mResponse['status']))
                 if self.mResponse['status'] == 'processing':
                     self._parseResult(self._unflatten(self.mMsger.getResult()))
                 self._clearEvent()
@@ -246,7 +248,7 @@ class CliViewer(BaseViewer):
 
     def request(self, arguments):
         """
-        Handles command requests from the different viewers
+        Handles command requests from the passed in arguments
         """
         params = {}
         params.update(arguments)
@@ -424,24 +426,24 @@ if __name__ == "__main__":
 
     # connect commands
 
-    
+
 
     # disconnect commands
 
-    
+
 
 #     # start commands
 #     start_parser = subparsers.add_parser('start', help='start client/server')
 #     start_parser.add_argument('-t', dest='type', choices=('srv', 'cli'), \
 #                               action='store', default='cli', help='start the server or client')
-#     
-#     # stop commands
-#     stop_parser = subparsers.add_parser('stop', help='stop client/server')
-#     stop_parser.add_argument('-t', dest='type', choices=('srv', 'cli'), \
-#                              action='store', default='cli', help='start the server or client')
+
+    # stop commands
+    stop_parser = subparsers.add_parser('stop', help='stop client/server')
+    stop_parser.add_argument('-t', dest='type', choices=('srv', 'cli', 'job'), \
+                            action='store', default='job', help='stop the server or client or job')
 
     # upload commands
-    
+
     # download commands
     # 'dl_module',  'dl_baseboard', 'dl_os', 'dl_version', 'dl_display', \
     # 'dl_filetype', 'dl_host', 'dl_protocol', 'tgt_filename'
@@ -481,12 +483,10 @@ if __name__ == "__main__":
                            action='store', metavar='DOWNLOAD_URL', help='Specify the proper URL of the download file')
 
     # install commands
-    
+
     # rescue commands
 
     # Global Options
-#     parser.add_argument('-i', '--interactive', dest='interactive', \
-#                         action='store_true', default=argparse.SUPPRESS, help='Interactive mode')
     parser.add_argument('--verbose', dest='verbose', \
                         action='store_true', default=False, help='Show more information')
     parser.add_argument('--version', action='version', version='%(prog)s 2018.5.16.1')

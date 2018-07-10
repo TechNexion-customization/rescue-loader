@@ -907,6 +907,22 @@
   <connection>
    <sender>diaWidget</sender>
    <signal>initialised()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>496</x>
+     <y>338</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>29</x>
+     <y>38</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
    <receiver>downloadImage</receiver>
    <slot>processSlot()</slot>
    <hints>

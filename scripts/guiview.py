@@ -642,6 +642,7 @@ class GuiViewer(QObject, BaseViewer):
         # 1. Check whether the dbus connection and interface is valid
         if not self.mMsger.hasValidDbusConn():
             # the system does not have a valid DBus Session or dbus interface
+            msgbox.clearCheckFlags()
             msgbox.setCheckFlags({'NoDbus': True})
             msgbox.setModal(False)
             msgbox.display(True) # _displayMessage(self.mGuiRootWidget, 'NoDbus') # non modal dialog
