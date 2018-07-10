@@ -143,7 +143,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         self.mResult['bytes_written'] = 0
         # setup the input/output objects
         # chunk_size in bytes default 1MB, i.e. 1048576
-        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0) else 1048576
+        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0) else 1048576 # 1MB
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
             try:
@@ -177,7 +177,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         # copy specified address range from src file to target file
         try:
             if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
-                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576 # 1MB
                 blksize = self.mIOs[0].getBlockSize()
                 srcstart = self.mParam['src_start_sector'] * blksize
                 tgtstart = self.mParam['tgt_start_sector'] * blksize
@@ -185,7 +185,7 @@ class CopyBlockActionModeller(BaseActionModeller):
                 self.mResult['total_size'] = totalbytes
                 # sector addresses of a very large file for looping
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-                _logger.debug('total_size: {} block_size: {} list of addresses to copy: {}'.format(totalbytes, blksize, [addr for addr in address]))
+                _logger.debug('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
                         self.checkInterruptAndExit()
@@ -448,7 +448,7 @@ class WebDownloadActionModeller(BaseActionModeller):
         self.mResult['bytes_written'] = 0
 
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
-        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535
+        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
         srcPath = '/rescue/' + self.mParam['src_directory'].strip('/') + '/' + self.mParam['src_filename'].lstrip('/')
         host = self.mParam['host_name'] if ('host_name' in self.mParam) else 'rescue.technexion.net'
         protocol = self.mParam['host_protocol'] if ('host_protocol' in self.mParam) else 'http'
@@ -459,9 +459,13 @@ class WebDownloadActionModeller(BaseActionModeller):
         if 'tgt_filename' in self.mParam:
             try:
                 self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
-                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
             except Exception as ex:
                 _logger.error('Cannot create web inputoutput: {}'.format(ex))
+                raise
+            try:
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+            except Exception as ex:
+                _logger.error('Cannot create block inputoutput: {}'.format(ex))
                 raise
         else:
             raise ArgumentTypeError('No tgt file specified')
@@ -473,7 +477,7 @@ class WebDownloadActionModeller(BaseActionModeller):
     def _mainAction(self):
         # copy specified address range from downloaded src file to target file
         try:
-            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535
+            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
             totalbytes = self.mIOs[0].getFileSize()
             self.mResult['total_uncompressed'] = self.mIOs[0].getUncompressedSize()
             srcstart = 0
@@ -484,11 +488,13 @@ class WebDownloadActionModeller(BaseActionModeller):
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
             else:
                 raise IOError('There is 0 Total Bytes to download')
-            _logger.debug('list of addresses to copy: {}'.format(address))
+            _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
             if len(address) > 1:
-                for (srcaddr, tgtaddr) in address:
+                for count, (srcaddr, tgtaddr) in enumerate(address):
                     self.checkInterruptAndExit()
                     self.__copyChunk(srcaddr, tgtaddr, 1)
+                    if not(count % 500):
+                        self.mIOs[1]._close()
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             return True

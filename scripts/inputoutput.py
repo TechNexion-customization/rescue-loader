@@ -8,6 +8,8 @@ import fcntl
 import mimetypes
 import urllib.request
 import urllib.response
+import urllib.error
+import socket
 import logging
 from io import IOBase
 
@@ -189,9 +191,12 @@ class XZFile (CompressedFile):
         # read raw compressed data from filename given
         try:
             if self.mDecompR is None:
-                self.mDecompR = lzma.LZMADecompressor(format=lzma.FORMAT_XZ, memlimit=111982830) # 134217728
+                self.mDecompR = lzma.LZMADecompressor(format=lzma.FORMAT_XZ, memlimit=100663296) # 111982830(103MB) 134217728(128MB)
             # decompress the read data and return uncompressed data
             return self.mDecompR.decompress(data)
+        except lzma.LZMAError as err:
+            _logger.error('{} lzma fail decompress within given memory limit: {}'.format(self.__class__, err))
+            raise
         except Exception as ex:
             _logger.error('{} lzma decompress exception: {}'.format(self.__class__, ex))
             raise
@@ -537,8 +542,10 @@ class WebInputOutput(BaseInputOutput):
         try:
             # FIXME: Upload to remote request
             pass
-        except Exception as ex:
-            _logger.error('{} upload exception: {}'.format(self.__class__, ex))
+        except TypeError as err:
+            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
+            _logger.error('{} upload exception: {}'.format(self.__class__, err))
             raise
         return 0
 
@@ -550,8 +557,10 @@ class WebInputOutput(BaseInputOutput):
             if self.mHandle:
                 # download from urllib.response
                 return self.mHandle.read(size) if (size > 0) else self.mHandle.read()
-        except Exception as ex:
-            _logger.error('{} download exception: {}'.format(self.__class__, ex))
+        except TypeError as err:
+            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
+            _logger.error('{} download exception: {}'.format(self.__class__, err))
             raise
         return 0
 
@@ -564,7 +573,7 @@ class WebInputOutput(BaseInputOutput):
                 # For HTTP and HTTPS URLs, setup request
                 # req = urllib.request.Request(self.mUrl) # no cgi data, no timeout
                 # self.mHandle = urllib.request.urlopen(req)
-                self.mHandle = urllib.request.urlopen(self.mUrl)
+                self.mHandle = urllib.request.urlopen(self.mUrl, None, 30) # timeout 30s
                 if self.mHandle:
                     self.mWebHdrInfo = self.mHandle.info()
                     _logger.debug('Hdr Info: {}'.format(self.mWebHdrInfo))
@@ -579,7 +588,10 @@ class WebInputOutput(BaseInputOutput):
                 raise ConnectionError('Upload not supported yet')
 #             if self.mCFHandle is None:
 #                 raise IOError('Cannot open compressed file')
-        except Exception:
+        except TypeError as err:
+            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
+            _logger.error('{} _open error: {}'.format(self.__class__, err))
             raise
 
     def _close(self):
@@ -594,8 +606,10 @@ class WebInputOutput(BaseInputOutput):
                     self.mCFHandle._flush()
                 del self.mCFHandle
             _logger.debug('{} _close: {}'.format(self.__class__, self.mUrl))
-        except Exception:
-            _logger.error('{} _close: {}'.format(self.__class__, self.mHandle, self.mCFHandle))
+        except TypeError as err:
+            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
+            _logger.error('{} _close error: {}'.format(self.__class__, err))
             raise
 
     def Write(self, data, start):
