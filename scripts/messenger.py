@@ -93,45 +93,28 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         provide sent(request) RPC call_method on the DBus server
         """
         _logger.debug('dbus i/f send method: callback to {} with {}'.format(self.mCbExecHandler.__name__, request))
-        params = {}
-        if callable(self.mCbExecHandler):
-            # parse the serialized second string back to dict
-            params.update(request)
-            self.mCbExecHandler(params)
-            return True
-        return False
+        return self.receiveMsg(request)
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
     def status(self):
         """
         provide status() RPC call_method on the DBus server
         """
-        _logger.debug('dbus i/f status method: callback to {}'.format(self.mCbStatusHandler.__name__))
-        status = {}
-        if callable(self.mCbStatusHandler):
-            status.update(self.mCbStatusHandler())
-        return status
+        return self.getStatus()
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
     def result(self):
         """
         provide result() RPC call_method on the DBus server
         """
-        _logger.debug('dbus i/f result method: callback to {}'.format(self.mCbResultHandler.__name__))
-        result = {}
-        if callable(self.mCbResultHandler):
-            result.update(self.mCbResultHandler())
-        return result
+        return self.getResult()
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='a{sv}', out_signature='b')
     def interrupt(self, param):
         """
         provide interrupt() RPC call_method on the DBus server
         """
-        _logger.debug('dbus i/f interrupt method: callback to {} with {}'.format(self.mCbInterruptHandler.__name__, param))
-        if callable(self.mCbInterruptHandler):
-            return self.mCbInterruptHandler(param)
-        return False
+        return self.setInterrupt(param)
 
     @dbus.service.signal(dbus_interface="com.technexion.dbus.interface", signature='a{sv}')
     def receive(self, response):
@@ -147,7 +130,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             self.mDBusLoop.run()
 
     def stop(self):
-        # both server and client uses a DBus Loop
+        # both server and client that uses a DBus Loop
         if self.mDBusLoop:
             self.mDBusLoop.quit()
         if not self.mIsServer and self.mSignal:
@@ -160,10 +143,10 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         """
         if isinstance(msg, dict):
             if self.mIsServer:
-                # call receive() to signal client with param
+                # call receive() to signal DBus client with param
                 self.receive(msg)
             else:
-                # called by the CLI/WEB/GUI viewer to send param to server
+                # called to send param to DBus server
                 if self.mServerObj:
                     self.mServerObj.send(msg)
                 else:
@@ -174,10 +157,11 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
     def receiveMsg(self, response):
         """
         override receiveMsg()
-        callback signal handler fn for receiving DBus server's receive(response) signal
+        - handles message received by DBus server's I/F send method,
+          which also callback the self.mCbExecHandler(params)
+        - callback signal handler fn for receiving DBus server's receive(response) signal
         """
         params = {}
-        #called through the Dbus with response
         if callable(self.mCbExecHandler):
             # parse the serialized second string back to dict
             params.update(response)
@@ -186,10 +170,16 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
 
     def setInterrupt(self, param):
         if isinstance(param, dict):
-            if not self.mIsServer:
+            if self.mIsServer:
+                # called by dbus I/F interrupt method
+                _logger.debug('dbus server i/f interrupt method: callback to {} with {}'.format(self.mCbInterruptHandler.__name__, param))
+                if callable(self.mCbInterruptHandler):
+                    return self.mCbInterruptHandler(param)
+            else:
                 # called by the CLI/WEB/GUI viewer to interrupt server jobs
+                _logger.debug('dbus client calls to dbus i/f interrupt method: with {}'.format(param))
                 if self.mServerObj:
-                    self.mServerObj.interrupt(param)
+                    return self.mServerObj.interrupt(param)
                 else:
                     raise ReferenceError('Unable to access DBUS exported object')
         else:
@@ -209,16 +199,21 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             raise IOError("This method call is for dbus server only!")
 
     def getStatus(self):
-        if not self.mIsServer:
+        retStatus = {}
+        if self.mIsServer:
+            # called by dbus I/F status method
+            _logger.debug('dbus server i/f status method: callback to {}'.format(self.mCbStatusHandler.__name__))
+            if callable(self.mCbStatusHandler):
+                retStatus.update(self.mCbStatusHandler())
+                return retStatus
+        else:
             # called by the CLI/WEB/GUI viewer to ask status from installer server
+            _logger.debug('dbus client calls to dbus i/f status method:')
             if self.mServerObj:
-                retStatus = {}
                 retStatus.update(self.mServerObj.status())
                 return retStatus
             else:
                 raise ReferenceError('Unable to access DBUS exported object')
-        else:
-            raise IOError("This method call is for dbus client only!")
 
     def setResult(self, result):
         if self.mIsServer:
@@ -234,16 +229,21 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
             raise IOError("This method call is for dbus server only!")
 
     def getResult(self):
-        if not self.mIsServer:
+        retResult = {}
+        if self.mIsServer:
+            # called by dbus I/F result method
+            _logger.debug('dbus server i/f result method: callback to {}'.format(self.mCbResultHandler.__name__))
+            if callable(self.mCbResultHandler):
+                retResult.update(self.mCbResultHandler())
+                return retResult
+        else:
             # called by the CLI/WEB/GUI viewer to ask status from installer server
+            _logger.debug('dbus client calls to dbus i/f result method:')
             if self.mServerObj:
-                retResult = {}
                 retResult.update(self.mServerObj.result())
                 return retResult
             else:
                 raise ReferenceError('Unable to access DBUS exported object')
-        else:
-            raise IOError("This method call is for dbus client only!")
 
 
 
@@ -259,73 +259,3 @@ class SocketMessenger(BaseMessenger):
 
     def receiveMsg(self):
         return {}
-
-
-
-if __name__ == "__main__":
-    import threading
-    import time
-
-    def flash():
-        def CliHandler(params):
-            print("CliHandler: received:")
-            if isinstance(params, dict):
-                for k, v in params.items():
-                    print('key:{} value:{}'.format(k, v))
-
-        dbuscli= DbusMessenger(setting, CliHandler)
-        threadcli = threading.Thread(target=dbuscli.run)
-        threadcli.start()
-        dbuscli.sendMsg({u'flash':{u'src_filename': u'./test.bin', u'src_start_sector': u'0', u'src_total_sectors': u'64', \
-              u'tgt_filename': u'./target.bin', u'tgt_start_sector': u'32'}})
-        time.sleep(1)
-        dbuscli.stop()
-        threadcli.join()
-
-    def server(setting):
-        def CBhandler(params):
-            print("CBhandler: received:\n{}".format(params))
-            dbussrv.sendMsg(params)
-            return True
-        dbussrv = DbusMessenger(setting, CBhandler)
-        dbussrv.run()
-
-    def client(setting):
-        def CliHandler(params):
-            print("CliHandler: received:")
-            if isinstance(params, dict):
-                for k, v in params.items():
-                    print('key:{} value:{}'.format(k, v))
-        def Run():
-            dbuscli.sendMsg({u'info':{u'target': u'emmc', u'location': u'disk'}})
-            time.sleep(1)
-            dbuscli.stop()
-
-        dbuscli= DbusMessenger(setting, CliHandler)
-        threadcli = threading.Thread(target=Run)
-        threadcli.start()
-        dbuscli.run()
-        threadcli.join()
-
-    import argparse
-    parser = argparse.ArgumentParser(description='Process Arguments.')
-    parser.add_argument('-c', '--config-file', dest='configfile', help='Specify the configuration file to load', metavar='FILE')
-    parser.add_argument('-v', '--verbose', dest='verbose', default=False, help='Show more information')
-    parser.add_argument('-t', dest='type', choices=['srv', 'flash', 'cli'], help='start the dbusmessage server, client_server, or client')
-    args = parser.parse_args()
-
-    from defconfig import DefConfig
-    conf = DefConfig()
-    conf.loadConfig("/etc/installer.xml")
-    setting = conf.getSettings(flatten=True)
-
-    if args.type == 'srv':
-        setting.update({'IS_SERVER': True})
-        server(setting)
-    elif args.type == 'flash':
-        flash()
-    else:
-        setting.update({'CLIENT_TYPE': 'cli_path'})
-        client(setting)
-
-    exit()
