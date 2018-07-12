@@ -36,7 +36,7 @@ _logger.setLevel(logging.INFO)
 
 ###############################################################################
 #
-# Signal Handler
+# Unix OS Signal Handler
 #
 ###############################################################################
 class SignalHandler(QtNetwork.QAbstractSocket):
@@ -142,6 +142,9 @@ class SignalHandler(QtNetwork.QAbstractSocket):
 ###############################################################################
 
 class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
+    """
+    Qt DBus's Adaptor Abstraction (for Server)
+    """
     QtCore.Q_CLASSINFO("D-Bus Interface", 'com.technexion.dbus.interface')
     QtCore.Q_CLASSINFO("D-Bus Introspection", ''
         '  <interface name="com.technexion.dbus.interface">\n'
@@ -152,75 +155,109 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
         '    <method name="status">\n'
         '      <arg direction="out" type="a{sv}" name="status"/>\n'
         '    </method>\n'
+        '    <method name="result">\n'
+        '      <arg direction="out" type="a{sv}" name="result"/>\n'
+        '    </method>\n'
         '    <signal name="receive">\n'
         '      <arg direction="out" type="a{sv}" name="response"/>\n'
         '    </signal>\n'
-        '    <method name="quit">\n'
-        '      <arg direction="out" type="a{sv}" name="quit"/>\n'
+        '    <method name="interrupt">\n'
+        '      <arg direction="in" type="a{sv}" name="parameters"/>\n'
         '    </method>\n'
         '  </interface>\n'
         '')
 
     receive = QtCore.pyqtSignal(QtDBus.QDBusMessage)
 
-    def __init__(self, parent):
+    def __init__(self, parent, CbExecHdl, cbStatusHdl, cbResultHdl, CbInterruptHdl):
         super().__init__(parent)
         self.setAutoRelaySignals(True)
         self.mRetStatus = {}
+        self.mStatusEvent = Event()
         self.mRetResult = {}
+        self.mResultEvent = Event()
+        self.mCbExecHandler = CbExecHdl
+        self.mCbStatusHandler = cbStatusHdl
+        self.mCbResultHandler = cbResultHdl
+        self.mCbInterruptHandler = CbInterruptHdl
 
     @QtCore.pyqtSlot(QtDBus.QDBusMessage)
     def send(self, request):
         """
         provide sent request RPC call_method on the server
         """
-        req = request.arguments()[0]
-        _logger.debug('qtdbus send method: {}'.format(req))
-        params = {}
-        #called through the Dbus with request
+        _logger.debug('qtdbus i/f send method: callback to {} with {}'.format(self.mCbExecHandler.__name__, request))
         if callable(self.mCbExecHandler):
-            # parse the serialized second string back to dict
-            params.update(req)
-            self.mCbExecHandler(params)
+            self.mCbExecHandler(request)
             return True
         return False
 
     @QtCore.pyqtSlot()
     def status(self):
-        return self.mRetStatus
+        """
+        provide status() RPC call_method on Qt DBus server
+        """
+        _logger.debug('qtdbus i/f status method: callback to {}'.format(self.mCbStatusHandler.__name__))
+        if callable(self.mCbStatusHandler):
+            self.mCbStatusHandler()
+        return RetStatus
 
     @property
-    def Status(self):
+    def RetStatus(self):
+        self.mStatusEvent.clear()
+        self.mStatusEvent.wait()
         return self.mRetStatus
 
-    @Status.setter
-    def Status(self, status):
+    @RetStatus.setter
+    def RetStatus(self, status):
+        self.mRetStatus.clear()
         if isinstance(status, dict):
             self.mRetStatus.update(status)
-            self.send(self.mRetStatus)
-        else:
-            self.mRetStatus.clear()
+        self.mStatusEvent.set()
 
     @QtCore.pyqtSlot()
     def result(self):
-        return self.mRetResult
+        """
+        provide result() RPC call_method on Qt DBus server
+        """
+        if callable(self.mCbResultHandler):
+            self.mCbResultHandler()
+        return RetResult
 
     @property
-    def Result(self):
+    def RetResult(self):
+        self.mResultEvent.clear()
+        self.mResultEvent.wait()
         return self.mRetResult
 
-    @Result.setter
-    def Result(self, result):
-        # called by the Installer server to set param to server
+    @RetResult.setter
+    def RetResult(self, result):
+        self.mRetResult.clear()
         if isinstance(result, dict):
             self.mRetResult.update(result)
-            self.send(self.mRetResult)
-        else:
-            self.mRetResult.clear()
+        self.mResultEvent.set()
+
+    @QtCore.pyqtSlot(QtDBus.QDBusMessage)
+    def interrupt(self, parameters):
+        """
+        provide interrupt() RPC call_method on Qt DBus server
+        """
+        param = parameters.arguments()[0]
+        _logger.debug('qtdbus interrupt method: {}'.format(param))
+        inputs = {}
+        #called through the Dbus with parameters
+        if callable(self.mCbInterruptHandler):
+            inputs.update(param)
+            self.mCbInterruptHandler(inputs)
+            return True
+        return False
+
 
 
 class MsgerInterface(QtDBus.QDBusAbstractInterface):
-
+    """
+    Qt DBus's Interface Abstraction (for Client)
+    """
     def __init__(self, busname, objpath, ifacename, connection, parent=None):
         super().__init__(busname, objpath, ifacename, connection, parent)
 
@@ -230,7 +267,7 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
         if reply.isValid():
             return reply.value()
         else:
-            return False
+            raise reply.error()
 
     def status(self):
         ret = self.asyncCall('status') # or self.call()
@@ -238,7 +275,7 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
         if reply.isValid():
             return reply.value()
         else:
-            return None
+            raise reply.error()
 
     def result(self):
         ret = self.asyncCall('result') # or self.call()
@@ -246,35 +283,45 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
         if reply.isValid():
             return reply.value()
         else:
-            return None
+            raise reply.error()
 
-    def quit(self):
-        ret = self.asyncCall('quit') # or self.call()
+    def interrupt(self):
+        ret = self.asyncCall('interrupt') # or self.call()
         reply = QtDBus.QDBusReply(ret)
         if reply.isValid():
             return reply.value()
         else:
-            return None
+            raise reply.error()
 
 
 
 class QtDbusMessenger(QObject, BaseMessenger):
+    """
+    Qt's own version of the DBus Messenger with signals and slots
+    """
+    sigExecmd = QtCore.pyqtSignal(dict)
+    sigStatus = QtCore.pyqtSignal()
+    sigResult = QtCore.pyqtSignal()
+    sigIntrpt = QtCore.pyqtSignal(dict)
 
-    done = QtCore.pyqtSignal(dict)
-
-    def __init__(self,  config, rootWidget, cbSlotHandle = None):
+    def __init__(self,  config, rootWidget, cbExecHdl = None, cbGetStatusHdl = None, cbGetResultHdl = None, cbIntrHdl = None):
         QObject.__init__(self, rootWidget)
         BaseMessenger.__init__(self, config)
+        # setup the QtDBus messenger according to xml configuration
         self.mIsServer = self.mConfig['IS_SERVER'] if ('IS_SERVER' in self.mConfig.keys()) else False
-        if callable(cbSlotHandle):
-            self.done.connect(cbSlotHandle)
+        # Setup the Receive Slot Callback Function
+        if callable(cbExecHdl): self.sigExecmd.connect(cbExecHdl)
+        if callable(cbGetStatusHdl): self.sigStatus.connect(cbGetStatusHdl)
+        if callable(cbGetResultHdl): self.sigResult.connect(cbGetResultHdl)
+        if callable(cbIntrHdl): self.sigIntrpt.connect(cbIntrHdl)
+        # FIXME: Need to implement callback functions to handle QtDBus server's SendSlot() and InterruptSlot()
         self.__initialize(rootWidget)
 
     def __initialize(self, rootWidget):
         """
         initialize this object to the DBUS connection
         """
-        # get the session bus Qt way
+        # get the session bus (the Qt way)
         self.mSessDBus = QtDBus.QDBusConnection.sessionBus()
         # get the dbus name, Server's obj path, and interface name
         self.mBusName = self.mConfig['busname']
@@ -283,15 +330,15 @@ class QtDbusMessenger(QObject, BaseMessenger):
         # since the main loop of a QtApplication is running the GUI event loop,
         # we don't need to create mainloop() here
         if self.mIsServer:
-            # new MsgerAdaptor constructor with sessbus and obj path
-            self.mAdapter = MsgerAdaptor(rootWidget)
+            # create MsgerAdaptor (QtDBus server) with sessbus and obj path
+            self.mAdapter = MsgerAdaptor(rootWidget, self.receiveMsg, self.getStatus, self.getResult, self.setInterrupt)
             self.mSessDBus.registerService(self.mBusName)
             self.mSessDBus.registerObject(self.mObjPath, self.mAdapter, QtDBus.QDBusConnection.ExportAdaptors)
             #self.mSessDBus.registerObject(self.mObjPath, self.mAdapter, QtDBus.QDBusConnection.ExportAllSlots)
         else:
-            # get the server proxy object, basically just new an MsgerInterface() object
+            # get the server proxy object (QtDBus client), basically just create a MsgerInterface() object
             self.mIface = MsgerInterface(self.mBusName, self.mObjPath, self.mIfaceName, self.mSessDBus, rootWidget)
-            # add_signal_receiver(), equivalent in Qt is connect()
+            # add_signal_receiver() to handle receive signals from QtDBus, the equivalent in Qt is connect()
             ret = self.mSessDBus.connect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self.receiveMsg)
             _logger.debug('mSessBus returns: {} mSessBus connected? {} mIface isValid: {}'.format(ret, self.mSessDBus.isConnected(), self.mIface.isValid()))
 
@@ -302,11 +349,11 @@ class QtDbusMessenger(QObject, BaseMessenger):
 
     def sendMsg(self, msg):
         """
-        If self is acting as a server then emits signal, otherwise sends the message
+        If self is acting as a server then emits receive signal with msg, otherwise sends the message to QtDBus server
         """
         if isinstance(msg, dict):
             if self.mIsServer:
-                self.mAdapter.receive.emit(msg) # call receive() to signal client with msg
+                self.mAdapter.receive.emit(msg)
             else:
                 # called by the CLI/WEB/GUI viewer to send param to server
                 if self.mIface and self.mIface.isValid():
@@ -319,60 +366,98 @@ class QtDbusMessenger(QObject, BaseMessenger):
     @QtCore.pyqtSlot(QtDBus.QDBusMessage)
     def receiveMsg(self, response):
         """
-        signal handler for the receive() signal from server
+        signal handler for the receiving receive() signal from server
         """
         resp = response.arguments()[0]
         params = {}
         params.update(resp)
-        self.done.emit(params)
+        # emit recv signal which connects to cbReceiveSlotHandle callback handler
+        self.sigExecmd.emit(params)
 
-    def getStatus(self):
+    def setInterrupt(self, param):
         """
-        Gets the status from DBus Server
+        allow the client to setInterrupt to the QtDBus server via emit intr signal
+        which calls back to cbInterruptSlotHandle
         """
-        retStatus = {}
-        if not self.mIsServer:
-            # called by the CLI/WEB/GUI viewer to ask server for current status
-            if self.mIface and self.mIface.isValid():
-                retStatus.update(self.mIface.status())
-                return retStatus
+        if isinstance(param, dict):
+            if self.mIsServer:
+                # called by the QtDBus Adaptor to emit the signal to set interrupt
+                self.sigIntrpt.emit(param)
             else:
-                raise ReferenceError('Unable to access DBUS exported object')
+                # called by the CLI/WEB/GUI viewer to interrupt server jobs
+                if self.mIface and self.mIface.isValid():
+                    return self.mIface.interrupt(param)
+                else:
+                    raise ReferenceError('Unable to access DBUS exported object')
         else:
-            raise IOError("This method call is for dbus client only!")
+            raise TypeError('Interrupt Param has to be packaged in a dictionary')
 
+    @pyqtSlot(dict)
     def setStatus(self, status):
+        """
+        Update the status within QtDBus Server
+        and emit receive to client with the status
+        """
         if self.mIsServer:
             if isinstance(status, dict):
-                self.mAdapter.Status = status
+                # calls property setter to set the status
+                self.mAdapter.RetStatus = status
+                # call sendMsg to emit receive() to signal client with status
+                self.sendMsg(status)
             else:
                 raise TypeError('Setting status must pass in a dictionary format')
         else:
             raise IOError("This method call is for dbus server only!")
 
-    def getResult(self):
+    def getStatus(self):
         """
-        Gets the status from DBus Server
+        Gets the status from QtDBus Server
         """
-        retResults = {}
-        if not self.mIsServer:
-            # called by the CLI/WEB/GUI viewer to ask server for current status
+        if self.mIsServer:
+            # called by the QtDBus Adaptor to emit sigStatus signal to get status,
+            # whoever is signaled, need to callback to setStatus() slot to update the status
+            self.sigStatus.emit()
+        else:
+            # called by the CLI/WEB/GUI viewer to ask DBus server for current status
             if self.mIface and self.mIface.isValid():
-                retResults.update(self.mIface.result())
-                return retResults
+                retStatus = {}
+                retStatus.update(self.mIface.status())
+                return retStatus
             else:
                 raise ReferenceError('Unable to access DBUS exported object')
-        else:
-            raise IOError("This method call is for dbus client only!")
 
+    @pyqtSlot(dict)
     def setResult(self, result):
+        """
+        Update the result within QtDBus Server
+        and emit receive to client with the results
+        """
         if self.mIsServer:
             if isinstance(result, dict):
-                self.mAdapter.Result = result
+                self.mAdapter.RetResult = result
+                # call sendMsg to emit receive() to signal client with result
+                self.sendMsg(result)
             else:
                 raise TypeError('Setting result must pass in a dictionary format')
         else:
             raise IOError("This method call is for dbus server only!")
+
+    def getResult(self):
+        """
+        Gets the result from QtDBus Server
+        """
+        if self.mIsServer:
+            # called by the QtDBus Adaptor to emit sigResult signal to get result,
+            # whoever is signaled, need to callback to setResult() slot to update the results
+            self.sigResult.emit()
+        else:
+            # called by the CLI/WEB/GUI viewer to ask DBus server for current result
+            if self.mIface and self.mIface.isValid():
+                retResults = {}
+                retResults.update(self.mIface.result())
+                return retResults
+            else:
+                raise ReferenceError('Unable to access DBUS exported object')
 
 
 
@@ -389,7 +474,7 @@ class GuiViewer(QObject, BaseViewer):
     For Displaying GUI elements on the target device
     It is the top most GUI class/object that handles display of all
     the sub-contained GUI elements
- 
+
     The sub-contained GUI elements are defined in the installer.xml
     configuration file. The idea is to provide genericity for
     controlling what the UI of the installer looks like, thus
@@ -397,7 +482,7 @@ class GuiViewer(QObject, BaseViewer):
     """
     responseSignal = QtCore.pyqtSignal(dict)
 
-    def __init__(self, confname=''):
+    def __init__(self, confname = None):
         """
         Setup the Gui Elem according to 2 categories,
         1. GuiDraws, 2. Customised Slots.
@@ -411,26 +496,39 @@ class GuiViewer(QObject, BaseViewer):
         self.mMoreInputs = {}
         self.mGuiRootWidget = None
         self.mGuiRootSignals = []
+
+        # parse the configuration as well as setup the GUI components
         if confname:
             self.mUiConfDict = ConvertXmlToDict(confname)
             self.__parseConf(self.mUiConfDict)
         else:
             self.mConfDict = self.mDefConfig.getSettings('gui_viewer')
             self.__parseConf(self.mConfDict['gui_viewer'])
+
+        # setup DBus Messenger after all GUI components are setup
         self.__setupMsger()
 
-        # signal once after 1000ms to do initialisation checking
-        QtCore.QTimer.singleShot(1000, self.__initialCheck)
+        # emit initialize signal to UI components which are setup to receive them
+        self.__emitInitSignal()
 
     def __setupMsger(self):
-        # check the DefConfig, and create mMsger as the dbus client
+        """
+        get the DefConfig, and create mMsger as the dbus client with the root widget
+        and self.response callback function
+        """
         conf = self.mDefConfig.getSettings(flatten=True)
         self.mMsger = QtDbusMessenger(conf, self.mGuiRootWidget, self.response)
+
+    def checkDbusConn(self):
+        return self.mMsger.hasValidDbusConn()
 
     ###########################################################################
     # PyQt GUI related
     ###########################################################################
     def __parseConf(self, confdict):
+        """
+        Parsed the XML configuration from /etc/installer.xml or installer.ui
+        """
         if 'app_name' in confdict:
             self.mAppName = confdict['app_name']
         if 'ui' in confdict  and confdict['ui']['version'] == "4.0":
@@ -441,39 +539,40 @@ class GuiViewer(QObject, BaseViewer):
                 # starting from top level widget
                 self.__setupUI(confdict['ui']['widget'])
             if 'slots' in confdict['ui']:
-                # validate the slots for the top most widget/application
-                ret = self.__validateSlots(confdict['ui']['slots'])
+                # validate the Ui slots for the top most widget/application
+                ret = self.__validateUiSlots(confdict['ui']['slots'])
             if ret and 'connections' in confdict['ui']:
+                # finally setup Qt signals and slots
                 self.__setupConnection(confdict['ui']['connections']['connection'])
 
     def __validateCustomWidget(self, confdict):
-        # The custom widgets is really used for defining custom widgets
-        # for the Qt Designer system.
-        #
-        # Probably just do checking or validating here to ensure that
-        # the program can be executed in sync according to QtDesigner's
-        # .UI configuration file's xml definitions, for example
-        #
-        #     <customwidgets>
-        #         <customwidget>
-        #             <class>QProcessSlot</class>
-        #             <extends>QWidget</extends>
-        #             <header>qprocessslot.h</header>
-        #             <container>1</container>
-        #             <slots>
-        #                 <signal>processComplete()</signal>
-        #                 <slot>process()</slot>
-        #             </slots>
-        #         </customwidget>
-        #     </customwidgets>
-        #
-        # class = the custom class (should exist in GuiDraw's subclasses)
-        # extends = we can check custom class to see if it is an instance of extends class
-        # header = suppose to be the C header file that defines the class, ignored here
-        # container = true or false
-        # slots = defines the signal name and slot method for the custom class,
-        #         we must check if these signals/slots are available in our python class
-        #
+        """
+        The custom widgets is really used for defining custom widgets for the Qt Designer system.
+
+        Probably just do checking or validating here to ensure that
+        the program can be executed in sync according to QtDesigner's
+        .UI configuration file's xml definitions, for example
+
+            <customwidgets>
+                <customwidget>
+                    <class>QProcessSlot</class>
+                    <extends>QWidget</extends>
+                    <header>qprocessslot.h</header>
+                    <container>1</container>
+                    <slots>
+                        <signal>processComplete()</signal>
+                        <slot>process()</slot>
+                    </slots>
+                </customwidget>
+            </customwidgets>
+
+        class = the custom class (should exist in GuiDraw's subclasses)
+        extends = we can check custom class to see if it is an instance of extends class
+        header = suppose to be the C header file that defines the class, ignored here
+        container = true or false
+        slots = defines the signal name and slot method for the custom class,
+                we must check if these signals/slots are available in our python class
+        """
         def check_custom_widget(cconf):
             def get_all_subclasses(c):
                 all_subclasses = []
@@ -510,7 +609,10 @@ class GuiViewer(QObject, BaseViewer):
                 return False
         return True
 
-    def __setupUI(self, confdict, parent=None):
+    def __setupUI(self, confdict, parent = None):
+        """
+        Setup the UI hierarchical xml elements specified in QtDesigner ui file
+        """
         # if root element, ie. no parent, setup specific way
         if parent is None:
             # set the root Gui elem
@@ -567,8 +669,10 @@ class GuiViewer(QObject, BaseViewer):
                                 _logger.warning('Warning: parsing unrecognised GUI XML entry[{}]: {}'.format(k, entry[k]))
                                 # raise RuntimeError('Error Parsing the GUI Xml')
 
-    def __validateSlots(self, confdict):
-        # Validate that the root widget has the appropriate signal defined.
+    def __validateUiSlots(self, confdict):
+        """
+        Validate that the root widget has the appropriate signal defined.
+        """
         for k, v in confdict.items():
             if k == 'signal':
                 if isinstance(v, dict):
@@ -581,34 +685,35 @@ class GuiViewer(QObject, BaseViewer):
             return False
 
     def __setupConnection(self, confdict, parent=None):
-        # Loop the connections, and setup the signal and slots designed in QtDesigner
-        #
-        # For example,
-        #     <connections>
-        #         <connection>
-        #             <sender>pushButtonCmd</sender>
-        #             <signal>clicked()</signal>
-        #             <receiver>progressBarStatus</receiver>
-        #             <slot>update()</slot>
-        #             <hints>
-        #                 <hint type="sourcelabel">
-        #                     <x>590</x>
-        #                     <y>438</y>
-        #                 </hint>
-        #                 <hint type="destinationlabel">
-        #                     <x>590</x>
-        #                     <y>469</y>
-        #                 </hint>
-        #             </hints>
-        #         </connection>
-        #     </connections>
-        #
-        # sender = the name of the Gui Element
-        # signal = the signal name
-        # receiver = the object that contains the Slot() method
-        # slot = the actual method name
-        # hints are for QtDesigner graphics and are ignored here
-        #
+        """
+        Traverse the connections xml tags, and setup the signal and slots specified in QtDesigner
+
+        For example,
+            <connections>
+                <connection>
+                    <sender>pushButtonCmd</sender>
+                    <signal>clicked()</signal>
+                    <receiver>progressBarStatus</receiver>
+                    <slot>update()</slot>
+                    <hints>
+                        <hint type="sourcelabel">
+                            <x>590</x>
+                            <y>438</y>
+                        </hint>
+                        <hint type="destinationlabel">
+                            <x>590</x>
+                            <y>469</y>
+                        </hint>
+                    </hints>
+                </connection>
+            </connections>
+
+        sender = the name of the Gui Element
+        signal = the signal name
+        receiver = the object that contains the Slot() method
+        slot = the actual method name
+        hints = QtDesigner graphics parameters and are ignored here
+        """
         def setup_signals(cfdict):
             if cfdict['sender'] in GuiDraw.clsGuiDraws.keys():
                 sender = GuiDraw.clsGuiDraws[cfdict['sender']]
@@ -631,34 +736,13 @@ class GuiViewer(QObject, BaseViewer):
         elif isinstance(confdict, XmlDict):
             setup_signals(confdict)
 
-
-
-    ###########################################################################
-    # GuiViewer flow control related
-    ###########################################################################
-    def __initialCheck(self):
-        msgbox = self.mGuiRootWidget.findChild(QMessageDialog, 'msgbox')
-        msgbox.setMessage('NoDbus')
-        # 1. Check whether the dbus connection and interface is valid
-        if not self.mMsger.hasValidDbusConn():
-            # the system does not have a valid DBus Session or dbus interface
-            msgbox.clearCheckFlags()
-            msgbox.setCheckFlags({'NoDbus': True})
-            msgbox.setModal(False)
-            msgbox.display(True) # _displayMessage(self.mGuiRootWidget, 'NoDbus') # non modal dialog
-            _logger.critical('DBus session bus or installer dbus server not available!!! Retrying...')
-            QtCore.QTimer.singleShot(1000, self.__initialCheck)
-            return
-        else:
-            msgbox.setCheckFlags({'NoDbus': False}) # _displayMessage(self.mGuiRootWidget, 'NoDbus', hide=True)
-            msgbox.display(False)
-            msgbox.clearCheckFlags()
-            msgbox.clearMessage()
-
-        # Finally, emit the signals defined for the root gui element, passing
-        # the viewer reference to the QProcessSlots, allowing them to
-        # to setup their request signal to viewer's request. As well as start
-        # the web crawling and storage discovery
+    def __emitInitSignal(self):
+        """
+        (Last Step) Emit the signals defined for the root gui element, passing
+        the viewer reference to the QProcessSlots, allowing GUI elements to
+        to setup their request signal to viewer's request. As well as start
+        the web crawling and storage discovery
+        """
         for s in self.mGuiRootSignals:
             signalName = re.sub('\(.*\)', '', s)
             if hasattr(self.mGuiRootWidget, signalName):
@@ -666,6 +750,11 @@ class GuiViewer(QObject, BaseViewer):
                 getattr(self.mGuiRootWidget, signalName)[dict].emit({'viewer': self})
                 _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
 
+
+
+    ###########################################################################
+    # GuiViewer flow control related
+    ###########################################################################
     def setResponseSlot(self, senderSlot):
         """
         setup responseSignal to connect back to sender's resultSlot() allowing
@@ -744,7 +833,6 @@ class GuiViewer(QObject, BaseViewer):
 
             # Show/Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lineRescueServer').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'textOutput').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()
@@ -795,9 +883,11 @@ class GuiViewer(QObject, BaseViewer):
                 # clear the event before sending message over to dbus
                 self._clearEvent()
                 _logger.debug('send cmd via DBus: {}'.format(self.mCmd))
-                return self.mMsger.sendMsg(self.mCmd) 
+                return self.mMsger.sendMsg(self.mCmd)
             else:
                 raise TypeError('cmd must be in a dictionary format')
+        except QDBusError as err:
+            _logger.info('DBus Error: {}'.format(err))
         except Exception as ex:
             _logger.info('Error: {}'.format(ex))
         return False
@@ -831,9 +921,10 @@ class GuiViewer(QObject, BaseViewer):
         retResult = {}
         retResult.update(self._unflatten(result))
         if self._parseResult(retResult):
-            _logger.debug('DBus signaled response: {}'.format(retResult))
+            _logger.debug('Send DBus signaled response: {} to corresponding GUI component slot'.format(retResult))
             self.responseSignal.emit(retResult)
         else:
+            _logger.debug('Filtered out DBus signaled response: {}'.format(retResult))
             pass
 
     def _parseResult(self, response):
@@ -841,29 +932,14 @@ class GuiViewer(QObject, BaseViewer):
         # recognizable dictionary to send to the receiving slots
 
         # extract the result, and parse the result from server
-        if isinstance(response, dict):
-            if 'user_request' in response.keys():
-                # if it is a user_request, then get user inputs using GUI objects
-                self._getUserInput(response.pop('user_request'))
-                return False
-            # still processings, and allow the QProcessSlot to decide what to do next
-            elif response['status'] == 'processing':
-                return True
-            elif response['status'] == 'success':
-                return True
-            elif response['status'] == 'failure':
+        if isinstance(response, dict) and 'status' in response:
+            if response['status'] in ['processing', 'success', 'failure']:
                 return True
         return False
 
-    def _getUserInput(self, userRequest):
-        # should update GUI element or call GUI Dialogue Boxes to get user input
-#         userResponse = {}
-#         self.mMoreInputs.clear()
-#         self.mMoreInputs = {'user_response': userResponse}
-        pass
-
     def queryResult(self):
         return self.mMsger.getResult()
+
 
 
 def guiview():
@@ -871,7 +947,7 @@ def guiview():
     sighdl = SignalHandler(app)
     sighdl.activate([signal.SIGTERM, signal.SIGUSR1], app.exit)
 
-    uifile = ''
+    uifile = None
     if os.path.isfile(sys.argv[-1]):
         uifile = sys.argv[-1]
     view = GuiViewer(uifile)
