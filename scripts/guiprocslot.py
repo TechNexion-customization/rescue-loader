@@ -359,12 +359,7 @@ class detectDeviceSlot(QProcessSlot):
         """
         Handle detect device callback slot
         """
-        if self.__checkDbus():
-            self.__checkCpuForm()
-            self.fail.emit({'NoError': True})
-        else:
-            self.fail.emit({'NoDbus': True})
-            QtCore.QTimer.singleShot(1000, self.process)
+        QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
         self._setCommand({'cmd': 'info', 'target': 'som'})
@@ -372,7 +367,11 @@ class detectDeviceSlot(QProcessSlot):
 
     def __checkDbus(self):
         if self.mViewer and hasattr(self.mViewer, 'checkDbusConn'):
-            return self.mViewer.checkDbusConn()
+            if self.mViewer.checkDbusConn():
+                self.__checkCpuForm()
+            else:
+                self.fail.emit({'NoDbus': True})
+                QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def parseResult(self, results):
         """
@@ -1410,7 +1409,7 @@ class chooseSelectionSlot(QChooseSlot):
             # issue command to copy first 33MB of target storage
             # copy the first 69632 sectors - 35,651,584 bytes out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
-                self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
                 self.request.emit(self.mCmds[-1])
                 self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
 
@@ -1575,7 +1574,7 @@ class downloadImageSlot(QProcessSlot):
             if self.mProgressBar:
                 self.progress.connect(self.mProgressBar.setValue)
 
-        _logger.warning('downloadImageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
+        _logger.warning('{}: signal sender: {}, inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
@@ -1601,11 +1600,11 @@ class downloadImageSlot(QProcessSlot):
                     self._updateDisplay()
                 else:
                     # prompt error message for incorrectly chosen URL and Storage selection
-                    self.fail.emit({'NoSelection': True, 'ask': 'retry'})
+                    self.fail.emit({'NoSelection': True, 'ask': 'continue'})
         else:
             # prompt error message for trying to interrupt flashing with other user inputs
             if self.sender().objectName() != 'detectDevice':
-                self.fail.emit({'NoInterrupt': True, 'ask': 'retry'})
+                self.fail.emit({'NoInterrupt': True, 'ask': 'continue'})
 
     def __getUrlStorageFromPick(self, pick):
         # get picked items from lstWgtSelection
@@ -1628,7 +1627,7 @@ class downloadImageSlot(QProcessSlot):
             if len(urls):
                 self.mFileUrl = urls[0]['url'][:]
             self.mTgtStorage = pick['storage'][:]
-        _logger.warning('found url: {} storage: {}'.format(self.mFileUrl, self.mTgtStorage))
+        _logger.warning('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
         # step 7: parse the result in a loop until result['status'] != 'processing'
@@ -1638,6 +1637,8 @@ class downloadImageSlot(QProcessSlot):
             self.mTimerId = self.startTimer(1000) # 1000 ms
             self.mFlashFlag = True
         else:
+            # do one last query result before killing the timer
+            self._queryResult()
             # flash job either success or failure
             self.killTimer(self.mTimerId)
             self.mFlashFlag = False
@@ -1647,18 +1648,18 @@ class downloadImageSlot(QProcessSlot):
         _logger.debug('{} validateResult: {}'.format(self.objectName(), self.mResults))
 
         # if download and flash is successful, emit success signal to go to next stage
-        if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and \
-            'status' in self.mResults and self.mResults['status'] == 'success':
-            self.progress.emit(100)
-            self.mLblRemain.setText('Remaining Time: 00:00')
-            self.mPick.update({'target': self.mTgtStorage, 'url': self.mFileUrl})
-            self.mPick.update({'flashed': True})
-            self.success.emit(self.mPick)
-            self.fail.emit({'NoError': True})
-        elif isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and \
-            'status' in self.mResults and self.mResults['status'] == 'failure':
-            self.mPick.update({'flashed': False})
-            self.success.emit(self.mPick)
+        if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults:
+            if self.mResults['status'] == 'success':
+                self.progress.emit(100)
+                self.mLblRemain.setText('Remaining Time: 00:00')
+                self.mPick.update({'url': self.mFileUrl, 'flashed': True})
+                _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                self.success.emit(self.mPick)
+                self.fail.emit({'NoError': True})
+            elif self.mResults['status'] == 'failure':
+                self.mPick.update({'url': self.mFileUrl, 'flashed': False})
+                _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                self.success.emit(self.mPick)
 
     def _updateDisplay(self):
         # show and hide some Gui elements
@@ -1696,6 +1697,7 @@ class postDownloadSlot(QProcessSlot):
         self.mLblRemain = None
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
+        self.mQRIcon = None
 
     def _queryResult(self):
         """
@@ -1739,20 +1741,20 @@ class postDownloadSlot(QProcessSlot):
                 if self.mPick['flashed']:
                     # flash succeeded
                     # gen qrcode save it in /tmp/qrcode.svg and display it before reboot
-                    _logger.info('generate qrcode from from URL {} and STORAGE {}'.format(self.mPick['url'], self.mPick['target']))
-                    self._setCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['target'], 'img_filename': '/tmp/qrcode.svg'})
+                    _logger.info('flash success: generate qrcode from from URL {}, STORAGE {}'.format(self.mPick['url'], self.mPick['storage']))
+                    self._setCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
                     self.request.emit(self.mCmds[-1])
                     # check for sdcard or emmc
-                    _logger.info('check whether target storage {} is emmc'.format(self.mPick['target']))
+                    _logger.info('flash success: check whether target storage {} is emmc'.format(self.mPick['storage']))
                     self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
                     self.request.emit(self.mCmds[-1])
                 else:
                     # flash failed
+                    _logger.info('flash failed: recover rescues system to target storage {}'.format(self.mPick['storage']))
                     # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-                    self._setCommand({'cmd': 'flash', 'tgt_filename': self.mTgtStorage, 'src_filename': '/tmp/mbr', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                    self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
                     self.request.emit(self.mCmds[-1])
                     self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
-
 
     def parseResult(self, results):
         self.mResults.clear()
@@ -1760,82 +1762,84 @@ class postDownloadSlot(QProcessSlot):
 
         # Get qrcode and display
         if results['cmd'] == 'qrcode' and results['status'] == 'success':
-            if 'svg_buffer' in results:
-                qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
-                self._findChildWidget('msgbox').setQrCode(qrIcon)
+            self.mQRIcon = True if 'svg_buffer' in results else False
 
         # Get controller info back and determine whether target storage is emmc
-        if results['cmd'] == 'info' and results['status'] == 'success':
-            # determine whether target device is an emmc, if it is, then do the mmc boot partition clearing
-            if self._isTargetEMMC(results):
-                self.progress.emit(0)
-                if 'androidthings' in self.mPick['os']:
-                    self._findChildWidget('lblInstruction').setText('Flash target emmc boot partition...')
+        if results['cmd'] == 'info':
+            if results['status'] == 'success':
+                # determine whether target device is an emmc, if it is, then do the mmc boot partition clearing
+                if self._isTargetEMMC(results):
+                    self.progress.emit(0)
+                    if 'androidthings' in self.mPick['os']:
+                        self._findChildWidget('lblInstruction').setText('Flash target emmc boot partition...')
+                    else:
+                        self._findChildWidget('lblInstruction').setText('Clearing target emmc boot partition...')
+                    # 1. disable mmc boot partition 1 boot option
+                    # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
+                    _logger.debug('issue command to enable emmc:{} boot partition with write access'.format(self.mPick['storage']))
+                    self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                                      'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
+                    self.request.emit(self.mCmds[-1])
                 else:
-                    self._findChildWidget('lblInstruction').setText('Clearing target emmc boot partition...')
-                # 1. disable mmc boot partition 1 boot option
-                # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
-                _logger.debug('issue command to enable emmc boot partition with write access'.format(self.mPick['target']))
-                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
-                                  'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['target']})
-                self.request.emit(self.mCmds[-1])
-            else:
-                # if not emmc, don't do anything, but emit complete and reboot
-                self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
-        elif results['cmd'] == 'info' and results['status'] == 'failure':
-            # even if cmd 'info' to query target storage failed, still emit complete and reboot
-            self.fail.emit({'NoError': True, 'NoTgtEmmcCheck': True, 'ask': 'reboot'})
+                    # if not emmc, don't do anything, but emit complete and reboot
+                    self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
+            elif results['status'] == 'failure':
+                # even if cmd 'info' to query target storage failed, still emit complete and reboot
+                self.fail.emit({'NoError': True, 'NoTgtEmmcCheck': True, 'ask': 'reboot'})
 
         # target emmc has been set to writable
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'readonly':
             if results['status'] == 'success':
                 if 'androidthings' in self.mPick['os']:
                     _logger.debug('issue command to flash androidthings emmc boot partition')
-                    self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['target'] + 'boot0'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0'})
                     self.request.emit(self.mCmds[-1])
                 else:
                     # 2. clear the mmc boot partition
-                    # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['target'] + 'boot0'}
-                    _logger.debug('issue command to clear {} boot partition'.format(self.mPick['target']))
-                    self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['target'] + 'boot0'})
+                    # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
+                    _logger.debug('issue command to clear {} boot partition'.format(self.mPick['storage']))
+                    self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'})
                     self.request.emit(self.mCmds[-1])
-            else:
+            elif results['status'] == 'failure':
                 # failed to disable mmc write boot partition option
-                self.fail.emit({'NoEmmcWrite': True, 'ask': 'reboot'})
+                self.fail.emit({'NoEmmcWrite': True, 'ask': 'interrupt'})
 
         # target emmc boot option disabled
-        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and self.mResults['config_id'] == 'bootpart':
+        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
             if self.mResults['status'] == 'success':
                 # Final notification, all successful, reboot
-                self.fail.emit({'NoError': True, 'Complete': True, 'ask': 'reboot'})
+                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
             elif self.mResults['status'] == 'failure':
                 # failed to set emmc boot option, still reboot
                 self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
 
-        if results['cmd'] == 'flash' and results['status'] == 'processing':
-            _logger.debug('start timer to update progressbar for clearing emmc {} boot partition'.format(self.mPick['target']))
-            self.mTimerId = self.startTimer(1000) # 1000 ms
-            self.mFlashFlag = True
-        elif results['cmd'] == 'flash' and (results['status'] == 'success' or results['status'] == 'failure'):
-            # flash job either success or failure, stop the timer
-            self.killTimer(self.mTimerId)
-            self.mFlashFlag = False
-            if results['src_filename'] == '/tmp/mbr':
-                # recover rescue system success or failure
-                if results['status'] == 'success':
-                    self.fail.emit({'NoFlash': True, 'ask': 'reboot'})
+        if results['cmd'] == 'flash':
+            if results['status'] == 'processing':
+                _logger.debug('start timer to update progressbar for clearing emmc {} boot partition'.format(self.mPick['storage']))
+                self.mTimerId = self.startTimer(1000) # 1000 ms
+                self.mFlashFlag = True
+            elif (results['status'] == 'success' or results['status'] == 'failure'):
+                # do one last query result before killing the timer
+                self._queryResult()
+                # flash job either success or failure, stop the timer
+                self.killTimer(self.mTimerId)
+                self.mFlashFlag = False
+                if results['src_filename'] == '/tmp/rescue.img':
+                    # recover rescue system success or failure
+                    if results['status'] == 'success':
+                        self.fail.emit({'NoFlash': True, 'ask': 'reboot'})
+                    else:
+                        # critical error, cannot recover the boot image and also failed to download and flash
+                        self.fail.emit({'NoFlash': True, 'ask': 'halt'})
                 else:
-                    # critical error, cannot recover the boot image and also failed to download and flash
-                    self.fail.emit({'NoFlash': True, 'ask': 'halt'})
-            else:
-                # target emmc has been flashed with zeros or failed, so anyway
-                # 3. set the mmc boot partition option
-                # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
-                _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
-                self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
-                                  'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
-                                  'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['target']})
-                self.request.emit(self.mCmds[-1])
+                    # target emmc has been flashed with zeros or failed, so anyway
+                    # 3. set the mmc boot partition option
+                    # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
+                    _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
+                    self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                                      'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                                      'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
+                    self.request.emit(self.mCmds[-1])
 
     def _isTargetEMMC(self, result):
         def parse_target_controller(res):
@@ -1858,7 +1862,7 @@ class postDownloadSlot(QProcessSlot):
         for tgt in lstTargets:
             sysname, sysno = tgt[1]['sys_name'].split(':', 1)
             nodepath = tgt[1]['driver'] + sysname.lstrip(tgt[1]['subsystem'])
-            if nodepath in self.mPick['target'] and tgt[1]['type'] == 'MMC':
+            if nodepath in self.mPick['storage'] and tgt[1]['type'] == 'MMC':
                 return True
         return False
 
@@ -1939,10 +1943,12 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('Cannot connect to TechNexion Rescue Server!!! Retrying...')
         if 'NoDLFile' in self.mErrors:
-            # add NoDLFile icon
             self.mMsgBox.setMessage('NoDLFile')
+            _logger.warning('No matching file from TechNexion Rescue Server.')
+        if 'NoCrawl' in self.mErrors:
+            self.mMsgBox.setMessage('NoCrawl')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.warning('No Downloadable File from TechNexion Rescue Server.')
+            _logger.warning('Not all crawling of the TechNexion Rescue Service succeeded.')
         if 'NoLocal' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoLocal')
@@ -1985,11 +1991,19 @@ class processErrorSlot(QProcessSlot):
         if 'NoTgtEmmcCheck' in self.mErrors:
             # emmc boot partition option error, not critical.
             self.mMsgBox.setMessage('Complete')
-            _logger.warning('Flash complete, checking target storage for emmc failed...')
+            _logger.warning('Flash complete, ignore checking target storage for emmc failed...')
         if 'NoTgtEmmc' in self.mErrors:
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
-            _logger.warning('Flash complete, target storage not emmc...')
+            _logger.warning('Flash complete, ignore target storage not emmc...')
+        if 'Complete' in self.mErrors:
+            # target is not emmc.
+            self.mMsgBox.setMessage('Complete')
+            _logger.warning('Flash complete, reboot the system into new OS...')
+        if 'QRCode' in self.mErrors:
+            self.mMsgBox.setMessage('QRCode')
+            _logger.warning('Set QRCode for the download files')
+
 
         if self.mAsk:
             self.mMsgBox.setModal(True) # modal dialog
@@ -2011,6 +2025,18 @@ class processErrorSlot(QProcessSlot):
                         subprocess.check_call(['systemctl', 'restart', 'guiclientd.service'])
                     except:
                         raise
+            elif self.mAsk == 'interrupt':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
+                if ret == QtGui.QDialog.Rejected:
+                    try:
+                        # reset/reboot the system
+                        subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
+                    except:
+                        raise
+            elif self.mAsk == 'continue':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
         else:
             self.mMsgBox.setModal(False)
             self.mMsgBox.display(self.mDisplay) # non modal dialog
@@ -2260,6 +2286,7 @@ class QMessageDialog(QtGui.QDialog):
                     lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0')
 
                 if lbl:
+                    _logger.debug('set background icon {} to {}'.format(res, lbl))
                     lbl.setPixmap(QtGui.QIcon(res).pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio))
 
     def clearBackgroundIcons(self):
@@ -2279,7 +2306,6 @@ class QMessageDialog(QtGui.QDialog):
 
             # loop all current set flags
             for key, flag in self.mCheckFlags.items():
-
                 # setup which label to show
                 lbl = None
                 if key == 'NoIface':
@@ -2301,7 +2327,9 @@ class QMessageDialog(QtGui.QDialog):
                         pixmap = QtGui.QIcon(':res/images/tick.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
 
                 # set the label pixmap
-                if lbl and pixmap: lbl.setPixmap(pixmap)
+                if lbl and pixmap:
+                    _logger.debug('set label {} for {} with {}'.format(lbl, key, pixmap))
+                    lbl.setPixmap(pixmap)
 
     def clearCheckFlags(self):
         if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
@@ -2316,27 +2344,31 @@ class QMessageDialog(QtGui.QDialog):
         _logger.debug('setup message box with msgtype: {}'.format(msgtype))
 
         if msgtype in ['NoCable', 'NoIface', 'NoServer']: # 'NoNic'
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoCable': ':res/images/no_cable.svg', \
                                      'NoIface': ':res/images/no_iface.svg', \
                                      'NoServer': ':res/images/no_server.svg'}) # {'NoNIC': ':res/images/no_nic.svg'}
         elif msgtype == 'NoCpuForm':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoCpuForm': ':res/images/no_cpuform.svg'})
         elif msgtype == 'NoDbus':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoDbus': ':res/images/no_dbus.svg'})
         elif msgtype in ['NoStorage', 'NoLocal', 'NoPartition']:
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoStorage': ':res/images/no_storage.svg'})
         elif msgtype == 'NoDLFile':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
-            self.setTitle("System Check")
-            self.setContent("No valid file to download from TechNexion rescue server.")
+            self.setTitle("Server Check")
+            self.setContent("No matching file to download from TechNexion rescue server.")
+        elif msgtype == 'NoCrawl':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("Server Check")
+            self.setContent("Not all files are explored from TechNexion rescue server.")
         elif msgtype == 'NoSelection':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
@@ -2352,28 +2384,36 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoEmmcWrite':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
-            self.setContent("Cannot set writable to emmc boot partition.")
+            self.setContent("Cannot set writable to emmc boot partition.\nRestart Rescue to try again.")
         elif msgtype == 'NoEmmcBoot':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("Cannot set emmc boot options.")
         elif msgtype == 'Complete':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
             self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
         elif msgtype == 'Interrupt':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
             self.setContent("Do you want to stop?")
+        # special qrcode setting
+        if msgtype == 'QRCode':
+            qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
+            self.setQrCode(qrIcon)
 
     def setAskButtons(self, asktype):
         if asktype == 'reboot':
             self.setButtons({'accept': 'REBOOT'})
         elif asktype == 'retry':
             self.setButtons({'accept': 'RETRY'})
+        elif asktype == 'continue':
+            self.setButtons({'accept': 'CONTINUE'})
         elif asktype == 'interrupt':
-            self.setButtons({'accept': 'NO', 'reject': 'STOP'})
+            self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
 
     def clearMessage(self):
         self.clearIcon()
