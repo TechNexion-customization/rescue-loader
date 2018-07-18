@@ -127,6 +127,8 @@ def main():
 
     menuResult = {}
     tgtResult = {}
+    copyResult = {}
+    dlResult = {}
 
     # step 0: find out the module and baseboard of the target device
     print('Find target device cpu, and form-factor...')
@@ -210,24 +212,46 @@ def main():
     while True:
         yn = input("[Y]es/[N]o ([Q]uit)? ")
         if yn.lower() == 'yes' or yn.lower() == 'y':
+            # step 7: backup rescue system on target first
+            print('Backup Rescue System on Target Storage first...')
+            copyResult.clear()
+            cliBck = CliViewer()
+            bckparam = {'cmd': 'flash', 'src_filename': targets[int(tgtNum)][2]['device_node'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'}
+            cliBck.request(bckparam)
+            copyResult.update(cliBck.getResult())
+            del cliBck
             break
         elif yn.lower() == 'no' or yn.lower() == 'n' or yn.lower() == 'quit' or yn.lower() == 'q':
             startstop_guiclientd(1)
             exit(1)
 
-    # step 7: parse the result in a loop until result['status'] != 'processing'
+    # step 8: parse the result in a loop until result['status'] != 'processing'
     endEvent = Event()
     endEvent.clear()
     resultThread = Thread(name='ResultThread', target=loopResult, args=(cliDl, endEvent))
     resultThread.start()
     cliDl.request(dlparam)
+    dlResult.update(cliDl.getResult())
     time.sleep(1)
     endEvent.set()
     resultThread.join()
-    print('Flash complete...', end=((' '*60) + '\n'))
     del cliDl
+    if dlResult['status'] == 'success':
+        print('Flash complete...', end=((' '*60) + '\n'))
+    else:
+        # step 9: restore rescue system on target storage if failed to flash
+        print('Flash failed, recover rescue system...', end=((' '*60) + '\n'))
+        copyResult.clear()
+        cliRecover = CliViewer()
+        recoverparam = {'cmd': 'flash', 'tgt_filename': targets[int(tgtNum)][2]['device_node'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'}
+        cliRecover.request(recoverparam)
+        copyResult.update(cliRecover.getResult())
+        del cliRecover
+        print('Exit installer now, please try again later...')
+        startstop_guiclientd(1)
+        exit(1)
 
-    # step 8: enable/disable the mmc boot option, and clear the boot partition if it is disabled
+    # step 10: enable/disable the mmc boot option, and clear the boot partition if it is disabled
     if 'androidthings' not in dlparam['dl_url']:
         print('Disable mmc boot partition readonly...')
         # python3 view.py {config mmc -c readonly -s enable/disable -n 1 /dev/mmcblk2}
@@ -260,7 +284,7 @@ def main():
     cliCfg.request(cfgparam)
     del cliCfg
 
-    # step 9: a message to tell user what to do next
+    # step 11: a message to tell user what to do next
     print('Please set the boot jumper to BOOT MODE and reboot your board...')
 
 
