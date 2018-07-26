@@ -1073,6 +1073,8 @@ class chooseBoardSlot(QChooseSlot):
             self._parseResultList(inputs)
             self._extractUIList()
             _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, None)
+            if self.mBoardUIList is not None and len(self.mBoardUIList) == 1:
+                self.finish.emit()
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage' or \
@@ -1170,6 +1172,8 @@ class chooseDisplaySlot(QChooseSlot):
             self._parseResultList(inputs)
             self._extractUIList()
             _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, None)
+            if self.mDisplayUIList is not None and len(self.mDisplayUIList) == 1:
+                self.finish.emit()
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage' or \
