@@ -1668,6 +1668,7 @@ class downloadImageSlot(QProcessSlot):
             elif self.mResults['status'] == 'failure':
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                self.fail.emit({'NoDownload': True, 'ask': 'continue'})
                 self.success.emit(self.mPick)
 
     def _updateDisplay(self):
@@ -1981,6 +1982,10 @@ class processErrorSlot(QProcessSlot):
             # serious error
             self.mMsgBox.setMessage('NoSelection')
             _logger.error('User selections are incorrect.')
+        if 'NoDownload' in self.mErrors:
+            # critical, but continue
+            self.mMsgBox.setMessage('NoDownload')
+            _logger.warning('Flashing failed!!! Restore Bootable Rescue System...')
         if 'NoFlash' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoFlash')
@@ -2386,6 +2391,10 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
             self.setContent("Please do not interrupt the download and flash progress.")
+        elif msgtype == 'NoDownload':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setTitle("Program Check")
+            self.setContent("Download and flash failed.\nClick continue to restore rescue system.")
         elif msgtype == 'NoFlash':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
