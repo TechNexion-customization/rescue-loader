@@ -1006,6 +1006,8 @@ class chooseOSSlot(QChooseSlot):
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
             try:
+                if strVersion.count('.') > 1:
+                    strVersion.replace('.', '', strVersion.count('.') - 1)
                 found = float(re.search('\d+\.\d+', strVersion).group(0))
             except:
                 found = 0.0
@@ -1014,9 +1016,10 @@ class chooseOSSlot(QChooseSlot):
         # Find newest version from the picked os
         version = 0.0
         for item in self.mVerList:
-            if self.mPick['os'] == item['os']:
-                version = parseVersion(item['ver']) if (version < parseVersion(item['ver'])) else version
-        return '{}'.format(version) if version > 0.0 else None
+            if self.mPick['os'] == item['os'] and version < parseVersion(item['ver']):
+                version = parseVersion(item['ver'])
+                retVer = item['ver']
+        return retVer if version > 0.0 else None
 
     # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
     # to get results from installerd
@@ -1612,16 +1615,16 @@ class downloadImageSlot(QProcessSlot):
                 self.fail.emit({'NoInterrupt': True, 'ask': 'continue'})
 
     def __getUrlStorageFromPick(self, pick):
-        # get picked items from lstWgtSelection
-        # Find the URL from filtered subset of the original download file list
+        filteredAttr = []
+        urls = []
+        # use picked items from lstWgtSelection to find the download URL
+        # from filtered subset of the original download file list
         for disp in pick['display']:
-            filteredAttr = []
+            filteredAttr.clear()
             filteredAttr.append(disp)
             filteredAttr.extend(v for k, v in pick.items() if (v is not None and k != 'storage' and k != 'display'))
             filteredList = self._findSubset(filteredAttr, self.mFileList)
-            # remove duplicates
-            #urls = list(set(f['url'] for f in filteredList if ('url' in f)))
-            urls = []
+            # remove duplicate urls from filteredList
             for f in filteredList:
                 if len(urls):
                     for l in urls:
@@ -1629,9 +1632,10 @@ class downloadImageSlot(QProcessSlot):
                             urls.append(f)
                 else:
                     urls.append(f)
-            if len(urls):
-                self.mFileUrl = urls[0]['url'][:]
-            self.mTgtStorage = pick['storage'][:]
+        # if we have an unique filtered file list, get the file url and storage
+        if len(urls):
+            self.mFileUrl = urls[0]['url'][:]
+        self.mTgtStorage = pick['storage'][:]
         _logger.warning('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
