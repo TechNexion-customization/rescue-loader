@@ -1448,6 +1448,11 @@ class chooseSelectionSlot(QChooseSlot):
             # send the mPick to downloadImage procslot
             if all(p is not None for p in self.mPick if (key in self.mPick for key in ['os', 'board', 'display', 'storage'])):
                 if hasattr(self._findChildWidget('downloadImage'), 'processSlot'):
+                    try:
+                        self.chosen.disconnect()
+                        # disconnect chosen signal first
+                    except:
+                        _logger.debug("disconnect chosen signal first")
                     self.chosen.connect(getattr(self._findChildWidget('downloadImage'), 'processSlot'))
                     self.chosen.emit(self.mPick)
 
