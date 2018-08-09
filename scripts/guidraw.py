@@ -352,6 +352,8 @@ class GuiDraw(object):
                 elif prop['name'] == 'alignment':
                     # Alignment
                     qobj.setAlignment(_getAlignment(prop['set']))
+                elif prop['name'] == 'wordWrap':
+                    qobj.setWordWrap(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'readOnly':
                     qobj.setReadOnly(True if prop['bool'] == 'true' else False)
 

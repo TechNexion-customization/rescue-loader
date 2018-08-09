@@ -528,7 +528,7 @@ class GuiViewer(QObject, BaseViewer):
     """
     responseSignal = QtCore.pyqtSignal(dict)
 
-    def __init__(self, confname = None):
+    def __init__(self, confname = None, orient = 'landscape'):
         """
         Setup the Gui Elem according to 2 categories,
         1. GuiDraws, 2. Customised Slots.
@@ -544,12 +544,12 @@ class GuiViewer(QObject, BaseViewer):
         self.mGuiRootSignals = []
 
         # parse the configuration as well as setup the GUI components
-        if confname:
+        if os.path.isfile(os.path.realpath(confname) + '/' + confname):
             self.mUiConfDict = ConvertXmlToDict(confname)
             self.__parseConf(self.mUiConfDict)
         else:
             self.mConfDict = self.mDefConfig.getSettings('gui_viewer')
-            self.__parseConf(self.mConfDict['gui_viewer'])
+            self.__parseConf(self.mConfDict['gui_viewer'][orient])
 
         # setup DBus Messenger after all GUI components are setup
         self.__setupMsger()
@@ -861,11 +861,8 @@ class GuiViewer(QObject, BaseViewer):
             iconLogo = QtGui.QIcon(':/res/images/tn_logo.svg')
             iconSize = iconLogo.actualSize(QtCore.QSize(100, 100))
             sizeLogo = QtCore.QSize(self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').size())
-            logoH = int(scnRect.height() / 4) if (scnRect.height() / sizeLogo.height()) < 4 else sizeLogo.height()
-            logoW = int(iconSize.width() * (logoH / iconSize.height()))
-            if (logoW / scnRect.width()) < 3:
-                logoW = int(scnRect.width() / 3)
-                logoH = int(iconSize.height() * (logoW / iconSize.width()))
+            logoW = sizeLogo.width()
+            logoH = int(iconSize.height() * (logoW / iconSize.width()))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').setPixmap(iconLogo.pixmap(logoW, logoH))
 
             # work out the proportion to the selection icons
@@ -878,12 +875,9 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
 
             # Show/Hide additional Widgets
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lineRescueServer').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDoYouKnow').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnNext').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
@@ -993,11 +987,10 @@ def guiview():
     sighdl = SignalHandler(app)
     sighdl.activate([signal.SIGTERM, signal.SIGUSR1], app.exit)
 
-    uifile = None
-    if os.path.isfile(sys.argv[-1]):
-        uifile = sys.argv[-1]
-    view = GuiViewer(uifile)
-    view.show(app.desktop().screenGeometry())
+    geo = app.desktop().screenGeometry()
+    orient = 'landscape' if geo.width() > geo.height() else 'portrait'
+    view = GuiViewer(sys.argv[-1], orient)
+    view.show(geo)
 
     ret = app.exec_()
     sighdl.deactivate()
