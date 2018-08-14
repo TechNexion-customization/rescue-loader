@@ -100,7 +100,8 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                     if 'id_bus' in row and row['id_bus'] != 'None':
                         resName = ":/res/images/storage_{}.svg".format(row['id_bus'].lower())
                     else:
-                        if int(row['size']) == 3825205248:
+                        # determine eMMC vs SDCard
+                        if 'MMC_TYPE=MMC' in row['uevent']:
                             resName = ":/res/images/storage_emmc.svg"
                         else:
                             resName = ":/res/images/storage_sd.svg"
@@ -747,6 +748,7 @@ class scanStorageSlot(QProcessSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
+        self.mControllers = []
         self.mResults = []
         self.mTimerId = None
         self.mFlag = False
@@ -762,11 +764,11 @@ class scanStorageSlot(QProcessSlot):
                 self.__detectStorage()
 
     def __detectStorage(self):
-        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
+        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
         self.request.emit(self.mCmds[-1])
 
     def parseResult(self, results):
-        def parse_target_list(res):
+        def parse_target_list(res, attrs):
             # Parse the target storage device info
             def findAttrs(keys, dc):
                 # find in dictionary and dictionary within a dictionary
@@ -778,10 +780,21 @@ class scanStorageSlot(QProcessSlot):
                             yield ret
             data = {}
             for k, v in res.items():
-                if isinstance(v, dict):
-                    data.update({k: {att[0]:att[1] for att in findAttrs(['device_node', 'device_type', 'size', 'id_bus', 'id_serial', 'id_model'], v)}})
-            return [(i, k, v) for i, (k, v) in enumerate(data.items())]
+                if isinstance(v, dict) and 'device_type' in v and v['device_type'] != 'partition':
+                    data.update({k: {att[0]:att[1] for att in findAttrs(attrs, v)}})
+            #return [(i, k, v) for i, (k, v) in enumerate(data.items())]
+            return [(k, v) for k, v in data.items()]
 
+        # query emmc disk if query emmc controller successful
+        if 'cmd' in results and results['cmd'] == 'info' and \
+           'target' in results and results['target'] == 'emmc' and \
+           'location' in results and results['location'] == 'controller' and \
+           'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
+            self.mControllers = parse_target_list(results, ['device_node', 'device_type', 'serial', 'uevent'])
+            self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
+            self.request.emit(self.mCmds[-1])
+
+        # query hd disk if query emmc disk successful
         if 'cmd' in results and results['cmd'] == 'info' and \
            'target' in results and results['target'] == 'emmc' and \
            'location' in results and results['location'] == 'disk' and \
@@ -790,17 +803,24 @@ class scanStorageSlot(QProcessSlot):
             self.request.emit(self.mCmds[-1])
 
         # step 5: ask user to choose the target to flash
-        listTarget = parse_target_list(results)
-        if len(listTarget):
-            for tgt in listTarget:
-                # 'name', 'node path', 'disk size'
-                self.mResults.append({'name': tgt[1], \
-                                      'path': tgt[2]['device_node'], \
-                                      'device_type': tgt[2]['device_type'], \
-                                      'size':int(tgt[2]['size']) * 512, \
-                                      'id_bus': tgt[2]['id_bus'] if 'id_bus' in tgt[2] else 'None', \
-                                      'id_serial': tgt[2]['id_serial'] if 'id_serial' in tgt[2] else 'None', \
-                                      'id_model': tgt[2]['id_model'] if 'id_model' in tgt[2] else 'None'})
+        if 'cmd' in results and results['cmd'] == 'info' and \
+            'target' in results and (results['target'] == 'emmc' or results['target'] == 'hd') and \
+            'location' in results and results['location'] == 'disk' and \
+            'status' in results and results['status'] == "success":
+            listTarget = parse_target_list(results, ['device_node', 'device_type', 'serial', 'id_bus', 'size', 'uevent'])
+            if len(listTarget):
+                for tgt in listTarget:
+                    # 'name', 'node path', 'disk size'
+                    self.mResults.append({'name': tgt[0], \
+                                          'path': tgt[1]['device_node'], \
+                                          'device_type': tgt[1]['device_type'], \
+                                          'size':int(tgt[1]['size']) * 512, \
+                                          'id_bus': tgt[1]['id_bus'] if 'id_bus' in tgt[1] else None, \
+                                          'uevent': tgt[1]['uevent'] if 'uevent' in tgt[1] else None})
+                    # find matching serial from the controllers
+                    for ctrl in self.mControllers:
+                        if tgt[1]['serial'] == ctrl[1]['serial']:
+                            self.mResults[-1].update({'uevent': ctrl[1]['uevent']})
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
@@ -1398,6 +1418,7 @@ class chooseStorageSlot(QChooseSlot):
                                   'device_type': item['device_type'], \
                                   'size': item['size'], \
                                   'id_bus': item['id_bus'], \
+                                  'uevent': item['uevent'], \
                                   'disable': False} for item in self.mResults)
         _logger.debug('chooseStorage: mStorageUIList: {}'.format(self.mStorageUIList))
 

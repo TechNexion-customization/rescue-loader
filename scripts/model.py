@@ -451,7 +451,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
                                                'sys_path': d.sys_path, \
                                                'attributes': self.__getDevAttributes(d), \
                                                'id_bus': d.get('ID_BUS'), \
-                                               'id_serial': d.get('ID_SERIAL'), \
+                                               'serial': d.get('ID_SERIAL'), \
                                                'id_model': d.get('ID_MODEL')}})
                 for p in self.mPartitions:
                     if p.parent == d:
