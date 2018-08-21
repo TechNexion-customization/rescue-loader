@@ -681,16 +681,26 @@ class crawlLocalfsSlot(QProcessSlot):
         """
         Handle crawling xz files from inputs, i.e. lists of mount points
         """
+        _logger.debug('crawlLocalfs: signal sender: {} inputs: {}'.format(self.sender().objectName(), inputs))
         if self.sender().objectName() == 'scanPartition':
+            mount_points = []
+            # parse the returned partition results to find mount points
+            if isinstance(inputs, dict):
+                for k, v in inputs.items():
+                    if isinstance(v, dict) and 'mount_point' in v.keys():
+                        if 'mount_point' in v and v['mount_point'] != 'None':
+                            if 'media' in v['mount_point']:
+                                mount_points.append(v['mount_point'])
+
             # make up the request params
             params = {'target': socket.gethostname()}
-            if isinstance(inputs, list):
-                if len(inputs) == 0:
-                    inputs.append('~/')
+            if isinstance(mount_points, list):
+                if len(mount_points) == 0:
+                    mount_points.append('~/')
 
                 self._findChildWidget('waitingIndicator').show()
-                for path in inputs:
-                    params.update({'location': path if path.endswith('/') else (path + '/')})
+                for mntpt in mount_points:
+                    params.update({'location': mntpt if mntpt.endswith('/') else (mntpt + '/')})
                     self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
                     self.request.emit(self.mCmds[-1])
 
@@ -848,7 +858,7 @@ class scanPartitionSlot(QProcessSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
-        self.mResults = []
+        self.mResults = {}
         self.mFlag = False
 
     def process(self, inputs):
@@ -873,20 +883,18 @@ class scanPartitionSlot(QProcessSlot):
             self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
             self.request.emit(self.mCmds[-1])
 
-        # parse the returned partition results to find mount points
+        # parse the returned partitions and send them off
         if isinstance(results, dict) and 'status' in results and results['status'] == "success":
             for k, v in results.items():
-                if isinstance(v, dict) and 'mount_point' in v.keys():
-                    if 'mount_point' in v and v['mount_point'] != 'None':
-                        if 'media' in v['mount_point']:
-                            self.mResults.append(v['mount_point'])
+                if isinstance(v, dict) and 'device_type' in v.keys() and v['device_type'] == 'partition':
+                    self.mResults.update({k: v})
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
-        # Check for available storage disk in the self.mResult list
-        if isinstance(self.mResults, list) and len(self.mResults):
+        # Signal available partitions in the self.mResults dictionary
+        if isinstance(self.mResults, dict) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. crawlLocalfs
-            self.success.emit(list(set(self.mResults)))
+            self.success.emit(self.mResults)
             self.fail.emit({'NoError': True})
         else:
             self.fail.emit({'NoPartition': True})
@@ -1459,6 +1467,7 @@ class chooseSelectionSlot(QChooseSlot):
         self.mLstWgtBoard = None
         self.mLstWgtDisplay = None
         self.mUserData = None
+        self.mTotalSectors = 0
 
     def process(self, inputs):
         # Display the dynamic UI from the available list of found target storage passed in inputs
@@ -1481,9 +1490,12 @@ class chooseSelectionSlot(QChooseSlot):
         if self.sender().objectName() == 'btnFlash':
             # receive the btnFlash click signal
             # issue command to copy first 33MB of target storage
-            # copy the first 69632 sectors - 35,651,584 bytes out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
+            # copy the first 69632 sectors(35,651,584 bytes) out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
-                self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                if self.mTotalSectors == 0:
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                else:
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors/4096)*512), 'chunk_size': '32768'})
                 self.request.emit(self.mCmds[-1])
                 self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
 
@@ -1511,6 +1523,17 @@ class chooseSelectionSlot(QChooseSlot):
                 # send the self.mPick to appropriate QProcSlot so picking
                 # process can be restarted from where it is disgarded
                 self.success.emit(self.mPick)
+
+        if self.sender().objectName() == 'scanPartition':
+            # figure out the partition size to backup
+            if isinstance(inputs, dict):
+                for k, v in inputs.items():
+                    if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
+                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                        'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
+                        'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
+                            self.mTotalSectors = int(v['attributes']['start']) + int(v['attributes']['size']) + 8 # add an additional block, i.e 4096/512
+                            _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
 
     def parseResult(self, results):
         # flash command complete and the results are updated/parsed here
@@ -1653,7 +1676,7 @@ class downloadImageSlot(QProcessSlot):
             if self.mProgressBar:
                 self.progress.connect(self.mProgressBar.setValue)
 
-        _logger.warning('{}: signal sender: {}, inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
+        _logger.warning('downloadImage: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
