@@ -87,16 +87,16 @@ def findAttrs(keys, dc):
             for ret in findAttrs(keys, v):
                 yield ret
 
-# def parseTargetList(result):
-#     ret = {}
-#     for k, v in result.items():
-#         data = []
-#         if isinstance(v, dict):
-#             data.append(k)
-#             for att in findAttrs(['device_node', 'size'], v):
-#                 data.append(att)
-#         ret.update({data})
-#     return [(i, k, v) for i, (k, v) in enumerate(data)]
+def parsePartitionSize(result):
+    # parse the returned partitions and send them off
+    if isinstance(result, dict) and 'status' in result and result['status'] == "success":
+        for k, v in result.items():
+            if isinstance(v, dict) and 'device_type' in v.keys() and v['device_type'] == 'partition' and \
+                'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
+                'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
+                'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
+                return int((int(v['attributes']['start']) + int(v['attributes']['size']) + 8) / 4096 * 512) # add an additional block, i.e 4096/512
 
 def parseTargetList(result):
     data = {}
@@ -227,7 +227,15 @@ def main():
         else:
             print('Invalid Inputs')
 
-    # step 4: request for list of targets storage device
+    # step 4a: get the total number of sectors for first booting partition.
+    cliPart = CliViewer()
+    cliPart.request({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
+    tgtResult.update(cliPart.getResult())
+    del cliPart
+    partblocks = parsePartitionSize(tgtResult)
+    tgtResult.clear()
+
+    # step 4b: request for list of targets storage device
     cliTgt = CliViewer()
     cliTgt.request({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
     tgtResult.update(cliTgt.getResult())
@@ -261,7 +269,7 @@ def main():
             print('Backup Rescue System on Target Storage first...')
             copyResult.clear()
             cliBck = CliViewer()
-            bckparam = {'cmd': 'flash', 'src_filename': targets[int(tgtNum)][2]['device_node'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'}
+            bckparam = {'cmd': 'flash', 'src_filename': targets[int(tgtNum)][2]['device_node'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(partblocks), 'chunk_size': '32768'}
             cliBck.request(bckparam)
             copyResult.update(cliBck.getResult())
             del cliBck
@@ -288,12 +296,14 @@ def main():
         print('Flash failed, recover rescue system...', end=((' '*60) + '\n'))
         copyResult.clear()
         cliRecover = CliViewer()
-        recoverparam = {'cmd': 'flash', 'tgt_filename': targets[int(tgtNum)][2]['device_node'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'}
+        recoverparam = {'cmd': 'flash', 'tgt_filename': targets[int(tgtNum)][2]['device_node'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(partblocks), 'chunk_size': '32768'}
         cliRecover.request(recoverparam)
         copyResult.update(cliRecover.getResult())
         del cliRecover
-        print('Exit installer now, please try again later...')
-        startstop_guiclientd(1)
+        if 'status' in copyResult and copyResult['status'] == 'success':
+            print('Exit installer now, please try again later...')
+        else:
+            print('Critical Error, cannot restore rescue partition...')
         exit(1)
 
     # step 10: enable/disable the mmc boot option, and clear the boot partition if it is disabled
