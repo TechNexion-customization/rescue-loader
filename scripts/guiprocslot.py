@@ -1802,6 +1802,7 @@ class postDownloadSlot(QProcessSlot):
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
         self.mQRIcon = None
+        self.mTotalSectors = 0
 
     def _queryResult(self):
         """
@@ -1856,9 +1857,23 @@ class postDownloadSlot(QProcessSlot):
                     # flash failed
                     _logger.info('flash failed: recover rescues system to target storage {}'.format(self.mPick['storage']))
                     # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-                    self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                    if self.mTotalSectors == 0:
+                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                    else:
+                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors/4096)*512), 'chunk_size': '32768'})
                     self.request.emit(self.mCmds[-1])
                     self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
+
+        if self.sender().objectName() == 'scanPartition':
+            # figure out the partition size to backup
+            if isinstance(inputs, dict):
+                for k, v in inputs.items():
+                    if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
+                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                        'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
+                        'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
+                            self.mTotalSectors = int(v['attributes']['start']) + int(v['attributes']['size']) + 8 # add an additional block, i.e 4096/512
+                            _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
 
     def parseResult(self, results):
         self.mResults.clear()
@@ -1931,7 +1946,7 @@ class postDownloadSlot(QProcessSlot):
                 if results['src_filename'] == '/tmp/rescue.img':
                     # recover rescue system success or failure
                     if results['status'] == 'success':
-                        self.fail.emit({'NoFlash': True, 'ask': 'reboot'})
+                        self.fail.emit({'Restore': True, 'ask': 'reboot'})
                     else:
                         # critical error, cannot recover the boot image and also failed to download and flash
                         self.fail.emit({'NoFlash': True, 'ask': 'halt'})
@@ -2104,6 +2119,9 @@ class processErrorSlot(QProcessSlot):
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
             _logger.warning('Flash complete, ignore target storage not emmc...')
+        if 'Restore' in self.mErrors:
+            self.mMsgBox.setMessage('Restore')
+            _logger.warning('Restore complete, reboot the system into Rescue...')
         if 'Complete' in self.mErrors:
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
@@ -2501,6 +2519,10 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("Cannot set emmc boot options.")
+        elif msgtype == 'Restore':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setTitle("Restore Complete")
+            self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")

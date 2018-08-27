@@ -1096,6 +1096,22 @@
 						</connection>
 						<connection>
 							<sender>scanPartition</sender>
+							<signal>success()</signal>
+							<receiver>postDownload</receiver>
+							<slot>processSlot()</slot>
+							<hints>
+								<hint type="sourcelabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+								<hint type="destinationlabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+							</hints>
+						</connection>
+						<connection>
+							<sender>scanPartition</sender>
 							<signal>fail()</signal>
 							<receiver>processError</receiver>
 							<slot>processSlot()</slot>
@@ -2845,6 +2861,22 @@
 							<sender>scanPartition</sender>
 							<signal>success()</signal>
 							<receiver>chooseSelection</receiver>
+							<slot>processSlot()</slot>
+							<hints>
+								<hint type="sourcelabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+								<hint type="destinationlabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+							</hints>
+						</connection>
+						<connection>
+							<sender>scanPartition</sender>
+							<signal>success()</signal>
+							<receiver>postDownload</receiver>
 							<slot>processSlot()</slot>
 							<hints>
 								<hint type="sourcelabel">
