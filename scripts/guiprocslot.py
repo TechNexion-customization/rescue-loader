@@ -1605,7 +1605,8 @@ class chooseSelectionSlot(QChooseSlot):
             elif 'storage' in self.mPick and self.mPick['storage'] is not None and 'storage' in data and data['storage'] is not None and self.mPick['storage'] == data['storage']:
                 # update text/icon on lblStorage with chosen storage
                 self._findChildWidget('lblStorage').setPixmap(item.icon().pixmap(self._findChildWidget('lblStorage').size()))
-                if int(data['size']) == 3825205248:
+                # determine eMMC vs SDCard
+                if 'MMC_TYPE=MMC' in data['uevent']:
                     self._findChildWidget('lblStorageTxt').setText('eMMC')
                 elif 'id_bus' in data and data['id_bus'] == 'ata':
                     self._findChildWidget('lblStorageTxt').setText('HD')
