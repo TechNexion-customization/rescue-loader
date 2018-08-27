@@ -1114,7 +1114,7 @@ class chooseOSSlot(QChooseSlot):
                 self.mLstWgtOS.clearSelection()
                 self.success.emit(self.mPick)
             else:
-                self.fail.emit('failed to choose a valid file to download')
+                _logger.info('failed to choose a valid option')
 
 
 
@@ -1213,7 +1213,7 @@ class chooseBoardSlot(QChooseSlot):
                 self.mLstWgtBoard.clearSelection()
                 self.success.emit(self.mPick)
             else:
-                self.fail.emit('failed to choose a valid file to download')
+                _logger.info('failed to choose a valid option')
 
 
 
@@ -1349,7 +1349,7 @@ class chooseDisplaySlot(QChooseSlot):
                 self.mLstWgtDisplay.clearSelection()
                 self.success.emit(self.mPick)
             else:
-                self.fail.emit('failed to choose a valid file to download')
+                _logger.info('failed to choose a valid option')
 
 
 
