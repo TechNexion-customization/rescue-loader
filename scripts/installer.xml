@@ -47,7 +47,7 @@
 							<item row="0" column="0" colspan="5">
 								<widget class="QWidget" name="tabTitle" native="true">
 									<layout class="QGridLayout" name="GridLayoutTitle">
-										<item row="0" column="0" colspan="2">
+										<item row="0" column="0" colspan="3">
 											<widget class="QLabel" name="lblLogo">
 												<property name="styleSheet">
 													<string notr="true">background: transparent</string>
@@ -64,7 +64,7 @@
 												</property>
 											</widget>
 										</item>
-										<item row="0" column="3" colspan="3">
+										<item row="0" column="3" colspan="4">
 											<widget class="QListWidget" name="lstWgtSelection">
 												<property name="layoutDirection">
 													<enum>Qt::RightToLeft</enum>
@@ -1784,9 +1784,15 @@
 						<layout class="QGridLayout" name="gridLayoutMain">
 							<item row="0" column="0" rowspan="3">
 								<widget class="QWidget" name="tabTitle" native="true">
-									<layout class="QVBoxLayout" name="vboxLayoutTitle">
-										<item>
+									<layout class="QGridLayout" name="gridLayoutTitle">
+										<item row="0" column="0">
 											<widget class="QLabel" name="lblLogo">
+												<property name="sizePolicy">
+													<sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+														<horstretch>1</horstretch>
+														<verstretch>0</verstretch>
+													</sizepolicy>
+												</property>
 												<property name="styleSheet">
 													<string notr="true">background: transparent</string>
 												</property>
@@ -1794,16 +1800,16 @@
 													<enum>Qt::PlainText</enum>
 												</property>
 												<property name="alignment">
-													<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+													<set>Qt::AlignVCenter|Qt::AlignHCenter</set>
 												</property>
 											</widget>
 										</item>
-										<item>
+										<item row="1" column="0" rowspan="2">
 											<widget class="QListWidget" name="lstWgtSelection">
 												<property name="sizePolicy">
 													<sizepolicy hsizetype="Expanding" vsizetype="Expanding">
 														<horstretch>1</horstretch>
-														<verstretch>0</verstretch>
+														<verstretch>1</verstretch>
 													</sizepolicy>
 												</property>
 												<property name="layoutDirection">

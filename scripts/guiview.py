@@ -867,9 +867,7 @@ class GuiViewer(QObject, BaseViewer):
 
             # work out the proportion to the selection icons
             sizeSelect = self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').size()
-            sh = int(scnRect.height() / 4 * 0.8) if (scnRect.height() / sizeSelect.height()) < 4 else sizeSelect.height()
-            if (sh / scnRect.width()) < 10:
-                sh = int(scnRect.width() / 10)
+            sh = int(sizeSelect.width() / 4 * 0.8)
             smalliconsize = QtCore.QSize(sh, sh)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
