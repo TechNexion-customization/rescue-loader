@@ -371,13 +371,13 @@ class InfoOperationHandler(BaseOperationHandler):
                         self.mActionParam['src_directory'] = v # directory/folder
                     elif k==i and v=='som':
                         self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                        self.mActionParam['re_pattern'] = '\w+\ (\w+)-(imx\w+|IMX\w+).+\ (\w+)\ baseboard'
+                        self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
                     elif k==i and v=='cpu':
                         self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
                     elif k==i and v=='form':
-                        self.mActionParam['re_pattern'] = '\w+\ (\w+)-\w+'
+                        self.mActionParam['re_pattern'] = '\w+ (\w+)-\w+'
                     elif k==i and v=='baseboard':
-                        self.mActionParam['re_pattern'] = '.*\ (\w+)\ baseboard'
+                        self.mActionParam['re_pattern'] = '.* (\w+) \w*board'
 
             if 'tgt_type' in self.mActionParam and not 'dst_pos' in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1

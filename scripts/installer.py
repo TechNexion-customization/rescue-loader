@@ -93,7 +93,7 @@ def parsePartitionSize(result):
         for k, v in result.items():
             if isinstance(v, dict) and 'device_type' in v.keys() and v['device_type'] == 'partition' and \
                 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
-                'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and \
                 'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
                 'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
                 return int((int(v['attributes']['start']) + int(v['attributes']['size']) + 8) / 4096 * 512) # add an additional block, i.e 4096/512
@@ -120,6 +120,7 @@ def checkUrl(url):
 def crawlWeb(link, result):
 #    print('link: {}'.format(link))
     cliWeb = CliViewer()
+    print('Search http://rescue.technexion.net{}'.format(link))
     cliWeb.request({'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': link })
     parsedList = parseWebList(cliWeb.getResult())
     del cliWeb
@@ -181,6 +182,7 @@ def main():
     cliSom.request({'cmd': 'info', 'target': 'som'})
     if 'found_match' in cliSom.getResult():
         form, cpu, baseboard = cliSom.getResult()['found_match'].split(',')
+        if cpu.find('-') != -1: cpu = cpu.split('-',1)[0]
         print('Found: {} {} {}'.format(cpu, form, baseboard))
     else:
         form = cpu = baseboard = '' # same reference
@@ -194,11 +196,16 @@ def main():
     print('Find matching xz files for the target device...')
     # step 2: find menu items that matches as cpu, form, but not baseboard
     for k, v in sorted(menuResult.items()):
-        if not (cpu[0:4].lower() in k.lower() or cpu.lower() in k.lower()):
+        if (cpu.lower() in k.lower()) and (form.lower() in k.lower()):
+            continue
+        if not (cpu[0:4].lower() in k.lower()):
             menuResult.pop(k)
         else:
             if form.lower() not in k.lower():
                 menuResult.pop(k)
+            if ('imx6ul' in cpu.lower()) or ('imx6ull' in cpu.lower()):
+                if k in menuResult:
+                    menuResult.pop(k)
 
     # step 3: ask user to choose the file to download
     menus = [(i, k, v) for i, (k, v) in enumerate(sorted(menuResult.items()))]
@@ -231,9 +238,9 @@ def main():
     cliPart = CliViewer()
     cliPart.request({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
     tgtResult.update(cliPart.getResult())
-    del cliPart
     partblocks = parsePartitionSize(tgtResult)
     tgtResult.clear()
+    del cliPart
 
     # step 4b: request for list of targets storage device
     cliTgt = CliViewer()

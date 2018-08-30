@@ -452,7 +452,8 @@ class detectDeviceSlot(QProcessSlot):
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and \
            'status' in results and results['status'] == 'success':
             self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
-            if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
+            if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
+            #if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
@@ -608,18 +609,15 @@ class crawlWebSlot(QProcessSlot):
         cpu = self._findChildWidget('lblCpu').text().lower()
         form = self._findChildWidget('lblForm').text().lower()
         baseboard = self._findChildWidget('lblBaseboard').text().lower()
-        if (cpu[0:4] in filename.lower() or cpu in filename.lower()):
-            if form in filename.lower():
-                if 'pico' in form:
-                    _logger.debug('Matched CPU:{} and PICO FORM:{}... {}'.format(cpu[0:4], form, filename))
+        if cpu in filename.lower() and form in filename.lower():
+            # exact match of cpu in the filename, including imx6ul, imx6ull
+            return True
+        else:
+            if cpu.lower() == 'imx6ul' or cpu.lower() == 'imx6ull':
+                return False
+            if cpu[0:4] in filename.lower():
+                if form.lower() in filename.lower():
                     return True
-                else:
-                    if 'tc' in baseboard and 'toucan' in filename.lower():
-                        _logger.debug('Matched CPU:{} and EDM FORM:{} and Baseboard:{}... {}'.format(cpu[0:4], form, baseboard, filename))
-                        return True
-                    elif 'fairy' in baseboard and 'fairy' in filename.lower():
-                        _logger.debug('Matched CPU:{} and EDM FORM:{} and Baseboard:{}... {}'.format(cpu[0:4], form, baseboard, filename))
-                        return True
         return False
 
     def __parseSOMInfo(self, path):
