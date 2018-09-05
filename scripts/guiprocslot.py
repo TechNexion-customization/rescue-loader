@@ -1648,7 +1648,13 @@ class downloadImageSlot(QProcessSlot):
             try:
                 res = self.mViewer.queryResult()
             except:
-                self.fail.emit({'NoDbus': True})
+                # cannot query installerd dbus server anymore, something wrong.
+                # stop the timer, and recover the rescue system
+                self.killTimer(self.mTimerId)
+                # use subprocess to restor the rescue system
+                # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+                subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage)])
+                self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
             else:
                 if 'total_uncompressed' in res and 'bytes_written' in res:
@@ -1812,7 +1818,13 @@ class postDownloadSlot(QProcessSlot):
             try:
                 res = self.mViewer.queryResult()
             except:
-                self.fail.emit({'NoDbus': True})
+                # cannot query installerd dbus server anymore, something wrong.
+                # stop the timer, and recover the rescue system
+                self.killTimer(self.mTimerId)
+                # use subprocess to restor the rescue system
+                # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
+                subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage'])])
+                self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
 
             if 'total_size' in res and 'bytes_written' in res:
@@ -2039,7 +2051,7 @@ class processErrorSlot(QProcessSlot):
             # add NoDbus icon
             self.mMsgBox.setMessage('NoDbus')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.critical('DBus session bus or installer dbus server not available!!! Retrying...')
+            _logger.critical('DBus session bus or installer dbus server not available!!! {}'.format('Retrying...' if self.mAsk is None else 'Restore Rescue System'))
         if 'NoNIC' in self.mErrors:
             # add NoNic icon
             self.mMsgBox.setMessage('NoNIC')
@@ -2482,6 +2494,7 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoDbus': ':res/images/no_dbus.svg'})
+            self.setContent("Cannot connect to Dbus installerd.service.")
         elif msgtype in ['NoStorage', 'NoLocal', 'NoPartition']:
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
