@@ -821,7 +821,6 @@ class GuiViewer(QObject, BaseViewer):
 
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
-
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
             pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 4, scnRect.height() * 4)).scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio)
             brush = QtGui.QBrush(pixmap)
@@ -871,6 +870,12 @@ class GuiViewer(QObject, BaseViewer):
             smalliconsize = QtCore.QSize(sh, sh)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
+
+            # set font size
+            fontsize = int(w/50)
+            _logger.warning('fontsize = {}'.format(fontsize))
+            self.mGuiRootWidget.setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize * 2))
 
             # Show/Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
