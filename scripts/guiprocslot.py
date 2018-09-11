@@ -1648,12 +1648,17 @@ class downloadImageSlot(QProcessSlot):
             try:
                 res = self.mViewer.queryResult()
             except:
+                _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
                 self.killTimer(self.mTimerId)
                 # use subprocess to restor the rescue system
                 # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-                subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage)])
+                try:
+                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage), 'bs=1M', 'oflag=dsync'])
+                except subprocess.CalledProcessError as err:
+                    _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
+                    raise
                 self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
             else:
@@ -1823,7 +1828,11 @@ class postDownloadSlot(QProcessSlot):
                 self.killTimer(self.mTimerId)
                 # use subprocess to restor the rescue system
                 # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-                subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage'])])
+                try:
+                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'oflag=dsync'])
+                except subprocess.CalledProcessError as err:
+                    _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
+                    raise
                 self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
 
