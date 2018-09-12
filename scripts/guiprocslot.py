@@ -1465,7 +1465,7 @@ class chooseSelectionSlot(QChooseSlot):
         self.mLstWgtBoard = None
         self.mLstWgtDisplay = None
         self.mUserData = None
-        self.mTotalSectors = 0
+        self.mTotalSectors = {}
 
     def process(self, inputs):
         # Display the dynamic UI from the available list of found target storage passed in inputs
@@ -1490,10 +1490,10 @@ class chooseSelectionSlot(QChooseSlot):
             # issue command to copy first 33MB of target storage
             # copy the first 69632 sectors(35,651,584 bytes) out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
-                if self.mTotalSectors == 0:
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
                 else:
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors/4096)*512), 'chunk_size': '32768'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
                 self.request.emit(self.mCmds[-1])
                 self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
 
@@ -1527,10 +1527,10 @@ class chooseSelectionSlot(QChooseSlot):
             if isinstance(inputs, dict):
                 for k, v in inputs.items():
                     if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
-                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and \
                         'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
                         'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
-                            self.mTotalSectors = int(v['attributes']['start']) + int(v['attributes']['size']) + 8 # add an additional block, i.e 4096/512
+                            self.mTotalSectors.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size']) + 8}) # add an additional block, i.e 4096/512
                             _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
 
     def parseResult(self, results):
@@ -1812,7 +1812,7 @@ class postDownloadSlot(QProcessSlot):
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
         self.mQRIcon = None
-        self.mTotalSectors = 0
+        self.mTotalSectors = {}
 
     def _queryResult(self):
         """
@@ -1877,10 +1877,11 @@ class postDownloadSlot(QProcessSlot):
                     # flash failed
                     _logger.info('flash failed: recover rescues system to target storage {}'.format(self.mPick['storage']))
                     # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-                    if self.mTotalSectors == 0:
-                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '8704', 'chunk_size': '32768'})
+                    if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
+                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
                     else:
-                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors/4096)*512), 'chunk_size': '32768'})
+                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
+
                     self.request.emit(self.mCmds[-1])
                     self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
 
@@ -1889,10 +1890,10 @@ class postDownloadSlot(QProcessSlot):
             if isinstance(inputs, dict):
                 for k, v in inputs.items():
                     if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
-                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and '0' in v['sys_name'] and \
+                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and \
                         'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
                         'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
-                            self.mTotalSectors = int(v['attributes']['start']) + int(v['attributes']['size']) + 8 # add an additional block, i.e 4096/512
+                            self.mTotalSectors.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size']) + 8}) # add an additional block, i.e 4096/512
                             _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
 
     def parseResult(self, results):
