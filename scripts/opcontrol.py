@@ -56,6 +56,7 @@
 #
 # ============================================================
 
+import resource
 import logging
 import time
 import queue
@@ -257,5 +258,26 @@ def opcontrol():
     srv = OpController(conf)
     exit(srv.run())
 
+def memory_limit():
+    soft, hard = resource.getrlimit(resource.RLIMIT_DATA)
+    resource.setrlimit(resource.RLIMIT_DATA, (get_memory() * 1024 / 2, hard))
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 2, hard))
+
+def get_memory():
+    with open('/proc/meminfo', 'r') as mem:
+        free_memory = 0
+        for i in mem:
+            sline = i.split()
+            if str(sline[0]) in ('MemFree:', 'Buffers:', 'Cached:'):
+                free_memory += int(sline[1])
+    return free_memory
+
 if __name__ == "__main__":
-    opcontrol()
+    memory_limit() # limits the maximum memory usage
+    try:
+        opcontrol()
+    except MemoryError:
+        _logger.error('\n\n\ERROR: Memory Exception\n')
+        exit(1)
+

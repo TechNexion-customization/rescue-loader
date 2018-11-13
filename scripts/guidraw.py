@@ -51,8 +51,8 @@ from view import CliViewer
 from guiprocslot import QProcessSlot, QWaitingIndicator, QMessageDialog
 from PyQt4 import QtGui, QtCore, QtSvg
 
-# import our resource.py with all the pretty images/icons
-import resource
+# import our resources.py with all the pretty images/icons
+import ui_res
 
 import logging
 # get the handler to the current module, and setup logging options

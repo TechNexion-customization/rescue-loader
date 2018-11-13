@@ -57,8 +57,8 @@ import socket
 from urllib.parse import urlparse
 from PyQt4 import QtGui, QtCore, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
-# import our resource.py with all the pretty images/icons
-import resource
+# import our resources.py with all the pretty images/icons
+import ui_res
 import logging
 # get the handler to the current module, and setup logging options
 _logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                     resName = ":/res/images/os_{}.svg".format(row['os'].lower())
                     item.setToolTip(row['os'].lower())
                 elif 'board' in row:
-                    #update the VERSION within the svg resource byte array, and draw the svg
+                    #update the VERSION within the svg resources byte array, and draw the svg
                     resName = ":/res/images/board_{}.svg".format(row['board'].lower())
                     #font = QtGui.QFont('Lato', 32, QtGui.QFont.Bold)
                     #item.setFont(font)
