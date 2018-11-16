@@ -61,17 +61,17 @@ import sys
 import signal
 import socket
 import logging
-import defconfig
 
 from guidraw import GuiDraw
 from guiprocslot import QMessageDialog
 from xmldict import XmlDict, ConvertXmlToDict
-from defconfig import DefConfig, SetupLogging
-from messenger import BaseMessenger
+from defconfig import DefConfig, SetupLogging, IsATargetBoard
+from messenger import BaseMessenger, SerialMessenger
 from view import BaseViewer
 
 from PyQt4 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
+from threading import Event
 
 # get the handler to the current module, and setup logging options
 SetupLogging('/tmp/installer_gui.log')
@@ -388,7 +388,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
             ret = self.mSessDBus.connect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self.receiveMsg)
             _logger.debug('mSessBus returns: {} mSessBus connected? {} mIface isValid: {}'.format(ret, self.mSessDBus.isConnected(), self.mIface.isValid()))
 
-    def hasValidDbusConn(self):
+    def hasValidConn(self):
         if self.mSessDBus.isConnected():
             return self.mIface.isValid()
         return False
@@ -542,6 +542,7 @@ class GuiViewer(QObject, BaseViewer):
         self.mMoreInputs = {}
         self.mGuiRootWidget = None
         self.mGuiRootSignals = []
+        self.mMsger = []
 
         # parse the configuration as well as setup the GUI components
         if os.path.isfile(os.path.realpath(confname) + '/' + confname):
@@ -563,10 +564,21 @@ class GuiViewer(QObject, BaseViewer):
         and self.response callback function
         """
         conf = self.mDefConfig.getSettings(flatten=True)
-        self.mMsger = QtDbusMessenger(conf, self.mGuiRootWidget, self.response)
+        try:
+            if not IsATargetBoard():
+                _logger.info('add SerialMessager')
+                self.mMsger.append(SerialMessenger(conf, self.response))
+                self.mMsger[-1].run()
+        except Exception as ex:
+            _logger.error('Cannot start a serial messenger. Error:{}'.format(ex))
+        _logger.info('add QtDbusMessenger')
+        self.mMsger.append(QtDbusMessenger(conf, self.mGuiRootWidget, self.response))
 
     def checkDbusConn(self):
-        return self.mMsger.hasValidDbusConn()
+        for mgr in self.mMsger:
+            if isinstance(mgr, QtDbusMessenger):
+                return mgr.hasValidConn()
+        return False
 
     ###########################################################################
     # PyQt GUI related
@@ -664,8 +676,11 @@ class GuiViewer(QObject, BaseViewer):
             # set the root Gui elem
             parent = GuiDraw.GenGuiDraw(confdict)
             self.mGuiRootWidget = parent
-            # Window Additional Flags
-            self.mGuiRootWidget.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint) #QtCore.Qt.SplashScreen | QtCore.Qt.WindowStaysOnTopHint)
+            if IsATargetBoard():
+                # Window Additional Flags
+                self.mGuiRootWidget.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint) #QtCore.Qt.SplashScreen | QtCore.Qt.WindowStaysOnTopHint)
+            else:
+                self.mGuiRootWidget.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
         else:
             # takes the old parent, and return itself as the new parent
             parent = GuiDraw.GenGuiDraw(confdict, parent)
@@ -925,11 +940,17 @@ class GuiViewer(QObject, BaseViewer):
             if isinstance(self.mCmd, dict):
                 # clear the event before sending message over to dbus
                 self._clearEvent()
-                _logger.debug('send cmd via DBus: {}'.format(self.mCmd))
-                return self.mMsger.sendMsg(self.mCmd)
+                for mgr in self.mMsger:
+                    if isinstance(mgr, QtDbusMessenger):
+                        _logger.debug('send cmd via DBus: {}'.format(self.mCmd))
+                        ret = mgr.sendMsg(self.mCmd)
+                    if isinstance(mgr, SerialMessenger):
+                        _logger.debug('send cmd via Serial: {}'.format(self.mCmd))
+                        mgr.sendMsg(self.mCmd)
+                return ret
             else:
                 raise TypeError('cmd must be in a dictionary format')
-        except QDBusError as err:
+        except QtDBus.QDBusError as err:
             _logger.info('DBus Error: {}'.format(err))
         except Exception as ex:
             _logger.info('Error: {}'.format(ex))
@@ -981,7 +1002,11 @@ class GuiViewer(QObject, BaseViewer):
         return False
 
     def queryResult(self):
-        return self.mMsger.getResult()
+        # FIXME: Need to sort out results returned from QtDbusMessenger or SerialMessenger
+        result = {}
+        for mgr in self.mMsger:
+            result.update(mgr.getResult())
+        return result
 
 
 

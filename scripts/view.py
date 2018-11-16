@@ -56,7 +56,7 @@ from threading import Thread, Event
 #from ConfigParser import ConfigParser # read/write config files
 
 from defconfig import DefConfig
-from messenger import DbusMessenger, SocketMessenger
+from messenger import DbusMessenger, WebMessenger
 
 # get the handler to the current module, and setup logging options
 _logger = logging.getLogger(__name__)

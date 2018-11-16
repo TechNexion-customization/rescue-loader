@@ -60,15 +60,15 @@ import resource
 import logging
 import time
 import queue
-from threading import Thread, Event, Lock
-from defconfig import DefConfig, SetupLogging
+from threading import Thread
+from defconfig import DefConfig, SetupLogging, IsATargetBoard
 from ophandle import FlashOperationHandler, \
                      InfoOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
                      QRCodeOperationHandler
 
-from messenger import DbusMessenger, SocketMessenger
+from messenger import DbusMessenger, WebMessenger
 
 SetupLogging('/tmp/installer_srv.log')
 # get the handler to the current module
@@ -153,18 +153,21 @@ class OpController(object):
         # initialize a DbusMessenger for sending and receiving messages
         setting = conf.getSettings(flatten=True)
         setting.update({'IS_SERVER': True})
-        self.mMsger = DbusMessenger(setting, \
-                                    self.__handleDBusMessage, \
-                                    self.__handleGetStatus, \
-                                    self.__handleGetResult, \
-                                    self.__handleUserInterrupt)
+        self.mMsger = []
+        self.mMsger.append(DbusMessenger(setting, \
+                                         self.__handleDBusMessage, \
+                                         self.__handleGetStatus, \
+                                         self.__handleGetResult, \
+                                         self.__handleUserInterrupt))
+
         # initialize an array to hold BaseOpHandlers
         self.mOpHandlers = []
         # initialize a queue to hold all the worker to perform the command job
         self.mQueue = queue.Queue()
         # using 2+ threads to handle the worker queue
         self.mThreads = [WorkerThread(self.mQueue), WorkerThread(self.mQueue)]
-        for thrd in self.mThreads: thrd.start()
+        for thrd in self.mThreads:
+            thrd.start()
 
     def run(self):
         # setup Operation Handlers from the defconfig
@@ -173,8 +176,10 @@ class OpController(object):
         self.mOpHandlers.append(DownloadOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(ConfigOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(QRCodeOperationHandler(self.__sendUserRequest))
-        # finally run the dbusmessenger server, and dbus run is blocking
-        self.mMsger.run()
+        # finally run the dbusmessenger server, because dbus's run is blocking
+        for mgr in self.mMsger:
+            if isinstance(mgr, DbusMessenger):
+                mgr.run()
 
     def __findOpHandler(self, cmds):
         # find the OpHandle for executing command
@@ -193,7 +198,8 @@ class OpController(object):
                 status = {}
                 status.update(msg)
                 status.update({'status': 'pending'})
-                self.mMsger.setStatus(self.__flatten(status))
+                for msger in self.mMsger:
+                    msger.setStatus(self.__flatten(status))
                 return True
         return False
 
@@ -218,7 +224,11 @@ class OpController(object):
         return self.__flatten(status)
 
     def __handleUserInterrupt(self, param):
-        # manage user interrupt from client/viewer
+        """
+        Manage user interrupt from client/viewer
+        - loop through worker threads to find all the ophandlers and
+          if ophandler has updateUserResponse and if callable, call it
+        """
         for thrd in self.mThreads:
             thWkrHdlr = thrd.getWorkerHandler()
             if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
@@ -228,19 +238,21 @@ class OpController(object):
 
     def __sendUserRequest(self, req):
         """
-        Handles requesting for more user inputs for the operations
-        send the req by triggering receive signal, then user should interrupt
-        by calling the DBus interrupt i/f method
+        Callback Handles for requesting more user inputs from the opOperationHandler
+        - send the user req by triggering receive signal, then user should interrupt
+          by calling the DBus interrupt i/f method
         """
         userReq = {}
         if isinstance(req, dict):
             userReq.update(req)
             # signal client/viewer with receive signal with request to get user input
-            self.mMsger.sendMsg(self.__flatten(userReq))
+            for msger in self.mMsger:
+                msger.sendMsg(self.__flatten(userReq))
 
     def setRetResult(self, result):
         if isinstance(result, dict):
-            self.mMsger.setResult(self.__flatten(result))
+            for msger in self.mMsger:
+                msger.setResult(self.__flatten(result))
 
     def __flatten(self, value, key=''):
         ret = {}
@@ -251,6 +263,8 @@ class OpController(object):
                 else:
                     ret[k if len(key) == 0 else key+'|'+k] = str(v)
         return ret
+
+
 
 def opcontrol():
     conf = DefConfig()
@@ -280,4 +294,3 @@ if __name__ == "__main__":
     except MemoryError:
         _logger.error('\n\n\ERROR: Memory Exception\n')
         exit(1)
-

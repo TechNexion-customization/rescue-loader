@@ -70,6 +70,21 @@ def SetupLogging(logfname):
 
 
 
+def IsATargetBoard():
+    """
+    Determine whether we are on target board
+    """
+    try:
+        fmodel = open('/proc/device-tree/model', 'r')
+        if fmodel:
+            fmodel.close()
+            return True
+        return False
+    except FileNotFoundError:
+        return False
+
+
+
 class SingletonMetaClass(type):
     """
     Define a 'SingletonMetaClass' type
