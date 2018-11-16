@@ -63,7 +63,7 @@ import logging
 import pyqrcode
 from argparse import ArgumentTypeError
 from html.parser import HTMLParser
-
+from defconfig import IsATargetBoard
 from inputoutput import BlockInputOutput, FileInputOutput, BaseInputOutput, WebInputOutput
 
 _logger = logging.getLogger(__name__)
@@ -596,8 +596,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             else:
                 raise IOError('There is 0 Total Bytes to download')
 
-            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
-                # if available memory > 640MB, use python lzma module
+            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
                 _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
                 if len(address) > 1:
                     for count, (srcaddr, tgtaddr) in enumerate(address):
@@ -661,7 +660,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
 
         try:
-            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
                 # read src and write to the target
                 data = self.mIOs[0].Read(srcaddr, numChunks)
                 self.mResult['bytes_read'] += len(data)
