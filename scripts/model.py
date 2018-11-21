@@ -53,6 +53,7 @@ import os
 import stat
 import fcntl
 import psutil
+import array
 import pyudev
 import socket
 import struct
@@ -803,96 +804,121 @@ class ConfigNicActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIoctlCmd = None
-        self.mIoctlArg = None
+        self.mIoctlArg = struct.pack('256s', b'\0')
+        self.mNames = array.array('B', b'\0' * 4096)
+
+    def getNetIP(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # doesn't even have to be reachable, so use DNS
+            s.connect(('8.8.8.8', 53))
+            IP = s.getsockname()[0]
+        except:
+            IP = '127.0.0.1'
+        finally:
+            s.close()
+        return IP
 
     def _preAction(self):
         if all(s in self.mParam for s in ['subcmd', 'target', 'config_id', 'config_action']) and self.mParam['subcmd'] == 'nic':
+            # get the target to put into binary struct
+            if 'target' in self.mParam:
+                tgt = b'eth0' if self.mParam['target'] == 'any' else self.mParam['target'][:15].encode()
+            # parse the config_id and setup appropriate IOCTL commands and Arguments
             if self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'iflink':
                 self.mIoctlCmd = 0x8911 # SIOCSIFLINK
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifconf':
                 self.mIoctlCmd = 0x8912 # SIOCGIFCONF
+                names_address, names_length = self.mNames.buffer_info()
+                self.mIoctlArg = struct.pack('iL', 4096, names_address)
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifname':
                 self.mIoctlCmd = 0x8910 # SIOCGIFNAME
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifname':
                 self.mIoctlCmd = 0x8923 # SIOCSIFNAME
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifflags':
                 self.mIoctlCmd = 0x8913 # SIOCGIFFLAGS
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifflags':
                 self.mIoctlCmd = 0x8914 # SIOCSIFFLAGS
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifaddr':
                 self.mIoctlCmd = 0x8915 # SIOCGIFADDR
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifaddr':
                 self.mIoctlCmd = 0x8916 # SIOCSIFADDR
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifdstaddr':
                 self.mIoctlCmd = 0x8917 # SIOCGIFDSTADDR
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifdstaddr':
                 self.mIoctlCmd = 0x8918 # SIOCSIFDSTADDR
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifbraddr':
                 self.mIoctlCmd = 0x8919 # SIOCGIFBRDADDR
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifbraddr':
                 self.mIoctlCmd = 0x891a # SIOCSIFBRDADDR
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifnetmask':
                 self.mIoctlCmd = 0x891b # SIOCGIFNETMASK
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifnetmask':
                 self.mIoctlCmd = 0x891c # SIOCSIFNETMASK
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmetric':
                 self.mIoctlCmd = 0x891d # SIOCGIFMETRIC
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmetric':
                 self.mIoctlCmd = 0x891e # SIOCSIFMETRIC
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmem':
                 self.mIoctlCmd = 0x891f # SIOCGIFMEM
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmem':
                 self.mIoctlCmd = 0x8920 # SIOCSIFMEM
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifmtu':
                 self.mIoctlCmd = 0x8921 # SIOCGIFMTU
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifmtu':
                 self.mIoctlCmd = 0x8922 # SIOCSIFMTU
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifencap':
                 self.mIoctlCmd = 0x8925 # SIOCGIFENCAP
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifencap':
                 self.mIoctlCmd = 0x8926 # SIOCSIFENCAP
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifhwaddr':
                 self.mIoctlCmd = 0x8927 # SIOCGIFHWADDR
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifhwaddr':
                 self.mIoctlCmd = 0x8924 # SIOCSIFHWADDR
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifslave':
                 self.mIoctlCmd = 0x8929 # SIOCGIFSLAVE
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifslave':
                 self.mIoctlCmd = 0x8930 # SIOCSIFSLAVE
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifpflags':
                 self.mIoctlCmd = 0x8935 # SIOCGIFPFLAGS
-                self.mIoctlArg = struct.pack('256s', self.mParam['target'][:15].encode() if 'target' in self.mParam else b'eth0')
+                self.mIoctlArg = struct.pack('256s', tgt)
             elif self.mParam['config_action'] == 'set' and self.mParam['config_id'] == 'ifpflags':
                 self.mIoctlCmd = 0x8934 # SIOCSIFPFLAGS
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ip':
+                return True
             else:
                 return False
 
-            _logger.info('_preAction: ioctl cmd: {} arg: {}'.format(self.mIoctlCmd, self.mIoctlArg))
+            _logger.info('_preAction: ioctl cmd: {:#x} arg: {}'.format(self.mIoctlCmd, self.mIoctlArg))
             return True
         return False
 
     def _mainAction(self):
-        try:
-            # do ioctl to get/set NIC related information
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.mResult['retcode'] = fcntl.ioctl(s.fileno(), self.mIoctlCmd, self.mIoctlArg)
-            _logger.info('retcode: {}, unpack: {}'.format(self.mResult['retcode'], struct.unpack('16s240s', self.mResult['retcode'])))
+        if self.mParam['config_id'] == 'ip':
+            self.mResult['ip'] = self.getNetIP()
             return True
-        except Exception as ex:
-            _logger.error('ConfigNic Exception: {}'.format(ex))
-            raise
+        else:
+            try:
+                # do ioctl to get/set NIC related information
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.mResult['retcode'] = fcntl.ioctl(s.fileno(), self.mIoctlCmd, self.mIoctlArg)
+                _logger.info('returned: {}'.format(self.mResult['retcode']))
+                return True
+            except Exception as ex:
+                _logger.error('ConfigNic Exception: {}'.format(ex))
+                raise
         return False
 
     def _postAction(self):
@@ -919,21 +945,38 @@ class ConfigNicActionModeller(BaseActionModeller):
             IFF_DORMENT = 0x20000      /* driver signals dormant. Volatile. */
             IFF_ECHO = 0x40000         /* echo sent packets. Volatile. */
         """
-        if self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ifflags':
-            self.mResult['ifname'], self.mResult['flags'] = struct.unpack('16si236x', self.mResult['retcode'])
-            _logger.info('flags: {}'.format(self.mResult['flags']))
-            self.mResult['state'] = []
-            if self.mResult['flags'] & 0x1:
-                self.mResult['state'].append('UP')
-            if self.mResult['flags'] & 0x2:
-                self.mResult['state'].append('BOARDCAST')
-            if self.mResult['flags'] & 0x40:
-                self.mResult['state'].append('RUNNING')
-            if self.mResult['flags'] & 0x1000:
-                self.mResult['state'].append('MULTICAST')
-            if self.mResult['flags'] & 0x10000:
-                self.mResult['state'].append('LOWER_UP')
-            return True
+        if self.mParam['config_action'] == 'get':
+            if self.mParam['config_id'] == 'ifflags':
+                self.mResult['ifname'], self.mResult['flags'] = struct.unpack('16si236x', self.mResult['retcode'])
+                _logger.info('flags: {}'.format(self.mResult['flags']))
+                self.mResult['state'] = []
+                if self.mResult['flags'] & 0x1:
+                    self.mResult['state'].append('UP')
+                if self.mResult['flags'] & 0x2:
+                    self.mResult['state'].append('BOARDCAST')
+                if self.mResult['flags'] & 0x40:
+                    self.mResult['state'].append('RUNNING')
+                if self.mResult['flags'] & 0x1000:
+                    self.mResult['state'].append('MULTICAST')
+                if self.mResult['flags'] & 0x10000:
+                    self.mResult['state'].append('LOWER_UP')
+                return True
+            elif self.mParam['config_id'] == 'ifconf':
+                max_bytes_out, names_address_out = struct.unpack('iL', self.mResult['retcode'])
+                namestr = self.mNames.tostring()
+                self.mResult['iflist'] = {}
+                for i in range(0, max_bytes_out, 40):
+                    name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8')
+                    ip = []
+                    for netaddr in namestr[ i+20 : i+24 ]:
+                        if isinstance(netaddr, int):
+                            ip.append(str(netaddr))
+                        elif isinstance(netaddr, str):
+                            ip.append(str(ord(netaddr)))
+                    self.mResult['iflist'].update({name: '.'.join(ip)})
+                return True
+            elif self.mParam['config_id'] == 'ip':
+                return True
         return False
 
 

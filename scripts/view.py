@@ -461,7 +461,7 @@ if __name__ == "__main__":
     config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_NAME', action='store', help='Specify the network configuration option')
     config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the network configure action for the configuration option')
     config_submmcparser.add_argument('-d', '--config-data', dest='config_data', metavar='CONFIG_DATA', action='store', default='', help='Specify the network configuration data')
-    config_submmcparser.add_argument('target', metavar='TARGET_MMC_NODEPATH', action='store', help='Specify the mmc device path to configure')
+    config_submmcparser.add_argument('target', metavar='TARGET_NIC_IFNAME', action='store', nargs='?', default='any', help='Specify the nic device path to configure')
 
 
 
