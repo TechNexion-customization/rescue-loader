@@ -979,6 +979,71 @@ class ConfigNicActionModeller(BaseActionModeller):
 
 
 
+class DriverActionModeller(BaseActionModeller):
+    """
+    modprobe or remove Linux drivers
+    """
+    def __init__(self):
+        super().__init__()
+        self.mResult['retcode'] = 0
+        self.mSubProcCmd = []
+
+    def _preAction(self):
+        if all(s in self.mParam for s in ['cmd', 'type']):
+            if self.mParam['cmd'] == 'connect':
+                self.mSubProcCmd.extend(['modprobe'])
+            elif self.mParam['cmd'] == 'disconnect':
+                self.mSubProcCmd.extend(['rmmod'])
+            if self.mParam['type'] == 'serial':
+                self.mSubProcCmd.extend(['g_serial'])
+            elif self.mParam['type'] == 'storage':
+                if self.mParam['cmd'] == 'connect':
+                    if 'src_filename' in self.mParam:
+                        self.mSubProcCmd.extend(['g_mass_storage', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                elif self.mParam['cmd'] == 'disconnect':
+                    self.mSubProcCmd.extend(['g_mass_storage'])
+            elif self.mParam['type'] == 'serialstorage':
+                if self.mParam['cmd'] == 'connect':
+                    if 'src_filename' in self.mParam:
+                        self.mSubProcCmd.extend(['g_acm_ms', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                elif self.mParam['cmd'] == 'disconnect':
+                    self.mSubProcCmd.extend(['g_acm_ms'])
+            elif self.mParam['type'] == 'multi':
+                if self.mParam['cmd'] == 'connect':
+                    if 'src_filename' in self.mParam:
+                        self.mSubProcCmd.extend(['g_multi', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                elif self.mParam['cmd'] == 'disconnect':
+                    self.mSubProcCmd.extend(['g_multi'])
+            _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
+            return True
+        return False
+
+    def _mainAction(self):
+        try:
+            # probe or remove the driver
+            if len(self.mSubProcCmd):
+                if self.mSubProcCmd[0] == 'modprobe':
+                    #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                    p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
+                    output, err = p.communicate()
+                    p_status = p.wait()
+                    self.mResult['retcode'] = p_status
+                    if err is None:
+                        self.mResult['output'] = str(output[:], 'utf-8')
+                    else:
+                        self.mResult['err'] = str(err[:], 'utf-8')
+                else:
+                    self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
+
+                _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
+                return True
+        except Exception as ex:
+            _logger.error('Probe Driver Exception: {}'.format(ex))
+            raise
+        return False
+
+
+
 class QRCodeActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()

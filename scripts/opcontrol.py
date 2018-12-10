@@ -60,15 +60,17 @@ import resource
 import logging
 import time
 import queue
+import os
+
 from threading import Thread
 from defconfig import DefConfig, SetupLogging, IsATargetBoard
 from ophandle import FlashOperationHandler, \
                      InfoOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
-                     QRCodeOperationHandler
-
-from messenger import DbusMessenger, WebMessenger
+                     QRCodeOperationHandler, \
+                     ConnectOperationHandler
+from messenger import DbusMessenger, SerialMessenger, WebMessenger
 
 SetupLogging('/tmp/installer_srv.log')
 # get the handler to the current module
@@ -111,8 +113,8 @@ class Worker(object):
 
 
 class WorkerThread(Thread):
-    def __init__(self, q):
-        super().__init__()
+    def __init__(self, q, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.mQueue = q
         self.mWorker = None
 
@@ -151,14 +153,16 @@ class OpController(object):
     def __init__(self, conf):
         super().__init__()
         # initialize a DbusMessenger for sending and receiving messages
-        setting = conf.getSettings(flatten=True)
-        setting.update({'IS_SERVER': True})
         self.mMsger = []
-        self.mMsger.append(DbusMessenger(setting, \
-                                         self.__handleDBusMessage, \
-                                         self.__handleGetStatus, \
-                                         self.__handleGetResult, \
-                                         self.__handleUserInterrupt))
+        self.mSetting = conf.getSettings(flatten=True)
+        self.mSetting.update({'IS_SERVER': True})
+
+        _logger.info("Initiate dbus messenger")
+        self.mMsger.append(DbusMessenger(self.mSetting, \
+                                    self.__handleCmdMessage, \
+                                    self.__handleGetStatus, \
+                                    self.__handleGetResult, \
+                                    self.__handleUserInterrupt))
 
         # initialize an array to hold BaseOpHandlers
         self.mOpHandlers = []
@@ -176,10 +180,11 @@ class OpController(object):
         self.mOpHandlers.append(DownloadOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(ConfigOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(QRCodeOperationHandler(self.__sendUserRequest))
-        # finally run the dbusmessenger server, because dbus's run is blocking
-        for mgr in self.mMsger:
-            if isinstance(mgr, DbusMessenger):
-                mgr.run()
+        self.mOpHandlers.append(ConnectOperationHandler(self.__sendUserRequest, self.__setupMsgerConnection))
+        # finally run the dbusmessenger server as the last step, because it is blocking
+        for msger in self.mMsger:
+            if isinstance(msger, DbusMessenger):
+                msger.run()
 
     def __findOpHandler(self, cmds):
         # find the OpHandle for executing command
@@ -188,7 +193,7 @@ class OpController(object):
                 return ophdler
         return None
 
-    def __handleDBusMessage(self, msg):
+    def __handleCmdMessage(self, msg):
         if isinstance(msg, dict):
             # find the correct OpHandler
             ophandler = self.__findOpHandler(msg)
@@ -226,21 +231,30 @@ class OpController(object):
     def __handleUserInterrupt(self, param):
         """
         Manage user interrupt from client/viewer
-        - loop through worker threads to find all the ophandlers and
-          if ophandler has updateUserResponse and if callable, call it
         """
-        for thrd in self.mThreads:
-            thWkrHdlr = thrd.getWorkerHandler()
-            if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
-                _logger.info("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
-                # call handler's updateUserResponse() api with param, and wait for handler to quit itself
-                thWkrHdlr.updateUserResponse(param)
+        if 'cmd' in param and 'type' in param:
+            if param['cmd'] == 'stop' and param['type'] == 'job':
+                # for stopping jobs, loop through worker threads to find all the running
+                # ophandlers and if ophandler has callable updateUserResponse, call it
+                # and let stop job return false after loop all running handlers
+                for thrd in self.mThreads:
+                    thWkrHdlr = thrd.getWorkerHandler()
+                    if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
+                        _logger.info("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
+                        # call handler's updateUserResponse() api with param, and wait for handler to quit itself
+                        thWkrHdlr.updateUserResponse(param)
+            elif param['cmd'] in ['connect', 'disconnect'] and \
+                param['type'] in ['serial', 'web', 'storage', 'serialstorage', 'multi']:
+                # if disconnect serial, we stop the serial communication first
+                return self.__setupMsgerConnection(param)
+        return False
 
     def __sendUserRequest(self, req):
         """
         Callback Handles for requesting more user inputs from the opOperationHandler
         - send the user req by triggering receive signal, then user should interrupt
           by calling the DBus interrupt i/f method
+        NOTE: Not called back by any ophandlers at the moment at the moment
         """
         userReq = {}
         if isinstance(req, dict):
@@ -253,6 +267,75 @@ class OpController(object):
         if isinstance(result, dict):
             for msger in self.mMsger:
                 msger.setResult(self.__flatten(result))
+
+    def __setupMsgerConnection(self, param):
+        def findMsger(msgerType):
+            for idx, mgr in enumerate(self.mMsger, start=0):
+                if isinstance(mgr, msgerType):
+                    return idx
+            return None
+
+        if IsATargetBoard():
+            if param['cmd'] == 'connect':
+                try:
+                    if param['type'] in ['serial', 'serialstorage', 'multi']:
+                        idx = findMsger(SerialMessenger)
+                        if idx is not None:
+                            self.mMsger[idx].run()
+                            return True
+                        else:
+                            # start serial messenger
+                            # setup serial messenger if we are on target board
+                            _logger.info("Initiate serial messenger")
+                            self.mMsger.append(SerialMessenger(self.mSetting, \
+                                                             self.__handleCmdMessage, \
+                                                             self.__handleGetStatus, \
+                                                             self.__handleGetResult, \
+                                                             self.__handleUserInterrupt))
+                            if len(self.mMsger) > 0 and isinstance(self.mMsger[-1], SerialMessenger):
+                                self.mMsger[-1].run()
+                            return True
+                    elif param['type'] == 'web':
+                        idx = findMsger(WebMessenger)
+                        if idx is not None:
+                            self.mMsger[idx].run()
+                            return True
+                        else:
+                            # start WebMessenger
+                            self.mMsger.append(WebMessenger(self.mSetting, \
+                                                             self.__handleCmdMessage, \
+                                                             self.__handleGetStatus, \
+                                                             self.__handleGetResult, \
+                                                             self.__handleUserInterrupt))
+                            if len(self.mMsger) > 0 and isinstance(self.mMsger[-1], WebMessenger):
+                                self.mMsger[-1].run()
+                            return True
+                    elif param['type'] == 'storage':
+                        return True
+                except Exception as ex:
+                    _logger.error('Failed to initiate {} messenger, try initiate later. Error: {}'.format(param['type'], ex))
+
+            elif param['cmd'] == 'disconnect':
+                try:
+                    if param['type'] in ['serial', 'serialstorage']:
+                        idxSer = findMsger(SerialMessenger)
+                        if idxSer is not None:
+                            _logger.info("Terminate {} messenger".format(param['type']))
+                            self.mMsger[idxSer].stop()
+                            del self.mMsger[idxSer]
+                            return True
+                    if param['type'] in ['web']:
+                        idxWeb = findMsger(WebMessenger)
+                        if idxWeb is not None:
+                            _logger.info("Terminate {} messenger".format(param['type']))
+                            self.mMsger[idxWeb].stop()
+                            del self.mMsger[idxWeb]
+                            return True
+                    elif param['type'] == 'storage':
+                        return True
+                except:
+                    _logger.error('Failed to stop {} messenger'.format(param['type']))
+        return False
 
     def __flatten(self, value, key=''):
         ret = {}

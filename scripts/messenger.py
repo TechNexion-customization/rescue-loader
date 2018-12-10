@@ -579,7 +579,7 @@ class SerialMessenger(BaseMessenger):
                 msg.update(self.getResult())
                 self.sendMsg(msg)
                 return True
-            if 'cmd' in response and response['cmd'] == 'stop':
+            if 'cmd' in response and (response['cmd'] == 'stop' or response['cmd'] == 'disconnect'):
                 self.setInterrupt(response)
                 return True
         else:

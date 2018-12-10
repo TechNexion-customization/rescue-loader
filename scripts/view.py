@@ -200,8 +200,7 @@ class CliViewer(BaseViewer):
         """
         if 'cmd' in self.mCmd and self.mCmd['cmd'] == 'stop':
             # use interrupt
-            self.mMsger.setInterrupt(self.mCmd)
-            return False
+            return self.mMsger.setInterrupt(self.mCmd)
         return True
 
     def _mainExec(self):
@@ -234,7 +233,7 @@ class CliViewer(BaseViewer):
                 # The server will signal a 'pending' response first.
                 # Then a 'processing' response
                 # and finally a 'success' or a 'failure' response
-                if 'status' in self.mResponse.keys():
+                if 'status' in self.mResponse:
                     if self.mResponse['status'] == 'pending':
                         # clear the event and wait until server send another response with status==processing
                         _logger.debug('status just becomes pending')
@@ -264,11 +263,12 @@ class CliViewer(BaseViewer):
                                 self._parseResult(self._unflatten(self.mMsger.getResult()))
                             break
             else:
-                _logger.debug("Waiting for server response timed out. status: {}".format(self.mResponse['status']))
-                if self.mResponse['status'] == 'processing':
-                    self._parseResult(self._unflatten(self.mMsger.getResult()))
-                self._clearEvent()
-                continue
+                if 'status' in self.mResponse:
+                    _logger.debug("Waiting for server response timed out. status: {}".format(self.mResponse['status']))
+                    if self.mResponse['status'] == 'processing':
+                        self._parseResult(self._unflatten(self.mMsger.getResult()))
+                        self._clearEvent()
+                        continue
 
     def __dump(self, value):
         for k in value.keys():
@@ -381,155 +381,227 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Technexion Installer Program: CLI')
     subparsers = parser.add_subparsers(dest='cmd', help='commands')
 
+    ############################################################################
     # info commands
     # 'target', 'location'
+    ############################################################################
     info_parser = subparsers.add_parser('info', help='information queries')
     info_parser.add_argument('-t', '--target', type=QueryTargetType, \
                              action='store', dest='target', default='emmc', \
-                             help='Specify target storage media, choices are: [emmc, sdcard, hd, or a valid web host URL]')
+                             help='Specify target storage media, choices are: \
+                                 [emmc, sdcard, hd, or a valid web host URL]')
     info_parser.add_argument('-l', '--location', type=QueryLocationType, \
                              action='store', dest='location', default='all', \
-                             help='Information of target storage media, choices are: [all, spl, bootloader, \
-                                    controller, disk, partition, bus, device, \
-                                    sensor, connection, kernel, dtb, rootfs, os, or \
-                                    a valid URL directory]')
-
+                             help='Information of target storage media, choices are: \
+                                 [all, spl, bootloader, controller, disk, partition, \
+                                 bus, device, sensor, connection, kernel, dtb, rootfs, \
+                                 os, or a valid URL directory]')
+    ############################################################################
     # flash commands
     # 'src_filename', 'tgt_filename', src_start_sector, tgt_start_sector, src_total_sectors
+    ############################################################################
     flash_parser = subparsers.add_parser('flash', help='flash local file to local storage media')
     flash_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
-                              action='store', metavar='FILENAME', help='Specify target storage media')
+                              action='store', metavar='FILENAME', \
+                              help='Specify target storage media')
     flash_parser.add_argument('-b', '--target-start-sector', dest='tgt_start_sector', \
-                              action='store', default='0', help='Specify starting locations on the target storage media')
+                              action='store', default='0', \
+                              help='Specify starting locations on the target storage media')
     flash_parser.add_argument('-s', '--source-filename', dest='src_filename', \
-                              action='store', metavar='FILENAME', help='Specify source storage media')
+                              action='store', metavar='FILENAME', \
+                              help='Specify source storage media')
     flash_parser.add_argument('-f', '--src-start-sector', dest='src_start_sector', \
-                              action='store', default='0', help='Specify starting locations on the source storage media')
+                              action='store', default='0', \
+                              help='Specify starting locations on the source storage media')
     flash_parser.add_argument('-n', '--total-sectors', dest='src_total_sectors', \
-                              action='store', default='-1', help='Specify total number of sectors to copy')
+                              action='store', default='-1', \
+                              help='Specify total number of sectors to copy')
     flash_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
-                              action='store', default='-1', help='Specify the chunk size (sector size) in bytes to copy')
-
+                              action='store', default='-1', \
+                              help='Specify the chunk size (sector size) in bytes to copy')
+    ############################################################################
     # qrcode commands
     # 'dl_url', 'tgt_filename', receiver, lvl, mode
+    ############################################################################
     qrcode_parser = subparsers.add_parser('qrcode', help='get the qrcode of the download file image info')
     qrcode_parser.add_argument('-u', '--download-url', dest='dl_url', \
-                              action='store', metavar='URL', type=str, help='Specify download url of the xz file')
+                              action='store', metavar='URL', type=str, \
+                              help='Specify download url of the xz file')
     qrcode_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
-                              action='store', metavar='FILENAME', type=str, help='Specify target storage media')
+                              action='store', metavar='FILENAME', type=str, \
+                              help='Specify target storage media')
     qrcode_parser.add_argument('-i', '--image-file', dest='img_filename', \
-                              action='store', type=str, help='Specify the svg file_name to save')
+                              action='store', type=str, \
+                              help='Specify the svg file_name to save')
     qrcode_parser.add_argument('-r', '--receiver', dest='receiver', \
-                              action='store', default='', metavar='MAILTO', type=str, help='Specify receiver email address')
+                              action='store', default='', metavar='MAILTO', type=str, \
+                              help='Specify receiver email address')
     qrcode_parser.add_argument('-m', '--encode-mode', dest='mode', \
-                              action='store', default='binary', type=QRCodeModeType , help='Specify encoding mode for qrcode')
+                              action='store', default='binary', type=QRCodeModeType, \
+                              help='Specify encoding mode for qrcode')
     qrcode_parser.add_argument('-l', '--error-level', dest='lvl', \
-                              action='store', default='H', type=QRCodeErrLevel, help='Specify error level for qrcode')
-
+                              action='store', default='H', type=QRCodeErrLevel, \
+                              help='Specify error level for qrcode')
+    ############################################################################
     # config commands
-    # 'load'/'save' 'configfile'
-    config_parser = subparsers.add_parser('config', help='configurations')
+    # 'load'/'save' subcommand with required 'configfile' argument
+    ############################################################################
+    config_parser = subparsers.add_parser('config', help='Save/Load configuration or configure mmc/nic')
     config_subparser = config_parser.add_subparsers(dest='subcmd', help='sub configuration command')
     config_subloadparser = config_subparser.add_parser('load', help="Load the configuration file")
     config_subloadparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
     config_subsaveparser = config_subparser.add_parser('save', help="Save the configuration file")
     config_subsaveparser.add_argument('configfile', metavar='FILENAME', action='store', help='Specify the configuration file')
-
-    # 'mmc' 'target'
-    # python3 view.py {'config' 'mmc' -c 'bootpart' -s 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
-    # param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable', 'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
-    config_submmcparser = config_subparser.add_parser('mmc', help='Specify MMC configure settings')
-    config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_OPTION_NAME', action='store', help='Specify the mmc configuration option')
-    config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the mmc action for the configuration option')
-    config_submmcparser.add_argument('-n', '--boot-partition-number', dest='boot_part_no', metavar='BOOT_OPTION_NUMBER', default='1', action='store', type=str, help='Specify the mmc boot partition number')
-    config_submmcparser.add_argument('-k', '--send-acknowledge', dest='send_ack', metavar='SEND_ACK', default='1', action='store', help='Specify whether to send acknowledge or not {0, 1}')
-    config_submmcparser.add_argument('target', metavar='TARGET_MMC_NODEPATH', action='store', help='Specify the mmc device path to configure')
     #config_parser.add_argument('subcmd', choices=('load', 'save'), default='load', action='store', help='Load/Save the configuration')
     #config_parser.add_argument('-c', '--config-file', dest='configfile', action='store', metavar='FILENAME', help='Specify the configuration file')
     #config_parser.add_argument('-t', '--target-device', dest='target', choices=('mmc', 'i2c', 'gpio'), default='mmc', action='store', help='Specify target device to configure, choices are: [mmc, i2c, gpio, ...]')
     #config_parser.add_argument('-l', '--location', dest='location', default='/dev/mmcblk2', action='store', help='Specify the mmc dev path')
-
-    # 'nic' 'target'
+    ############################################################################
+    # 'mmc' 'target' subcommands with following syntax
+    # python3 view.py {'config' 'mmc' -c 'bootpart' -s 'enable', -n 1, -k 1, -l '/dev/mmcblk2'}
+    # param = {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable',
+    #          'boot_part_no': '1', 'send_ack': '1', 'target': '/dev/mmcblk2'}
+    ############################################################################
+    config_submmcparser = config_subparser.add_parser('mmc', help='Specify MMC configure settings')
+    config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', \
+                                     metavar='CONFIG_OPTION_NAME', action='store', \
+                                     help='Specify the mmc configuration option')
+    config_submmcparser.add_argument('-s', '--config-action', dest='config_action', \
+                                     metavar='CONFIG_ACTION', action='store', \
+                                     help='Specify the mmc action for the configuration option')
+    config_submmcparser.add_argument('-n', '--boot-partition-number', dest='boot_part_no', \
+                                     metavar='BOOT_OPTION_NUMBER', default='1', \
+                                     action='store', type=str, help='Specify the mmc boot partition number')
+    config_submmcparser.add_argument('-k', '--send-acknowledge', dest='send_ack', \
+                                     metavar='SEND_ACK', default='1', action='store', \
+                                     help='Specify whether to send acknowledge or not {0, 1}')
+    config_submmcparser.add_argument('target', metavar='TARGET_MMC_NODEPATH', action='store', \
+                                     help='Specify the mmc device path to configure')
+    ############################################################################
+    # 'nic' subcommand with required 'target' argument, others are options
     # python3 view.py {'config' 'nic' -c 'ifflags' -s 'get' enp3s0'}
     # param = {'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': 'enp3s0'}
-    config_submmcparser = config_subparser.add_parser('nic', help='Specify network configure settings')
-    config_submmcparser.add_argument('-c', '--config-opt', dest='config_id', metavar='CONFIG_NAME', action='store', help='Specify the network configuration option')
-    config_submmcparser.add_argument('-s', '--config-action', dest='config_action', metavar='CONFIG_ACTION', action='store', help='Specify the network configure action for the configuration option')
-    config_submmcparser.add_argument('-d', '--config-data', dest='config_data', metavar='CONFIG_DATA', action='store', default='', help='Specify the network configuration data')
-    config_submmcparser.add_argument('target', metavar='TARGET_NIC_IFNAME', action='store', nargs='?', default='any', help='Specify the nic device path to configure')
-
-
-
+    ############################################################################
+    config_subnicparser = config_subparser.add_parser('nic', help='Specify network configure settings')
+    config_subnicparser.add_argument('-c', '--config-opt', dest='config_id', \
+                                     metavar='CONFIG_NAME', action='store', \
+                                     help='Specify the network configuration option')
+    config_subnicparser.add_argument('-s', '--config-action', dest='config_action', \
+                                     metavar='CONFIG_ACTION', action='store', \
+                                     help='Specify the network configure action for the configuration option')
+    config_subnicparser.add_argument('-d', '--config-data', dest='config_data', \
+                                     metavar='CONFIG_DATA', action='store', default='', \
+                                     help='Specify the network configuration data')
+    config_subnicparser.add_argument('target', metavar='TARGET_NIC_IFNAME', action='store', \
+                                     nargs='?', default='any', \
+                                     help='Specify the nic device path to configure')
+    ############################################################################
     # verify commands
+    ############################################################################
 
-
-
+    ############################################################################
     # connect commands
-
-
-
+    ############################################################################
+    connect_parser = subparsers.add_parser('connect', help='connect serial, web, mass storage, serial + mass storage or multi')
+    connect_parser.add_argument('-t', dest='type', choices=('serial', 'web', 'storage', 'serialstorage', 'multi'), \
+                                action='store', default='cli', \
+                                help='connect serial, web or mass storage')
+    connect_parser.add_argument('-s', '--source-filename', dest='src_filename', \
+                              action='store', metavar='FILENAME', default='', \
+                              help='Specify source storage media to use as mass storage device')
+    ############################################################################
     # disconnect commands
-
-
-
-#     # start commands
+    ############################################################################
+    disconnect_parser = subparsers.add_parser('disconnect', help='disconnect, serial, web, mass storage, serial + mass storage or multi')
+    disconnect_parser.add_argument('-t', dest='type', choices=('serial', 'web', 'storage', 'serialstorage', 'multi'), \
+                                   action='store', default='serial', \
+                                   help='disconnect serial, web or mass storage')
+    ############################################################################
+    # start commands
+    # 'start' command to start client/server
+    ############################################################################
 #     start_parser = subparsers.add_parser('start', help='start client/server')
 #     start_parser.add_argument('-t', dest='type', choices=('srv', 'cli'), \
-#                               action='store', default='cli', help='start the server or client')
-
+#                               default='cli', help='start the server, client')
+    ############################################################################
     # stop commands
-    stop_parser = subparsers.add_parser('stop', help='stop client/server')
+    # 'stop' command to stop client/server, and interrupt long running jobs
+    ############################################################################
+    stop_parser = subparsers.add_parser('stop', help='stop server, client, or jobs')
     stop_parser.add_argument('-t', dest='type', choices=('srv', 'cli', 'job'), \
-                            action='store', default='job', help='stop the server or client or job')
-
+                             action='store', default='job', \
+                             help='stop the server, client, or job')
+    ############################################################################
     # upload commands
+    ############################################################################
 
+    ############################################################################
     # download commands
     # 'dl_module',  'dl_baseboard', 'dl_os', 'dl_version', 'dl_display', \
     # 'dl_filetype', 'dl_host', 'dl_protocol', 'tgt_filename'
+    ############################################################################
     dl_parser = subparsers.add_parser('download', help='download rescue files and flash to local storage media')
     dl_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
-                           action='store', metavar='FILENAME', help='Specify target storage media')
-    dl_parser.add_argument('-b', '--target-start-sector', dest='tgt_start_sector', type=str, \
-                           action='store', default='0', help='Specify starting sector on the target storage media')
+                           action='store', metavar='FILENAME', \
+                           help='Specify target storage media')
+    dl_parser.add_argument('-b', '--target-start-sector', dest='tgt_start_sector', \
+                           type=str, action='store', default='0', \
+                           help='Specify starting sector on the target storage media')
     dl_parser.add_argument('-p', '--host-protocol', dest='dl_protocol', choices=('http', 'ftp'), \
-                           action='store', default='http', help='Specify host protocol to use for downloads')
+                           action='store', default='http', \
+                           help='Specify host protocol to use for downloads')
     dl_parser.add_argument('-s', '--host-name', dest='dl_host', \
-                           action='store', metavar='HOST', default='rescue.technexion.net', help='Specify host/URL to download from')
+                           action='store', metavar='HOST', default='rescue.technexion.net', \
+                           help='Specify host/URL to download from')
     dl_parser.add_argument('-m', '--module', dest='dl_module', type=str, \
-                           choices=('edm1_cf_imx6all', 'pico-imx6', 'pico-imx6ul', 'pico-imx7', 'pico_imx6', 'tek3_imx6', 'tep5-imx6', 'tep5_imx6'), \
-                           action='store', default=argparse.SUPPRESS, help='Specify the module of target device')
+                           choices=('edm1_cf_imx6all', 'pico-imx6', 'pico-imx6ul', \
+                                    'pico-imx7', 'pico_imx6', 'tek3_imx6', \
+                                    'tep5-imx6', 'tep5_imx6'), \
+                           action='store', default=argparse.SUPPRESS, \
+                           help='Specify the module of target device')
     dl_parser.add_argument('-d', '--baseboard', dest='dl_baseboard', \
-                           choices=('dwarf', 'hobbit', 'nymph', 'fairy', 'pi', 'toucan', 'tek3', 'tep5'), \
-                           action='store', default=argparse.SUPPRESS, help='Specify the baseboard of target device')
+                           choices=('dwarf', 'hobbit', 'nymph', 'fairy', 'pi', \
+                                    'toucan', 'tek3', 'tep5'), \
+                           action='store', default=argparse.SUPPRESS, \
+                           help='Specify the baseboard of target device')
     dl_parser.add_argument('-o', '--operating-system', dest='dl_os', \
                            choices=('ubuntu', 'android', 'yocto'),\
-                           action='store', default=argparse.SUPPRESS, help='Specify the operating system to download for target device')
+                           action='store', default=argparse.SUPPRESS, \
+                           help='Specify the operating system to download for target device')
     dl_parser.add_argument('-v', '--os-version', dest='dl_version', type=str, \
-                           action='store', default=argparse.SUPPRESS, metavar='OS_VERSION', help='Specify the version of operating system to download')
+                           action='store', default=argparse.SUPPRESS, \
+                           metavar='OS_VERSION', help='Specify the version of operating system to download')
     dl_parser.add_argument('-y', '--display', dest='dl_display', \
-                           choices=('lcd800x480', 'lvds1024x600', '070', '050', 'vga', 'hdmi'), \
-                           action='store', default=argparse.SUPPRESS, help='Specify the display version of target device')
+                           choices=('lcd800x480', 'lvds1024x600', '070', '050', \
+                                    'vga', 'hdmi'), \
+                           action='store', default=argparse.SUPPRESS, \
+                           help='Specify the display version of target device')
     dl_parser.add_argument('-e', '--file-extension', dest='dl_filetype', \
                            choices=('xz', 'imx', 'img', 'bin'), \
-                           action='store', default=argparse.SUPPRESS, help='Specify the file extension of the download file')
-    dl_parser.add_argument('-f', '--src-start-sector', dest='src_start_sector', type=str, \
-                           action='store', default='0', help='Specify starting locations on the source storage media')
-    dl_parser.add_argument('-n', '--src-total-sectors', dest='src_total_sectors', type=str, \
-                           action='store', default='-1', help='Specify total number of sectors to download')
+                           action='store', default=argparse.SUPPRESS, \
+                           help='Specify the file extension of the download file')
+    dl_parser.add_argument('-f', '--src-start-sector', dest='src_start_sector', \
+                           type=str, action='store', default='0', \
+                           help='Specify starting locations on the source storage media')
+    dl_parser.add_argument('-n', '--src-total-sectors', dest='src_total_sectors', \
+                           type=str, action='store', default='-1', \
+                           help='Specify total number of sectors to download')
     dl_parser.add_argument('-c', '--chunk-size', dest='chunk_size', type=str, \
-                           action='store', default='65536', help='Specify the block size to read/write per I/O')
+                           action='store', default='65536', \
+                           help='Specify the block size to read/write per I/O')
     dl_parser.add_argument('-u', '--url', dest='dl_url', default=argparse.SUPPRESS, \
-                           action='store', metavar='DOWNLOAD_URL', help='Specify the proper URL of the download file')
+                           action='store', metavar='DOWNLOAD_URL', \
+                           help='Specify the proper URL of the download file')
+    ############################################################################
+    # install commands - to be implemented
+    ############################################################################
 
-    # install commands
-
-    # rescue commands
-
+    ############################################################################
     # Global Options
-    parser.add_argument('--verbose', dest='verbose', \
-                        action='store_true', default=False, help='Show more information')
-    parser.add_argument('--version', action='version', version='%(prog)s 2018.5.16.1')
+    ############################################################################
+    parser.add_argument('--verbose', dest='verbose', action='store_true', default=False, \
+                        help='Show more information')
+    parser.add_argument('--version', action='version', version='%(prog)s 2018.6.30.2')
     args = parser.parse_args() # by default, arguments taken from sys.argv[1:]
     if args.verbose:
         _logger.setLevel(logging.DEBUG)

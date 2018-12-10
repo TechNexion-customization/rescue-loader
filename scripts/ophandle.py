@@ -58,9 +58,9 @@ from model import CopyBlockActionModeller, \
                   QueryWebFileActionModeller, \
                   QueryLocalFileActionModeller, \
                   ConfigMmcActionModeller, \
+                  DriverActionModeller, \
                   ConfigNicActionModeller, \
-                  QRCodeActionModeller, \
-                  BaseActionModeller
+                  QRCodeActionModeller
 
 _logger = logging.getLogger(__name__)
 
@@ -515,6 +515,64 @@ class ConfigOperationHandler(BaseOperationHandler):
             return True
         else:
             return False
+
+
+class ConnectOperationHandler(BaseOperationHandler):
+    def __init__(self, UserRequestCB, ConnectCB):
+        super().__init__(UserRequestCB)
+        self.mConnectCbHandler = ConnectCB
+
+    def isOpSupported(self, OpParams):
+        # Check if cmd is supported
+        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys() and 'type' in OpParams.keys():
+            if OpParams['cmd'] in ['connect', 'disconnect'] and \
+                OpParams['type'] in ['serial', 'web', 'storage', 'serialstorage', 'multi']:
+                return True
+        return False
+
+    def _setupActions(self):
+        # setup "config" cmd operation:
+        if self.mActionParam:
+            self.mActionModellers.append(DriverActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            return True
+        return False
+
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        self.mActionParam.clear()
+        # Parse the OpParams and Setup mActionParams
+        # e.g. {'cmd': 'start', 'cmd': 'stop', 'type': 'serial | web | storage'}
+        if isinstance(OpParams, dict):
+            # required params
+            for k in ['cmd', 'type']:
+                if k in OpParams:
+                    self.mActionParam.update({k: OpParams[k]})
+
+            if 'src_filename' in OpParams and OpParams['src_filename'] != '':
+                self.mActionParam.update({'src_filename': OpParams['src_filename']})
+
+        # verify the ActionParam to pass to modeller
+        if all(s in self.mActionParam.keys() for s in ['cmd', 'type']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+            return True
+        else:
+            return False
+
+    def performOperation(self, OpParams):
+        """
+        override performOperation
+        """
+        ret = False
+        if callable(self.mConnectCbHandler):
+            if OpParams['cmd'] == 'disconnect':
+                _logger.debug('disconnect: callback to remove messenger before modprobe')
+                self.mConnectCbHandler(OpParams)
+            ret = super().performOperation(OpParams)
+            if ret and OpParams['cmd'] == 'connect':
+                _logger.debug('connect: callback to create messenger after modprobe')
+                return self.mConnectCbHandler(OpParams)
+        return ret
 
 
 
