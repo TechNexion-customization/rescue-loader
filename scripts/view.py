@@ -183,7 +183,7 @@ class CliViewer(BaseViewer):
     def _isStillProcessing(self):
         status = {}
         status.update(self._unflatten(self.mMsger.getStatus()))
-        _logger.info('Is Still processing? Status: {}'.format(status))
+        _logger.info('Job Status: {}'.format(status))
         if 'status' in status and status['status'] == 'processing':
             return True
         return False
@@ -397,6 +397,46 @@ if __name__ == "__main__":
                                  bus, device, sensor, connection, kernel, dtb, rootfs, \
                                  os, or a valid URL directory]')
     ############################################################################
+    # read commands
+    # 'src_filename', src_start_sector, src_total_sectors, chunk_size
+    ############################################################################
+    read_parser = subparsers.add_parser('read', help='read src file and present read data')
+    read_parser.add_argument('-s', '--source-filename', dest='src_filename', \
+                              action='store', metavar='FILENAME', \
+                              help='Specify source storage media')
+    read_parser.add_argument('-f', '--src-start-sector', dest='src_start_sector', \
+                              action='store', default='0', \
+                              help='Specify starting sector (512 bytes/sector) on the source storage media')
+    read_parser.add_argument('-n', '--num-of-chunks', dest='num_chunks', \
+                              action='store', default='-1', \
+                              help='Specify total number of chunks to read')
+    read_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
+                              action='store', default='-1', \
+                              help='Specify the chunk size (or sector size) in bytes to read')
+    read_parser.add_argument('-i', '--coding', dest='coding', default='no', \
+                              action='store', choices=('no', 'b64', 'rle'), \
+                              help='Specify the coding to return the read data')
+    ############################################################################
+    # write commands
+    # 'tgt_filename', tgt_start_sector, tgt_total_sectors, chunk_size
+    ############################################################################
+    write_parser = subparsers.add_parser('write', help='write data to target file')
+    write_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
+                              action='store', metavar='FILENAME', \
+                              help='Specify target storage media')
+    write_parser.add_argument('-b', '--target-start-sector', dest='tgt_start_sector', \
+                              action='store', default='0', \
+                              help='Specify starting sector (512 bytes/sector) on the target storage media')
+    write_parser.add_argument('-d', '--target-chunk-data', dest='tgt_data', \
+                              action='store', default='', \
+                              help='Specify the data to write to the target file/storage media')
+    write_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
+                              action='store', default='-1', \
+                              help='Specify the chunk size (or sector size) in bytes to write')
+    write_parser.add_argument('-i', '--coding', dest='coding', default='no', \
+                              action='store', choices=('no', 'rle'), \
+                              help='Specify the coding of the written data')
+    ############################################################################
     # flash commands
     # 'src_filename', 'tgt_filename', src_start_sector, tgt_start_sector, src_total_sectors
     ############################################################################
@@ -415,7 +455,7 @@ if __name__ == "__main__":
                               help='Specify starting locations on the source storage media')
     flash_parser.add_argument('-n', '--total-sectors', dest='src_total_sectors', \
                               action='store', default='-1', \
-                              help='Specify total number of sectors to copy')
+                              help='Specify total number of sectors (512 bytes/sector) to copy')
     flash_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
                               action='store', default='-1', \
                               help='Specify the chunk size (sector size) in bytes to copy')

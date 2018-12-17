@@ -54,13 +54,14 @@ import stat
 import fcntl
 import psutil
 import array
+import binascii
+import base64
 import pyudev
 import socket
 import struct
 import subprocess
 import logging
 import pyqrcode
-from argparse import ArgumentTypeError
 from html.parser import HTMLParser
 
 from inputoutput import BlockInputOutput, FileInputOutput, BaseInputOutput, WebInputOutput
@@ -129,26 +130,25 @@ class BaseActionModeller(object):
             if len(param) > 0:
                 self.mParam.clear()
                 self.mParam.update(param)
-                _logger.debug('{} - set mParam: {}'.format(self, self.mParam))
+                _logger.debug('{} - set mParam: {}'.format(type(self).__name__, self.mParam))
         else:
-            raise ValueError('{} - no action params for model'.format(self))
+            raise ValueError('wrong action params')
 
     def performAction(self):
         self.mResult.clear()
         ret = False
         try:
             ret = self._preAction()
-            _logger.debug('{} _preAction(): {}'.format(self, ret))
+            _logger.debug('{} _preAction(): {}'.format(type(self).__name__, ret))
             if (ret):
                 ret = self._mainAction()
-                _logger.debug('{} _mainAction(): {}'.format(self, ret))
+                _logger.debug('{} _mainAction(): {}'.format(type(self).__name__, ret))
                 if(ret):
                     ret = self._postAction()
-                    _logger.debug('{} _postAction(): {}'.format(self, ret))
+                    _logger.debug('{} _postAction(): {}'.format(type(self).__name__, ret))
         except Exception as ex:
-            _logger.info('{} performAction exception: {}'.format(self, ex))
+            _logger.error('{} performAction error: {}'.format(type(self).__name__, ex))
             ret = False
-            raise
         finally:
             return ret
 
@@ -176,6 +176,127 @@ class BaseActionModeller(object):
 
 
 
+class BasicBlockActionModeller(BaseActionModeller):
+    """
+    Basic Block Action Model to read/write blocks to/from files/storage
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+        self.mChunkSize = 0
+
+    def _preAction(self):
+        # setup the input/output objects
+        # if no chunksize specified, set chunk_size to default 512 bytes
+        if 'chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0:
+            self.mChunkSize = 512
+        else:
+            self.mChunkSize = int(self.mParam['chunk_size'])
+
+        if all(s not in self.mParam for s in ['src_filename', 'tgt_filename']) or \
+            all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
+            raise ValueError('preAction: Neither src/tgt file specified or both specified')
+        else:
+            if 'src_filename' in self.mParam:
+                self.mResult['bytes_read'] = 0
+                if 'src_start_sector' not in self.mParam or int(self.mParam['src_start_sector']) < 0:
+                    self.mParam['src_start_sector'] = 0
+                elif int(self.mParam['src_start_sector']) % 512 != 0:
+                    raise ValueError('preAction: source start sector must be multiples of 512 sector size')
+                if 'num_chunks' not in self.mParam or self.mParam['num_chunks'] < 0:
+                    self.mParam['num_chunks'] = 1
+                # default mode is rb+
+                self.mIO = BlockInputOutput(self.mChunkSize, self.mParam['src_filename'], 'rb')
+                if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode):
+                    # setup different total size for char dev
+                    # special case where source is a char device, because it is
+                    # mostly read only, and have no total sectors
+                    self.mParam['chunk_size'] = 4096 # reset to 4096
+                    self.mParam['src_start_sector'] = 0 # reset to beginning
+                    # i.e. reset to 0 instead of -1/any passed in from handler
+                    self.mParam['src_total_chunks'] = 0
+                else:
+                    filesize = self.mIO.getFileSize()
+                    blksize = self.mIO.getBlockSize()
+                    if ('chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0):
+                        # if no chunk_size is specified, then assign the os blocksize
+                        self.mIO.mChunkSize = blksize
+                        self.mParam['chunk_size'] = blksize
+                        self.mParam['src_total_chunks'] = -(-filesize // blksize)
+                    else:
+                        self.mParam['src_total_chunks'] = -(-filesize // int(self.mParam['chunk_size']))
+
+            elif 'tgt_filename' in self.mParam:
+                self.mResult['bytes_written'] = 0
+                if 'tgt_start_sector' not in self.mParam or int(self.mParam['tgt_start_sector']) < 0:
+                    self.mParam['tgt_start_sector'] = 0
+                elif int(self.mParam['tgt_start_sector']) % 512 != 0:
+                    raise ValueError('preAction: target start sector must be multiples of 512 sector size')
+                self.mIO = BlockInputOutput(self.mChunkSize, self.mParam['tgt_filename'], 'wb+')
+                if 'tgt_data' not in self.mParam or len(self.mParam['tgt_data']) == 0:
+                    raise ValueError('preAction: No data to be written')
+                # if no coding and data is hexdecimal, then unhex it,
+                # otherwise leave the data as it is for b64 or rle coding
+                if 'coding' in self.mParam and (self.mParam['coding'] == 'no' or self.mParam['coding'] is None):
+                    if self.mIO.isHexData(self.mParam['tgt_data']):
+                        self.mParam['tgt_data'] = binascii.unhexlify(self.mParam['tgt_data'].encode())
+                if stat.S_ISCHR(os.stat(self.mParam['tgt_filename']).st_mode):
+                    raise IOError('preAction: target filename/device cannot be a char dev')
+                else:
+                    filesize = self.mIO.getFileSize()
+                    blksize = self.mIO.getBlockSize()
+                    if ('chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0):
+                        self.mIO.mChunkSize = blksize
+                        self.mParam['chunk_size'] = blksize
+                        self.mParam['tgt_total_chunks'] = -(-filesize // blksize)
+                    else:
+                        self.mParam['tgt_total_chunks'] = -(-filesize // int(self.mParam['chunk_size']))
+
+        if self.mIO:
+            self.mResult.update(self.mParam)
+            _logger.debug('{}: preAction: {}'.format(type(self).__name__, self.mParam))
+            return True
+        return False
+
+    def _mainAction(self):
+        ret = False
+        # read or write specified address range from src file or target data to target file
+        if all(s in self.mParam for s in ['src_start_sector', 'num_chunks']):
+            _logger.debug('{}: mainAction: Read {} chunks from sector {}'.format(type(self).__name__, self.mParam['num_chunks'], self.mParam['src_start_sector']))
+            data = self.mIO.Read(int(self.mParam['src_start_sector']), int(self.mParam['num_chunks']))
+            if data:
+                if self.mParam['coding'] == 'rle':
+                    retdata = base64.urlsafe_b64encode(binascii.rlecode_hqx(data))
+                elif self.mParam['coding'] == 'b64':
+                    retdata = base64.urlsafe_b64encode(data)
+                else:
+                    retdata = data
+                self.mResult.update({'src_data': retdata.decode('ascii')})
+                self.mResult.update({'bytes_read': len(data)})
+                ret = True
+        elif all(s in self.mParam for s in ['tgt_start_sector', 'tgt_data']):
+            # write() returns number of bytes written
+            if self.mParam['coding'] == 'rle':
+                rawdata = binascii.rledecode_hqx(base64.urlsafe_b64decode(self.mParam['tgt_data'].encode('ascii')))
+            elif self.mParam['coding'] == 'b64':
+                rawdata = base64.urlsafe_b64decode(self.mParam['tgt_data'].encode('ascii'))
+            else:
+                rawdata = self.mParam['tgt_data'].encode()
+            _logger.debug('{}: mainAction: write data size: {} to sector: {}'.format(type(self).__name__, len(rawdata), rawdata))
+            self.mResult['bytes_written'] = self.mIO.Write(rawdata, self.mParam['tgt_start_sector'])
+            if self.mResult['bytes_written'] == len(rawdata):
+                ret = True
+        else:
+            raise ValueError('mainAction: Invalid parameter values.')
+
+        # close the block input/output device
+        self.mIO._close()
+        del self.mIO
+        return ret
+
+
+
 class CopyBlockActionModeller(BaseActionModeller):
     """
     Copy Block Action Model to copy blocks of files
@@ -189,32 +310,34 @@ class CopyBlockActionModeller(BaseActionModeller):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
         # setup the input/output objects
-        # chunk_size in bytes default 1MB, i.e. 1048576
-        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0) else 1048576 # 1MB
+        # # if no chunksize specified, reset chunk_size to default 1MB, i.e. 1048576 bytes
+        if 'chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0:
+            self.mParam['chunk_size'] = 1048576 # 1MB
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
-            try:
-                if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode) and stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode):
-                    # special case where source is a char device and target is a block device, e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
-                    self.mParam['chunk_size'] = 4096 #  self.mIOs[-1].getBlockSize()
-                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
-                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
-                    self.mParam['src_total_sectors'] = int(self.mIOs[-1].getFileSize() / self.mParam['chunk_size'])
-                    self.mParam['src_start_sector'] = 0
-                    self.mParam['tgt_start_sector'] = 0
-                else:
-                    # default mode is rb+
-                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename']))
-                    # setup different size params
-                    filesize = self.mIOs[-1].getFileSize()
-                    blksize = self.mIOs[-1].getBlockSize()
-                    if (self.mParam['src_total_sectors'] == -1) or ('src_total_sectors' not in self.mParam):
-                        self.mParam['src_total_sectors'] = int(filesize/blksize) + 0 if (filesize % blksize) else 1
-                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
-            except Exception as ex:
-                raise IOError('Cannot create block inputoutput: {}'.format(ex))
+            if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode) and \
+                stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode):
+                # special case where source is a char device and target is a block device,
+                # char dev don't have a total sector size, and is read only
+                # e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
+                self.mParam['chunk_size'] = 4096 #  self.mIOs[-1].getBlockSize()
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
+                # so get src total sector from target device
+                self.mParam['src_total_sectors'] = -(-self.mIOs[-1].getFileSize() // int(self.mParam['chunk_size']))
+                self.mParam['src_start_sector'] = 0
+                self.mParam['tgt_start_sector'] = 0
+            else:
+                # default mode is rb+
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename']))
+                # setup different size params
+                filesize = self.mIOs[-1].getFileSize()
+                blksize = self.mIOs[-1].getBlockSize()
+                if (int(self.mParam['src_total_sectors']) == -1) or ('src_total_sectors' not in self.mParam):
+                    self.mParam['src_total_sectors'] = -(-filesize // blksize)
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
         else:
-            raise ArgumentTypeError('No src or tgt file specified')
+            raise ValueError('preAction: Neither src nor tgt file specified')
 
         if len(self.mIOs) > 0 and all(isinstance(ioobj, BaseInputOutput) for ioobj in self.mIOs):
             return True
@@ -222,53 +345,47 @@ class CopyBlockActionModeller(BaseActionModeller):
 
     def _mainAction(self):
         # copy specified address range from src file to target file
-        try:
-            if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
-                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576 # 1MB
-                blksize = self.mIOs[0].getBlockSize()
-                srcstart = self.mParam['src_start_sector'] * blksize
-                tgtstart = self.mParam['tgt_start_sector'] * blksize
-                totalbytes = self.mParam['src_total_sectors'] * blksize
-                self.mResult['total_size'] = totalbytes
-                # sector addresses of a very large file for looping
-                address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-                _logger.debug('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
-                if len(address) > 1:
-                    for (srcaddr, tgtaddr) in address:
-                        self.checkInterruptAndExit()
-                        self.__copyChunk(srcaddr, tgtaddr, 1)
-                else:
-                    self.__copyChunk(srcstart, tgtstart, totalbytes)
-                return True
+        ret = False
+        if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
+            chunksize = int(self.mParam['chunk_size'])
+            blksize = self.mIOs[0].getBlockSize() # get block size from src dev
+            srcstart = int(self.mParam['src_start_sector']) * blksize
+            tgtstart = int(self.mParam['tgt_start_sector']) * blksize
+            totalbytes = int(self.mParam['src_total_sectors']) * blksize
+            self.mResult['total_size'] = totalbytes
+            # sector addresses of a very large file for looping
+            address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
+            _logger.debug('{} total_size: {} block_size: {} list of addresses ({}) to copy: {}'.format(type(self).__name__, totalbytes, blksize, len(address), [addr for addr in address]))
+            if len(address) > 1:
+                for (srcaddr, tgtaddr) in address:
+                    self.checkInterruptAndExit()
+                    self.__copyChunk(srcaddr, tgtaddr, 1)
             else:
-                raise ArgumentTypeError('Not specified source/target start sector, or total sectors')
-        except Exception as ex:
-            _logger.error('CopyBlock main-action exception: {}'.format(ex))
-            raise
+                self.__copyChunk(srcstart, tgtstart, totalbytes)
+            ret = True
         else:
-            return False
-        finally:
-            # close the block device
-            for ioobj in self.mIOs:
-                ioobj._close()
+            raise ValueError('mainAction: No specified src/tgt start sector, nor total sectors')
+
+        # close the block device
+        for ioobj in self.mIOs:
+            ioobj._close()
+        del self.mIOs
+        return ret
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks):
-        try:
-            # read src and write to the target
-            data = self.mIOs[0].Read(srcaddr, numChunks)
-            self.mResult['bytes_read'] += len(data)
-            written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(tgtaddr), written))
-            # write should return number of bytes written
-            if (written > 0):
-                self.mResult['bytes_written'] += written
-            del data # hopefully this would clear the write data buffer
-        except:
-            raise
+        # read src and write to the target
+        data = self.mIOs[0].Read(srcaddr, numChunks)
+        self.mResult['bytes_read'] += len(data)
+        written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
+        _logger.debug('{} read: @{} size:{}, written: @{} size:{}'.format(type(self).__name__, hex(srcaddr), len(data), hex(tgtaddr), written))
+        # write should return number of bytes written
+        if (written > 0):
+            self.mResult['bytes_written'] += written
+        del data # hopefully this would clear the write data buffer
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
-        parts = int(totalbytes / chunksize) + (1 if (totalbytes % chunksize) else 0)
+        parts = -(-totalbytes // chunksize) # int ceiling division
         return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
 
 
@@ -291,35 +408,33 @@ class QueryFileActionModeller(BaseActionModeller):
             if self.mIO:
                 return True
             else:
-                raise ReferenceError('Cannot create FileInputOutput')
+                raise IOError('preAction: Cannot create FileInputOutput')
         else:
-            raise ReferenceError('No Valid Source File')
+            raise ValueError('preAction: No valid source file')
         return False
 
     def _mainAction(self):
         # read the file, and return read lines
         # TODO: should implement writing files in the future
-        try:
-            if all(s in self.mParam for s in ['src_start_line', 'src_totallines']):
-                data = self.mIO.Read(self.mParam['src_start_line'], self.mParam['src_totallines'])
-            elif 'src_start_line' in self.mParam and not 'src_totallines' in self.mParam:
-                # only src_start_line, start from start line and read rest
-                data = self.mIO.Read(self.mParam['src_start_line'])
-            elif 'src_total_lines' in self.mParam:
-                # only src_total_lines, read from start with total lines
-                data = self.mIO.Read(0, self.mParam['src_total_lines'])
-            else:
-                # no src_start_line and no src_totallines, start from beginning and read all
-                data = self.mIO.Read(0)
-            _logger.debug('read data: {}'.format(data))
-            self.mResult['lines_read'] += len(data)
-            self.mResult.update({'file_content': data})
-            return True
-        except Exception:
-            raise
-        return False
+        if all(s in self.mParam for s in ['src_start_line', 'src_totallines']):
+            # start from start line and read src_totallines
+            data = self.mIO.Read(int(self.mParam['src_start_line']), int(self.mParam['src_totallines']))
+        elif 'src_start_line' in self.mParam and not 'src_totallines' in self.mParam:
+            # only src_start_line, start from start line and read rest
+            data = self.mIO.Read(int(self.mParam['src_start_line']))
+        elif 'src_total_lines' in self.mParam:
+            # only src_total_lines, read from start with total lines
+            data = self.mIO.Read(0, int(self.mParam['src_total_lines']))
+        else:
+            # no src_start_line and no src_totallines, start from beginning and read all
+            data = self.mIO.Read(0)
+        _logger.debug('{} read data: {}'.format(type(self).__name__, data))
+        self.mResult['lines_read'] += len(data)
+        self.mResult.update({'file_content': data})
+        return True if len(data) else False
 
     def _postAction(self):
+        ret = False
         if 're_pattern' in self.mParam:
             # if there is a regular express pattern passed in, return the
             # found regular express pattern
@@ -327,11 +442,12 @@ class QueryFileActionModeller(BaseActionModeller):
             for line in self.mResult['file_content']:
                 m = p.match(line)
                 if m:
-                    _logger.debug('from pattern {} found_match: {}'.format(self.mParam['re_pattern'], m.groups()))
+                    _logger.debug('{} from pattern {} found_match: {}'.format(type(self).__name__, self.mParam['re_pattern'], m.groups()))
                     self.mResult['found_match'] = ','.join([g for g in m.groups()])
+                    ret = True
         # clear the mIO
         if self.mIO: del self.mIO
-        return True
+        return ret
 
 
 
@@ -350,7 +466,7 @@ class QueryBlockDevActionModeller(BaseActionModeller):
     def _preAction(self):
         if all(s in self.mParam for s in ['tgt_type', 'dst_pos']):
             self.__gatherStorage()
-            _logger.debug('controllers: {}\ndisks: {}\npartitions: {}'.format(self.mCtrls, self.mDisks, self.mPartitions))
+            _logger.debug('{} controllers: {}\ndisks: {}\npartitions: {}'.format(type(self).__name__, self.mCtrls, self.mDisks, self.mPartitions))
             if len(self.mPartitions) > 0 and len(self.mDisks) > 0 and len(self.mCtrls) > 0:
                 return True
         else:
@@ -360,10 +476,10 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         # check the actparams against the udev info
         # find self.mParam['tgt_type'] from ctrller's attributes('type') or driver()
         for o in self.mCtrls:
-            _logger.debug('tgt_type: {}, attributes: {}, driver: {}'.format(self.mParam['tgt_type'], self.__getDevAttributes(o).values(), o.driver))
+            _logger.debug('{} tgt_type: {}, attributes: {}, driver: {}'.format(type(self).__name__, self.mParam['tgt_type'], self.__getDevAttributes(o).values(), o.driver))
             if (self.mParam['tgt_type'] in self.__getDevAttributes(o).values() \
                 or self.mParam['tgt_type'] == o.driver):
-                _logger.debug('found controller: {}'.format(o))
+                _logger.debug('{} found controller: {}'.format(type(self).__name__, o))
                 self.mFound.append(o)
         # if found any controllers that match the target type, record it
         if len(self.mFound) > 0:
@@ -500,58 +616,47 @@ class WebDownloadActionModeller(BaseActionModeller):
         host = self.mParam['host_name'] if ('host_name' in self.mParam) else 'rescue.technexion.net'
         protocol = self.mParam['host_protocol'] if ('host_protocol' in self.mParam) else 'http'
         dlhost = protocol.rstrip('://') + '://' + host.rstrip('/')
-        _logger.debug('chunksize: {}, srcPath: {}, host: {}'.format(chunksize, srcPath, dlhost))
+        _logger.debug('{} chunksize: {}, srcPath: {}, host: {}'.format(type(self).__name__, chunksize, srcPath, dlhost))
 
         # setup the input/output objects
         if 'tgt_filename' in self.mParam:
-            try:
-                self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
-            except Exception as ex:
-                _logger.error('Cannot create web inputoutput: {}'.format(ex))
-                raise
-            try:
-                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
-            except Exception as ex:
-                _logger.error('Cannot create block inputoutput: {}'.format(ex))
-                raise
+            self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
+            self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
         else:
-            raise ArgumentTypeError('No tgt file specified')
+            raise ValueError('preAction: No tgt file specified')
 
-        if len(self.mIOs) > 0 and all(isinstance(ioobj, BaseInputOutput) for ioobj in self.mIOs):
+        if len(self.mIOs) == 2:
             return True
         return False
 
     def _mainAction(self):
         # copy specified address range from downloaded src file to target file
-        try:
-            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
-            totalbytes = self.mIOs[0].getFileSize()
-            self.mResult['total_uncompressed'] = self.mIOs[0].getUncompressedSize()
-            srcstart = 0
-            tgtstart = self.mParam['tgt_start_sector']
+        ret = False
+        chunksize = int(self.mParam['chunk_size']) if ('chunk_size' in self.mParam) else 65535 # 64K
+        totalbytes = self.mIOs[0].getFileSize()
+        self.mResult['total_uncompressed'] = self.mIOs[0].getUncompressedSize()
+        srcstart = 0
+        tgtstart = int(self.mParam['tgt_start_sector'])
 
-            # sector addresses of a very large file for looping
-            if totalbytes > 0:
-                address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-            else:
-                raise IOError('There is 0 Total Bytes to download')
-            _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
-            if len(address) > 1:
-                for count, (srcaddr, tgtaddr) in enumerate(address):
-                    self.checkInterruptAndExit()
-                    self.__copyChunk(srcaddr, tgtaddr, 1)
-            else:
-                self.__copyChunk(srcstart, tgtstart, totalbytes)
-            return True
-        except Exception as ex:
-            _logger.error('WebDownload main-action exception: {}'.format(ex))
-            raise
+        # sector addresses of a very large file for looping
+        if totalbytes > 0:
+            address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
         else:
-            return False
-        finally:
-            # close the block device
-            for ioobj in self.mIOs:
-                ioobj._close()
+            raise IOError('mainAction: There is 0 Total Bytes to download')
+        _logger.debug('{} list of addresses ({}) to copy: {}'.format(type(self).__name__, len(address), address))
+        if len(address) > 1:
+            for index, (srcaddr, tgtaddr) in enumerate(address):
+                self.checkInterruptAndExit()
+                self.__copyChunk(srcaddr, tgtaddr, 1)
+                ret = True
+        else:
+            self.__copyChunk(srcstart, tgtstart, totalbytes)
+            return True
+        # close the block device
+        for ioobj in self.mIOs:
+            ioobj._close()
+        del self.mIOs
+        return ret
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks):
         try:
@@ -559,17 +664,17 @@ class WebDownloadActionModeller(BaseActionModeller):
             data = self.mIOs[0].Read(srcaddr, numChunks)
             self.mResult['bytes_read'] += len(data)
             written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
+            _logger.debug('{} read: @{} size:{}, written: @{} size:{}'.format(type(self).__name__, hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
             # write should return number of bytes written
             if (written > 0):
                 self.mResult['bytes_written'] += written
             del data # hopefully this would clear the write data buffer
-        except Exception:
-            raise
+        except Exception as ex:
+            raise IOError('__copyChunk error: {}'.format(ex))
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
-        parts = int(totalbytes / chunksize) + (1 if (totalbytes % chunksize) else 0)
+        parts = -(-totalbytes // chunksize) # int ceiling division
         return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
 
 
@@ -586,7 +691,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         if all(s in self.mParam for s in ['host_name', 'src_directory']):
-            if ('host_name' in self.mParam) and self.mParam['host_name'].lower().startswith('http'):
+            if 'host_name' in self.mParam and self.mParam['host_name'].lower().startswith('http'):
                 self.mWebHost = self.mParam['host_name']
             else:
                 self.mWebHost = 'http://rescue.technexion.net'
@@ -604,32 +709,29 @@ class QueryWebFileActionModeller(BaseActionModeller):
 
     def _mainAction(self):
         # TODO: should implement writing files in the future
-        try:
-            # setup the web input output
-            webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
-            if webIO:
-                _logger.debug('Host: {} Path: {} File Type: {}'.format(self.mWebHost, self.mSrcPath, webIO.getFileType()))
-                if 'html' in webIO.getFileType():
-                    webpage = webIO.Read(0, 0)
-                    # parse the web pages
-                    dctFiles = self.__parseWebPage(webpage)
-                    if len(dctFiles) > 0:
-                        self.mResult['file_list'] = dctFiles
-                        self.mResult['lines_read'] += len(webpage)
-                        return True
-                elif 'xz' in webIO.getFileType():
-                    self.mResult['header_info'] = webIO.getHeaderInfo()
-                    self.mResult['file_type'] = webIO.getFileType()
-                    self.mResult['total_size'] = webIO.getFileSize()
-                    self.mResult['total_uncompressed'] = webIO.getUncompressedSize()
+        # setup the web input output
+        webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
+        if webIO:
+            _logger.debug('{} Host: {} Path: {} File Type: {}'.format(type(self).__name__, self.mWebHost, self.mSrcPath, webIO.getFileType()))
+            if 'html' in webIO.getFileType():
+                webpage = webIO.Read(0, 0)
+                # parse the web pages
+                dctFiles = self.__parseWebPage(webpage)
+                if len(dctFiles) > 0:
+                    self.mResult['file_list'] = dctFiles
+                    self.mResult['lines_read'] += len(webpage)
                     return True
-                else:
-                    raise IOError('Cannot read none text base web files')
+            elif 'xz' in webIO.getFileType():
+                self.mResult['header_info'] = webIO.getHeaderInfo()
+                self.mResult['file_type'] = webIO.getFileType()
+                self.mResult['total_size'] = webIO.getFileSize()
+                self.mResult['total_uncompressed'] = webIO.getUncompressedSize()
+                return True
             else:
-                raise IOError('Cannot create WebInputOutput with {} {}'.format(self.mSrcPath, self.mWebHost))
-        except Exception as ex:
-            _logger.error('QueryWebFile Exception: {}'.format(ex))
-            raise
+                raise IOError('mainAction: Cannot read non-text based web files')
+        else:
+            raise ValueError('mainAction: Cannot create WebInputOutput with {} {}'.format(self.mSrcPath, self.mWebHost))
+
         return False
 
     def __parseWebPage(self, page):
@@ -662,7 +764,7 @@ class QueryLocalFileActionModeller(BaseActionModeller):
             else:
                 self.mSrcPath = '/'
             # search xz files from self.mSrcPath
-            _logger.debug('QueryLocalFile: self.mSrcPath: {}'.format(self.mSrcPath))
+            _logger.debug('{} QueryLocalFile: self.mSrcPath: {}'.format(type(self).__name__, self.mSrcPath))
             return True
         else:
             return False
@@ -684,17 +786,15 @@ class QueryLocalFileActionModeller(BaseActionModeller):
                                 else:
                                     self.mResult['file_list'].update({file: {'file_name': file, \
                                                                              'file_path': os.path.join(dirpath, file)}})
-                            except Exception:
-                                _logger.error('Cannot create BlockInputOutput with {}'.format(self.mSrcPath))
-                                raise
+                            except Exception as ex:
+                                raise IOError('mainAction: Cannot create BlockInputOutput with {}, error:{}'.format(self.mSrcPath, ex))
                             finally:
                                 if self.mIO: del self.mIO
                                 self.mIO = None
                         _logger.debug('QueryLocalFile: {}: {}'.format(file, os.path.join(dirpath, file)))
             return True
         except Exception as ex:
-            _logger.error('QueryLocalFile Exception: {}'.format(ex))
-            raise
+            raise IOError('mainAction error: {}'.format(ex))
         return False
 
 
@@ -736,32 +836,27 @@ class ConfigMmcActionModeller(BaseActionModeller):
                                              '>', '/sys/block/' + tgtfile + 'boot' + str(int(self.mParam['boot_part_no']) - 1) + '/force_ro'])
                 elif self.mParam['config_id'] == 'extcsd':
                     self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], self.mParam['target']])
-                _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
+                _logger.info('{} preAction: subprocess cmd: {}'.format(type(self).__name__, self.mSubProcCmd))
                 return True
         return False
 
     def _mainAction(self):
-        try:
-            # do something to query mmc
-            if len(self.mSubProcCmd):
-                if self.mSubProcCmd[0] == 'mmc':
-                    #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
-                    p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
-                    output, err = p.communicate()
-                    p_status = p.wait()
-                    self.mResult['retcode'] = p_status
-                    if err is None:
-                        self.mResult['output'] = str(output[:], 'utf-8')
-                    else:
-                        self.mResult['err'] = str(err[:], 'utf-8')
+        # do something to query mmc
+        if len(self.mSubProcCmd):
+            if self.mSubProcCmd[0] == 'mmc':
+                #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
+                output, err = p.communicate()
+                p_status = p.wait()
+                self.mResult['retcode'] = p_status
+                if err is None:
+                    self.mResult['output'] = str(output[:], 'utf-8')
                 else:
-                    self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
-                _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
-                return True
-        except Exception as ex:
-            _logger.error('ConfigMmc Exception: {}'.format(ex))
-            raise
-        return False
+                    self.mResult['err'] = str(err[:], 'utf-8')
+            else:
+                self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
+            _logger.info('{} mainAction: retcode: {}'.format(type(self).__name__, self.mResult['retcode']))
+        return self.mResult['retcode'] == 0 # 0 means success
 
 
 
@@ -899,7 +994,7 @@ class ConfigNicActionModeller(BaseActionModeller):
             else:
                 return False
 
-            _logger.info('_preAction: ioctl cmd: {:#x} arg: {}'.format(self.mIoctlCmd, self.mIoctlArg))
+            _logger.info('{} preAction: ioctl cmd: {:#x} arg: {}'.format(type(self).__name__, self.mIoctlCmd, self.mIoctlArg))
             return True
         return False
 
@@ -912,11 +1007,10 @@ class ConfigNicActionModeller(BaseActionModeller):
                 # do ioctl to get/set NIC related information
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 self.mResult['retcode'] = fcntl.ioctl(s.fileno(), self.mIoctlCmd, self.mIoctlArg)
-                _logger.info('returned: {}'.format(self.mResult['retcode']))
+                _logger.info('{} fcntl.ioctl() returned: {}'.format(type(self).__name__, self.mResult['retcode']))
                 return True
             except Exception as ex:
-                _logger.error('ConfigNic Exception: {}'.format(ex))
-                raise
+                raise ConnectionError('mainAction error: {}'.format(ex))
         return False
 
     def _postAction(self):
@@ -1019,28 +1113,24 @@ class DriverActionModeller(BaseActionModeller):
         return False
 
     def _mainAction(self):
-        try:
-            # probe or remove the driver
-            if len(self.mSubProcCmd):
-                if self.mSubProcCmd[0] == 'modprobe':
-                    #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
-                    p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
-                    output, err = p.communicate()
-                    p_status = p.wait()
-                    self.mResult['retcode'] = p_status
-                    if err is None:
-                        self.mResult['output'] = str(output[:], 'utf-8')
-                    else:
-                        self.mResult['err'] = str(err[:], 'utf-8')
+        # probe or remove the driver
+        if len(self.mSubProcCmd):
+            if self.mSubProcCmd[0] == 'modprobe':
+                #self.mResult['retcode'] = subprocess.check_call(self.mSubProcCmd)
+                p = subprocess.Popen(' '.join(self.mSubProcCmd), stdout=subprocess.PIPE, shell=True)
+                output, err = p.communicate()
+                p_status = p.wait()
+                self.mResult['retcode'] = p_status
+                if err is None:
+                    self.mResult['output'] = str(output[:], 'utf-8')
                 else:
-                    self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
-
-                _logger.info('_mainAction: retcode: {}'.format(self.mResult['retcode']))
-                return True
-        except Exception as ex:
-            _logger.error('Probe Driver Exception: {}'.format(ex))
-            raise
-        return False
+                    self.mResult['err'] = str(err[:], 'utf-8')
+            else:
+                self.mResult['retcode'] = subprocess.check_call(' '.join(self.mSubProcCmd), shell=True)
+        else:
+            raise ValueError('mainAction: No process commands')
+        _logger.info('{} mainAction: retcode: {}'.format(type(self).__name__, self.mResult['retcode']))
+        return self.mResult['retcode'] == 0 # 0 means success
 
 
 
@@ -1080,20 +1170,20 @@ class QRCodeActionModeller(BaseActionModeller):
             #code = pyqrcode.create(strEmail, error=self.mErrLvl, version=self.mCapVer, mode=self.mEncMode)
             code = pyqrcode.create(strEmail, error=self.mErrLvl, version=self.mCapVer, mode=self.mEncMode, encoding='ASCII')
             code.svg(self.mIO, scale=1, background="white") #, module_color="#7D007D")
-            if self.mImage: code.svg(self.mImage, scale=8)
+            if self.mImage:
+                code.svg(self.mImage, scale=8)
             self.mResult['svg_buffer'] = self.mIO.getvalue()[:] # copy the whole bytes
             return True
 
         except Exception as ex:
-            _logger.error('main-action exception: {}'.format(ex))
-            raise
+            raise IOError('mainAction error: {}'.format(ex))
         return False
 
     def _postAction(self):
         # clear the mIO
         if self.mIO:
             self.mIO.close()
-            del self.mIO
+        del self.mIO
         return True
 
 

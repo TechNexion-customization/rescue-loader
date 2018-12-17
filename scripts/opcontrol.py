@@ -64,7 +64,8 @@ import os
 
 from threading import Thread
 from defconfig import DefConfig, SetupLogging, IsATargetBoard
-from ophandle import FlashOperationHandler, \
+from ophandle import ReadWriteOperationHandler, \
+                     FlashOperationHandler, \
                      InfoOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
@@ -175,6 +176,7 @@ class OpController(object):
 
     def run(self):
         # setup Operation Handlers from the defconfig
+        self.mOpHandlers.append(ReadWriteOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(FlashOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(InfoOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(DownloadOperationHandler(self.__sendUserRequest))

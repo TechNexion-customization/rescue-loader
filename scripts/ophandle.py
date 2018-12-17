@@ -47,11 +47,11 @@
 # -*- coding: utf-8 -*-
 
 import socket
-import abc
 import logging
 import urllib.parse
-from threading import Thread, Event, RLock
-from model import CopyBlockActionModeller, \
+from threading import Event, RLock
+from model import BasicBlockActionModeller, \
+                  CopyBlockActionModeller, \
                   QueryFileActionModeller, \
                   QueryBlockDevActionModeller, \
                   WebDownloadActionModeller, \
@@ -135,8 +135,7 @@ class BaseOperationHandler(object):
             self.mActionParam.clear()
             self.mResult.clear()
             self.mStatus.clear()
-            self.mStatus.update({'status': 'processing'})
-            self.mStatus.update(OpParams)
+            self.mStatus.update({'status': 'processing'}, **OpParams)
 
             # clear old action models for next command
             if len(self.mActionModellers): del self.mActionModellers[:]
@@ -148,8 +147,8 @@ class BaseOperationHandler(object):
                         return True
         except Exception as ex:
             # handles all lower level exceptions here, except IS NOT raised further to uppre level.
-            _logger.error('handler performOperation exception: {}'.format(ex))
-            self.mStatus.update({'error': '{}'.format(ex)})
+            _logger.error('{} handler performOperation error: {}'.format(type(self).__name__, ex))
+            self.mStatus.update({'status': 'error', 'error': '{}'.format(ex)})
         return False
 
     def updateUserResponse(self, userInputs):
@@ -165,8 +164,8 @@ class BaseOperationHandler(object):
                     return True
         except Exception as ex:
             # handles all lower level exceptions here.
-            _logger.error('handler updateUserResponse exception: {}'.format(ex))
-            self.mStatus.update({'error': '{}'.format(ex)})
+            _logger.error('{} handler updateUserResponse error: {}'.format(type(self).__name__, ex))
+            self.mStatus.update({'status': 'error', 'error': '{}'.format(ex)})
         else:
             return False
 
@@ -209,6 +208,57 @@ class BaseOperationHandler(object):
         To be overridden
         """
         return userInputs
+
+
+
+class ReadWriteOperationHandler(BaseOperationHandler):
+    def __init__(self, UserRequestCB):
+        super().__init__(UserRequestCB)
+
+    def isOpSupported(self, OpParams):
+        # Check if cmd is supported
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
+            if OpParams['cmd'] == 'read' or OpParams['cmd'] == 'write':
+                return True
+        return False
+
+    def _setupActions(self):
+        # setup "read/write" cmd operations
+        if self.mActionParam:
+            self.mActionModellers.append(BasicBlockActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            return True
+        return False
+
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
+        # Parse the OpParams and Setup mActionParams
+        if isinstance(OpParams, dict):
+            self.mActionParam['chunk_size'] = int(OpParams['chunk_size']) if 'chunk_size' in OpParams else -1
+            self.mActionParam['coding'] = OpParams['coding'] if 'coding' in OpParams else None
+            if 'src_filename' in OpParams:
+                # check for source start sector, number of chunks
+                self.mActionParam['src_filename'] = str(OpParams['src_filename'])
+                self.mActionParam['src_start_sector'] = int(OpParams['src_start_sector']) if 'src_start_sector' in OpParams else 0
+                self.mActionParam['num_chunks'] = int(OpParams['num_chunks']) if 'num_chunks' in OpParams else -1
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
+                return True
+            elif 'tgt_filename' in OpParams:
+                # check for target start sector, and data to be written
+                self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
+                self.mActionParam['tgt_start_sector'] = int(OpParams['tgt_start_sector']) if 'tgt_start_sector' in OpParams else 0
+                if 'tgt_data' in OpParams:
+                    if isinstance(OpParams['tgt_data'], str):
+                        self.mActionParam['tgt_data'] = OpParams['tgt_data'][:]
+                    elif isinstance(OpParams['tgt_data'], bytes):
+                        self.mActionParam['tgt_data'] = OpParams['tgt_data'].decode()
+                    else:
+                        return False
+                else:
+                    return False
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
+                return True
+        return False
 
 
 
