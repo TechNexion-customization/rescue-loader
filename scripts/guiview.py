@@ -60,10 +60,11 @@ import os
 import sys
 import signal
 import socket
+import serial
 import logging
 
 from guidraw import GuiDraw
-from guiprocslot import QMessageDialog
+from guiprocslot import QProcessSlot, QMessageDialog
 from xmldict import XmlDict, ConvertXmlToDict
 from defconfig import DefConfig, SetupLogging, IsATargetBoard
 from messenger import BaseMessenger, SerialMessenger
@@ -246,7 +247,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
         _logger.debug('qtdbus i/f status method: callback to {}'.format(self.mCbStatusHandler.__name__))
         if callable(self.mCbStatusHandler):
             self.mCbStatusHandler()
-        return RetStatus
+        return RetStatus # gets the property of RetStatus
 
     @property
     def RetStatus(self):
@@ -268,7 +269,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
         """
         if callable(self.mCbResultHandler):
             self.mCbResultHandler()
-        return RetResult
+        return RetResult # gets the property of RetStatus
 
     @property
     def RetResult(self):
@@ -412,7 +413,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
     @QtCore.pyqtSlot(QtDBus.QDBusMessage)
     def receiveMsg(self, response):
         """
-        signal handler for the receiving receive() signal from server
+        signal handler for the receiving receive() signal from QtDBus Server
         """
         resp = response.arguments()[0]
         params = {}
@@ -509,6 +510,57 @@ class QtDbusMessenger(QObject, BaseMessenger):
 
 ###############################################################################
 #
+# MsgDispatcher to store viewer/msger/sender/cmd in DispatchQ
+#
+###############################################################################
+class MsgDispatcher(QObject):
+
+    respSignal = QtCore.pyqtSignal(dict)
+
+    def __init__(self, viewer, msger, sender, reqMsg):
+        QObject.__init__(self)
+        """
+        called by signals from other GObject components
+        To be overriden by all sub classes
+        """
+        self.mMsgCmd = {}
+        self.mViewer = None
+        self.mMsger = None
+        self.mSender = None
+        self.mDoneFlag = False
+        try:
+            if viewer is not None and isinstance(viewer, GuiViewer) and \
+                    isinstance(msger, BaseMessenger) and \
+                    isinstance(sender, QProcessSlot) and \
+                    isinstance(reqMsg, dict):
+                self.mViewer = viewer
+                self.mMsger = msger
+                self.mSender = sender
+                self.mSender.finish.connect(self._reqCompleted)
+                if hasattr(self.mSender, 'resultSlot'):
+                    # connect signal to sender's resultSlot
+                    self.respSignal.connect(self.mSender.resultSlot)
+                self.mMsgCmd.update(reqMsg)
+            else:
+                raise ValueError('Invalid Parameters')
+        except:
+            raise
+
+    def matchAndSend(self, respMsg):
+        #if (set(respMsg.items()) & set(self.mMsgCmd.items())) == set(respMsg.items()):
+        if dict(respMsg, **self.mMsgCmd) == respMsg:
+            _logger.warn('signal response to GUI {}: {}'.format(self.mSender.Name(), respMsg))
+            # dict of cmd and results is the same as results, means cmd is already in results
+            self.respSignal.emit(respMsg)
+
+    @pyqtSlot()
+    def _reqCompleted(self):
+        self.mDoneFlag = True
+
+
+
+###############################################################################
+#
 # GuiViewer
 #
 ###############################################################################
@@ -543,6 +595,7 @@ class GuiViewer(QObject, BaseViewer):
         self.mGuiRootWidget = None
         self.mGuiRootSignals = []
         self.mMsger = []
+        self.mDispatchQ = []
 
         # parse the configuration as well as setup the GUI components
         if os.path.isfile(os.path.realpath(confname) + '/' + confname):
@@ -554,9 +607,10 @@ class GuiViewer(QObject, BaseViewer):
 
         # setup DBus Messenger after all GUI components are setup
         self.__setupMsger()
-
         # emit initialize signal to UI components which are setup to receive them
         self.__emitInitSignal()
+        # used to sequentialize QProcessSlot's request
+        self._setEvent()
 
     def __setupMsger(self):
         """
@@ -579,6 +633,13 @@ class GuiViewer(QObject, BaseViewer):
             if isinstance(mgr, QtDbusMessenger):
                 return mgr.hasValidConn()
         return False
+
+    def getConnType(self, mgr):
+        if isinstance(mgr, QtDbusMessenger):
+            return "dbus"
+        elif isinstance(mgr, SerialMessenger):
+            return "serial"
+        return None
 
     ###########################################################################
     # PyQt GUI related
@@ -807,7 +868,7 @@ class GuiViewer(QObject, BaseViewer):
         for s in self.mGuiRootSignals:
             signalName = re.sub('\(.*\)', '', s)
             if hasattr(self.mGuiRootWidget, signalName):
-                # root widget's initialised.emit() signal passing {'viewer': self} to all QProcessSlots
+                # root widget's initialised.emit() signal passing {'viewer': self} to all defined QProcessSlots
                 getattr(self.mGuiRootWidget, signalName)[dict].emit({'viewer': self})
                 _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
 
@@ -816,24 +877,6 @@ class GuiViewer(QObject, BaseViewer):
     ###########################################################################
     # GuiViewer flow control related
     ###########################################################################
-    def setResponseSlot(self, senderSlot):
-        """
-        setup responseSignal to connect back to sender's resultSlot() allowing
-        results to go back to sender when response comes back from QtDBus
-        called by QProcessSlot's processSlot() slot
-        """
-        try:
-            # try to disconnect first, then connect
-            self.responseSignal.disconnect(senderSlot)
-        except:
-            pass
-        try:
-            self.responseSignal.connect(senderSlot)
-            _logger.info("connect responseSignal to {}.resultSlot.".format(senderSlot))
-        except:
-            _logger.warning("connect responseSignal to {}.resultSlot failed".format(senderSlot))
-            raise
-
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
@@ -938,23 +981,33 @@ class GuiViewer(QObject, BaseViewer):
         """
         try:
             if isinstance(self.mCmd, dict):
-                # clear the event before sending message over to dbus
-                self._clearEvent()
-                for mgr in self.mMsger:
-                    if isinstance(mgr, QtDbusMessenger):
-                        _logger.debug('send cmd via DBus: {}'.format(self.mCmd))
-                        ret = mgr.sendMsg(self.mCmd)
-                    if isinstance(mgr, SerialMessenger):
-                        _logger.debug('send cmd via Serial: {}'.format(self.mCmd))
-                        mgr.sendMsg(self.mCmd)
+                mgr = self.mMsger[int(self.mCmd['msger_id'])]
+                ret = mgr.sendMsg(self.mCmd)
+#                 if isinstance(mgr, QtDbusMessenger):
+#                     _logger.debug('send cmd via DBus: {} ret: {}'.format(self.mCmd, ret))
+#                 elif isinstance(mgr, SerialMessenger):
+#                     _logger.debug('send cmd via Serial: {} ret: {}'.format(self.mCmd, ret))
                 return ret
             else:
                 raise TypeError('cmd must be in a dictionary format')
-        except QtDBus.QDBusError as err:
-            _logger.info('DBus Error: {}'.format(err))
-        except Exception as ex:
-            _logger.info('Error: {}'.format(ex))
+#         except QtDBus.QDBusError as err:
+#             _logger.error('QtDBus Error: {}'.format(err))
+        except serial.serialutil.SerialException as err:
+            _logger.error('Serial Error: {}'.format(err))
+        except (IOError, TypeError, ReferenceError, Exception) as err:
+            _logger.error('Error: {}'.format(err))
         return False
+
+    def _postExec(self):
+        mgr = self.mMsger[int(self.mCmd['msger_id'])]
+        # if the new self.mCmd match previously send command, don't append to dispatch queue
+        for q in self.mDispatchQ:
+            if dict(q.mMsgCmd, **self.mCmd) == q.mMsgCmd:
+                _logger.warn("cmd already exist in queue: {}".format(self.mCmd))
+                return False
+        _logger.warn("send and append cmd to queue: {}".format(self.mCmd))
+        self.mDispatchQ.append(MsgDispatcher(self, mgr, self.sender(), self.mCmd))
+        return True
 
     @QtCore.pyqtSlot(dict)
     def request(self, arguments):
@@ -968,11 +1021,16 @@ class GuiViewer(QObject, BaseViewer):
         """
         params = {}
         params.update(arguments)
+        self._waitForEventTimeout(None)
+        self._clearEvent()
         # execute parsed commands
         if self._parseCmd(params):
-            if (self._preExec()):
-                if (self._mainExec()):
-                    self._postExec()
+            for msger_id, mgr in enumerate(self.mMsger, start=0):
+                self.mCmd.update({'msger_id': '{}'.format(msger_id), 'msger_type': self.getConnType(mgr), 'total_mgrs': '{}'.format(len(self.mMsger))})
+                if (self._preExec()):
+                    if (self._mainExec()):
+                        self._postExec()
+        self._setEvent()
 
     @QtCore.pyqtSlot(dict)
     def response(self, result):
@@ -985,11 +1043,10 @@ class GuiViewer(QObject, BaseViewer):
         retResult = {}
         retResult.update(self._unflatten(result))
         if self._parseResult(retResult):
-            _logger.debug('Send DBus signaled response: {} to corresponding GUI component slot'.format(retResult))
-            self.responseSignal.emit(retResult)
+            for q in self.mDispatchQ:
+                q.matchAndSend(retResult)
         else:
-            _logger.debug('Filtered out DBus signaled response: {}'.format(retResult))
-            pass
+            _logger.debug('dropped response from messenger: {}'.format(retResult))
 
     def _parseResult(self, response):
         # do the result parsing here, and convert it into proper
@@ -1001,11 +1058,12 @@ class GuiViewer(QObject, BaseViewer):
                 return True
         return False
 
-    def queryResult(self):
-        # FIXME: Need to sort out results returned from QtDbusMessenger or SerialMessenger
+    def queryResult(self, msger_type):
+        # get results returned from 'dbus' or 'serial' specified
         result = {}
         for mgr in self.mMsger:
-            result.update(mgr.getResult())
+            if self.getConnType(mgr) == msger_type:
+                result.update(mgr.getResult())
         return result
 
 
