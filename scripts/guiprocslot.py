@@ -57,9 +57,11 @@ import socket
 from urllib.parse import urlparse
 from PyQt4 import QtGui, QtCore, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
+from threading import Event
 # import our resources.py with all the pretty images/icons
 import ui_res
 import logging
+from defconfig import IsATargetBoard
 # get the handler to the current module, and setup logging options
 _logger = logging.getLogger(__name__)
 
@@ -105,7 +107,6 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                             resName = ":/res/images/storage_emmc.svg"
                         else:
                             resName = ":/res/images/storage_sd.svg"
-                    item.setToolTip('{}'.format(row['name']))
                 elif 'os' in row:
                     resName = ":/res/images/os_{}.svg".format(row['os'].lower())
                     item.setToolTip(row['os'].lower())
@@ -250,6 +251,7 @@ class QProcessSlot(QtGui.QWidget):
 
     subclasses = {}
 
+    request = pyqtSignal(dict)
     finish = pyqtSignal()
 
     @classmethod
@@ -278,14 +280,22 @@ class QProcessSlot(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent)
         self.mTotalReq = 0
         self.mTotalRemove = 0
+        self.mMsgs = []
         self.mCmds = []
+        self.mCmdEv = Event()
+        self.mCmdEv.set()
         self.mViewer = None
         self.finish.connect(self._reqDone)
 
-    def _setCommand(self, cmd):
-        self.mTotalReq = self.mTotalReq + 1
+    def sendCommand(self, cmd):
+        self.mTotalReq += 1
+        self.mCmdEv.wait(0)
+        self.mCmdEv.clear()
         self.mCmds.append(cmd)
-        _logger.debug("{} queue cmd request: {}".format(self.objectName(), self.mCmds[-1]))
+        self.mMsgs.append(dict(cmd))
+        self.mCmdEv.set()
+        _logger.warn("{} queue cmd request: {} remaining cmds: {}".format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
+        self.request.emit(cmd)
 
     @pyqtSlot()
     @pyqtSlot(bool)
@@ -297,10 +307,14 @@ class QProcessSlot(QtGui.QWidget):
     @pyqtSlot(QtGui.QListWidgetItem)
     def processSlot(self, inputs = None):
         """
-        called by signals from other GObject components
+        called by signals from other GUIObject components
         To be overriden by all sub classes
         """
-        if self.mViewer is None and isinstance(inputs, dict) and 'viewer' in inputs.keys():
+        if self.mViewer is None and isinstance(inputs, dict) and 'viewer' in inputs:
+            # this bit handles guiviewer's __emitInitSignal(),
+            # i.e. root widget's initialised.emit() signal passing {'viewer': self} to all defined QProcessSlots
+            # we are trying to keep QProcessSlot as generic as possible, i.e. remove dependency of viewer element
+            # in the constructor, and only connect to viewer's request as necessary
             try:
                 self.request.disconnect()
                 # disconnect request signal first
@@ -308,11 +322,9 @@ class QProcessSlot(QtGui.QWidget):
                 _logger.debug("disconnect request signal first")
 
             self.mViewer = inputs['viewer']
-            # call the viewer's setResponseSlot API to setup the callback to self.resultSlot()
-            self.mViewer.setResponseSlot(self.resultSlot)
-            _logger.debug("initialised: Setup GuiViewer.responseSignal() to connect to {}\n".format(self.resultSlot))
             self.request.connect(self.mViewer.request)
             _logger.debug("initialised: Setup {}.request signal to GuiViewer.request()\n".format(self.objectName(), self.sender().objectName()))
+        _logger.debug('{} - sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
         self.process(inputs)
 
     def process(self, inputs):
@@ -324,13 +336,13 @@ class QProcessSlot(QtGui.QWidget):
     @pyqtSlot(dict)
     def resultSlot(self, results = None):
         """
-        called by signals from other GObject components
-        To be overriden by all sub classes
+        called by viewer's response() slot via MsgDispatcher with returned results
         """
-        if self._hasSameCommand(results):
-            self.parseResult(results)
-            if len(self.mCmds) == 0:
-                self.finish.emit()
+        ret = self._hasSameCommand(results)
+        self.parseResult(results)
+        if ret and len(self.mCmds) == 0:
+            _logger.warn('{} Requests Completed, emit finish signal to validate results'.format(self.objectName()))
+            self.finish.emit()
 
     def parseResult(self, results):
         """
@@ -351,17 +363,37 @@ class QProcessSlot(QtGui.QWidget):
         return self.window().findChild(QtGui.QWidget, widgetName)
 
     def _hasSameCommand(self, results):
-        # match exact key, value from self.mCmd
-        for i, cmd in enumerate(self.mCmds):
+        ret = False
+        remove = None
+        # match exact key, value from self.mCmd, and find the first match
+        for i, cmd in enumerate(self.mCmds, start=0):
             # dict of cmd and results is the same as results, means cmd is already in results
             if dict(results, **cmd) == results:
-                if 'status' in results:
-                    if results['status'] == 'success' or results['status'] == 'failure':
-                        self.mTotalRemove = self.mTotalRemove + 1
-                        _logger.debug("{} remove returned request: {} status: {} cmds: {}".format(self.objectName(), cmd, results['status'], len(self.mCmds)))
-                        self.mCmds.remove(cmd)
-                return True
-        return False
+                # need to handle which type of messengers the results comes back from,
+                # i.e. dbus, serial, or web
+                # if a command has all messenger types returned, remove the command,
+                # which means when all commands are removed, it will then allow
+                # the process flow go to validateResult by self.finish.emit()
+                if 'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
+                    if 'cmd' in results and 'msger_id' in results and 'total_mgrs' in results:
+                        self.mMsgs[i].update({results['msger_id']: 'msger_id'})
+                        count = len([k for k, v in self.mMsgs[i].items() if v == 'msger_id'])
+                        _logger.warn('{} cmd: {}, msger id: {}, total remove: {}, total req: {}, total_mgrs: {}, count: {}, update mgr list: {}'.format(self.objectName(), results['cmd'], results['msger_id'], self.mTotalRemove, self.mTotalReq, results['total_mgrs'], count, self.mMsgs))
+                        # if total messengers for the particular command is the same as total_mgrs then remove it
+                        if count == int(results['total_mgrs']):
+                            remove = i
+                ret = True
+                break
+        if remove is not None:
+            _logger.warn("{} remove returned request: {} remaining cmds: {}".format(self.objectName(), self.mMsgs[remove], len(self.mCmds) - 1))
+            self.mTotalRemove += 1
+            self.mCmdEv.wait(0)
+            self.mCmdEv.clear()
+            del self.mCmds[remove]
+            del self.mMsgs[remove]
+            self.mCmdEv.set()
+
+        return ret
 
     @pyqtSlot()
     def _reqDone(self):
@@ -382,7 +414,6 @@ class detectDeviceSlot(QProcessSlot):
     """
     Handles detecting target device CPU and Form Factor information
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(str)
     fail = pyqtSignal(dict)
 
@@ -411,10 +442,12 @@ class detectDeviceSlot(QProcessSlot):
         QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
-        self._setCommand({'cmd': 'info', 'target': 'som'})
-        self.request.emit(self.mCmds[-1])
+        self.sendCommand({'cmd': 'info', 'target': 'som'})
 
     def __checkDbus(self):
+        """
+        Check if DBus is working on the running system
+        """
         if self.mViewer and hasattr(self.mViewer, 'checkDbusConn'):
             if self.mViewer.checkDbusConn():
                 self.__checkCpuForm()
@@ -424,40 +457,43 @@ class detectDeviceSlot(QProcessSlot):
 
     def parseResult(self, results):
         """
-        Handle returned detect network device results from server
+        Handle returned SOM infor from DBus or Serial messenger
+        Handle returned nic ifname and ip
+        Handle returned detect network device results from DBus server
         """
-        if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
-            _logger.info('subcmd: nic, parse result: {}'.format(results))
+        if 'subcmd' in results and results['subcmd'] == 'nic':
+            _logger.warn('subcmd: nic, parse result: {}'.format(results))
             if 'status' in results and results['status'] == 'success':
-                if 'config_id' in results.keys() and results['config_id'] == 'ip':
-                    self.mIP = results['ip']
-                elif 'config_id' in results.keys() and results['config_id'] == 'ifconf':
-                    if 'iflist' in results.keys() and isinstance(results['iflist'], dict):
-                        for k, v in results['iflist'].items():
-                            if v == self.mIP:
-                                self.mNICName = k
-                                _logger.warn('Found NIC iface: {} ip: {}'.format(k, v))
-                elif 'config_id' in results.keys() and results['config_id'] == 'ifflags':
-                    if 'state' in results.keys() and 'flags' in results.keys():
-                        # a. Check whether NIC hardware available (do we have mac?)
-                        #if 'LOWER_UP' in results['state']:
-                        # b. Check NIC connection is up (flag says IFF_UP?)
-                        if 'UP' in results['state']:
-                            # c. Check NIC connection is running (flag says IFF_RUNNING?)
-                            if 'RUNNING' in results['state']:
-                                # d. when all is running, check to see if we can connect to our rescue server.
-                                self.mErr.update({'NoIface': False, 'NoCable': False})
-                                self.__hasValidNetworkConnectivity()
-                                return
+                if 'msger_type' in results and results['msger_type'] == 'dbus':
+                    if 'config_id' in results and results['config_id'] == 'ip':
+                        self.mIP = results['ip']
+                    elif 'config_id' in results and results['config_id'] == 'ifconf':
+                        if 'iflist' in results and isinstance(results['iflist'], dict):
+                            for k, v in results['iflist'].items():
+                                if v == self.mIP:
+                                    self.mNICName = k
+                                    _logger.warn('found ifname: {} ip: {}'.format(k, v))
+                    elif 'config_id' in results and results['config_id'] == 'ifflags':
+                        if 'state' in results and 'flags' in results:
+                            # a. Check whether NIC hardware available (do we have mac?)
+                            #if 'LOWER_UP' in results['state']:
+                            # b. Check NIC connection is up (flag says IFF_UP?)
+                            if 'UP' in results['state']:
+                                # c. Check NIC connection is running (flag says IFF_RUNNING?)
+                                if 'RUNNING' in results['state']:
+                                    # d. when all is running, check to see if we can connect to our rescue server.
+                                    self.mErr.update({'NoIface': False, 'NoCable': False})
+                                    self.__hasValidNetworkConnectivity()
+                                    return
+                                else:
+                                    self.mErr.update({'NoCable': True, 'NoServer': True})
                             else:
-                                self.mErr.update({'NoCable': True, 'NoServer': True})
-                        else:
-                            self.mErr.update({'NoIface': True, 'NoCable': True, 'NoServer': True})
-                        #else:
-                        #    self.mErr.update({'NoNIC': True})
-                        self.fail.emit(self.mErr)
-                        self.mSentFlag = False
-                        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                                self.mErr.update({'NoIface': True, 'NoCable': True, 'NoServer': True})
+                            #else:
+                            #    self.mErr.update({'NoNIC': True})
+                            self.fail.emit(self.mErr)
+                            self.mSentFlag = False
+                            QtCore.QTimer.singleShot(1000, self.__checkNetwork)
             return
 
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and \
@@ -483,7 +519,7 @@ class detectDeviceSlot(QProcessSlot):
             self.fail.emit(self.mErr)
 
         if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and \
-           'NoError' in self.mErr.keys() and self.mErr['NoError']:
+           'NoError' in self.mErr and self.mErr['NoError']:
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
                 _logger.warning('Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
@@ -496,14 +532,11 @@ class detectDeviceSlot(QProcessSlot):
         # send request to installerd.service to request for network status.
         _logger.debug('send request to installerd to query network status...')
         if self.mNICName:
-            self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': self.mNICName})
-            self.request.emit(self.mCmds[-1])
+            self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': self.mNICName})
         else:
             # didn't get nic iface name, so query nic iface name first, then queue another timer to do __checkNetwork
-            self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': 'any'})
-            self.request.emit(self.mCmds[-1])
-            self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
-            self.request.emit(self.mCmds[-1])
+            self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': 'any'})
+            self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
             QtCore.QTimer.singleShot(1000, self.__checkNetwork)
 
     def __hasValidNetworkConnectivity(self):
@@ -520,7 +553,9 @@ class detectDeviceSlot(QProcessSlot):
             self.mErr.update({'NoServer': True})
             self.fail.emit(self.mErr)
             _logger.error('TechNexion rescue server not available!!! Retrying...')
+            self.mSentFlag = False
             QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
+            return
         else:
             self.mErr.update({'NoIface': False, 'NoCable': False, 'NoServer': False, 'NoError': True})
             self.fail.emit(self.mErr)
@@ -535,7 +570,6 @@ class crawlWebSlot(QProcessSlot):
     Potentially the Crawling Mechanism is done in a long process thread.
     If the long process is needed, it could possibly be done using QThread in Qt.
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(object) # QtGui.PyQt_PyObject)
     fail = pyqtSignal(dict)
 
@@ -565,46 +599,46 @@ class crawlWebSlot(QProcessSlot):
     def __crawlUrl(self, inputs):
         params = {}
         params.update(inputs)
-        self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
-        _logger.debug('crawl request: {}'.format(self.mCmds[-1]))
-        self.request.emit(self.mCmds[-1])
+        _logger.debug('crawl request: {}'.format({'cmd': 'info', 'target': params['target'], 'location': params['location']}))
+        self.sendCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
 
     def parseResult(self, results):
         #print('crawlWeb result: {}'.format(results))
-        if 'total_uncompressed' in results.keys() or 'total_size' in results.keys():
-            # step 3: figure out the xz file to download
-            # extract total uncompressed size of the XZ file
-            if 'total_uncompressed' in results:
-                uncompsize = results['total_uncompressed']
-            elif 'total_size' in results:
-                uncompsize = results['total_size']
-            else:
-                uncompsize = 0
-            # extract form, cpu, board, display, and filename of the XZ file
-            form, cpu, board, display, fname = self.__parseSOMInfo(results['location'])
-            # extract the os and ver number from the extracted filename of the XZ file
-            os, ver, extra = self.__parseFilename(fname.rstrip('.xz'))
-            # make up the XZ file URL
-            url = results['target'] + '/rescue' + results['location']
-            # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
-            self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
+        if 'msger_type' in results and results['msger_type'] == 'dbus':
+            if 'total_uncompressed' in results or 'total_size' in results:
+                # step 3: figure out the xz file to download
+                # extract total uncompressed size of the XZ file
+                if 'total_uncompressed' in results:
+                    uncompsize = results['total_uncompressed']
+                elif 'total_size' in results:
+                    uncompsize = results['total_size']
+                else:
+                    uncompsize = 0
+                # extract form, cpu, board, display, and filename of the XZ file
+                form, cpu, board, display, fname = self.__parseSOMInfo(results['location'])
+                # extract the os and ver number from the extracted filename of the XZ file
+                os, ver, extra = self.__parseFilename(fname.rstrip('.xz'))
+                # make up the XZ file URL
+                url = results['target'] + '/rescue' + results['location']
+                # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
+                self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
 
-        elif 'file_list' in results.keys():
-            # recursively request into the rescue server directories to find XZ files
-            parsedList = self.__parseWebList(results)
-            if len(parsedList) > 0 and isinstance(parsedList, list):
-                for item in parsedList:
-                    if item[1].endswith('/'):
-                        pobj = self.__checkUrl(item[2])
-                        if pobj is not None:
-                            _logger.debug('internet item path: {}'.format(pobj.path))
-                            self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location':pobj.path.replace('/rescue/', '/')})
-                    elif item[1].endswith('.xz'):
-                        # match against the target device, and send request to obtain uncompressed size
-                        _logger.debug('internet xzfile path: {} {} {}'.format(item[1], item[2], item[2].split('/rescue/',1)))
-                        if self.__matchDevice(item[2].split('/rescue/', 1)[1]):
-                            self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location': '/' + item[2].split('/rescue/', 1)[1]})
-            _logger.debug('Crawling url {} to find suitable xz file.\n'.format(results['location']))
+            elif 'file_list' in results:
+                # recursively request into the rescue server directories to find XZ files
+                parsedList = self.__parseWebList(results)
+                if len(parsedList) > 0 and isinstance(parsedList, list):
+                    for item in parsedList:
+                        if item[1].endswith('/'):
+                            pobj = self.__checkUrl(item[2])
+                            if pobj is not None:
+                                _logger.debug('internet item path: {}'.format(pobj.path))
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location':pobj.path.replace('/rescue/', '/')})
+                        elif item[1].endswith('.xz'):
+                            # match against the target device, and send request to obtain uncompressed size
+                            _logger.debug('internet xzfile path: {} {} {}'.format(item[1], item[2], item[2].split('/rescue/',1)))
+                            if self.__matchDevice(item[2].split('/rescue/', 1)[1]):
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location': '/' + item[2].split('/rescue/', 1)[1]})
+                _logger.debug('Crawling url {} to find suitable xz file.\n'.format(results['location']))
 
         # Emit our own finished signal, because network check will cause a premature finish.emit()
         if len(self.mCmds) == 0:
@@ -686,7 +720,6 @@ class crawlLocalfsSlot(QProcessSlot):
     Potentially the Crawling Mechanism is done in a long process thread.
     If the long process is needed, it could possibly be done using QThread in Qt.
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(object) # QtGui.PyQt_PyObject
     fail = pyqtSignal(dict)
 
@@ -698,13 +731,12 @@ class crawlLocalfsSlot(QProcessSlot):
         """
         Handle crawling xz files from inputs, i.e. lists of mount points
         """
-        _logger.debug('crawlLocalfs: signal sender: {} inputs: {}'.format(self.sender().objectName(), inputs))
         if self.sender().objectName() == 'scanPartition':
             mount_points = []
             # parse the returned partition results to find mount points
             if isinstance(inputs, dict):
                 for k, v in inputs.items():
-                    if isinstance(v, dict) and 'mount_point' in v.keys():
+                    if isinstance(v, dict) and 'mount_point' in v:
                         if 'mount_point' in v and v['mount_point'] != 'None':
                             if 'media' in v['mount_point']:
                                 mount_points.append(v['mount_point'])
@@ -718,8 +750,8 @@ class crawlLocalfsSlot(QProcessSlot):
                 self._findChildWidget('waitingIndicator').show()
                 for mntpt in mount_points:
                     params.update({'location': mntpt if mntpt.endswith('/') else (mntpt + '/')})
-                    self._setCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
-                    self.request.emit(self.mCmds[-1])
+                    _logger.debug('crawl localfs: {}'.format({'cmd': 'info', 'target': params['target'], 'location': params['location']}))
+                    self.sendCommand({'cmd': 'info', 'target': params['target'], 'location': params['location']})
 
     def parseResult(self, results):
         # Parse the return local xz files
@@ -769,7 +801,6 @@ class scanStorageSlot(QProcessSlot):
     """
     Handle scanStorage callback slot
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(object) # QtGui.PyQt_PyObject
     fail = pyqtSignal(dict)
 
@@ -785,14 +816,13 @@ class scanStorageSlot(QProcessSlot):
         step 4: request for list of targets storage device
         """
         if self.sender().objectName() == 'detectDevice':
-            _logger.debug('{} - sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
             if not self.mFlag:
                 self.mFlag = True
                 self.__detectStorage()
 
     def __detectStorage(self):
-        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
-        self.request.emit(self.mCmds[-1])
+        _logger.debug('scan storage info: {}'.format({'cmd': 'info', 'target': 'emmc', 'location': 'controller'}))
+        self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
 
     def parseResult(self, results):
         def parse_target_list(res, attrs):
@@ -805,6 +835,7 @@ class scanStorageSlot(QProcessSlot):
                     elif isinstance(v, dict):
                         for ret in findAttrs(keys, v):
                             yield ret
+
             data = {}
             for k, v in res.items():
                 if isinstance(v, dict) and 'device_type' in v and v['device_type'] != 'partition':
@@ -818,29 +849,31 @@ class scanStorageSlot(QProcessSlot):
            'location' in results and results['location'] == 'controller' and \
            'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
             self.mControllers = parse_target_list(results, ['device_node', 'device_type', 'serial', 'uevent'])
-            self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
-            self.request.emit(self.mCmds[-1])
+            _logger.debug('scan emmc info: {}'.format({'cmd': 'info', 'target': 'emmc', 'location': 'disk'}))
+            self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
 
         # query hd disk if query emmc disk successful
         if 'cmd' in results and results['cmd'] == 'info' and \
            'target' in results and results['target'] == 'emmc' and \
            'location' in results and results['location'] == 'disk' and \
            'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
-            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
-            self.request.emit(self.mCmds[-1])
+            _logger.debug('scan hd info: {}'.format({'cmd': 'info', 'target': 'hd', 'location': 'disk'}))
+            self.sendCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
 
-        # step 5: ask user to choose the target to flash
+        # step 5: parse a list of target devices for user to choose
         if 'cmd' in results and results['cmd'] == 'info' and \
             'target' in results and (results['target'] == 'emmc' or results['target'] == 'hd') and \
             'location' in results and results['location'] == 'disk' and \
-            'status' in results and results['status'] == "success":
+            'status' in results and results['status'] == "success" and 'msger_type' in results:
             listTarget = parse_target_list(results, ['device_node', 'device_type', 'serial', 'id_bus', 'size', 'uevent'])
             if len(listTarget):
                 for tgt in listTarget:
                     # 'name', 'node path', 'disk size'
+                    _logger.warn('found target storage device: {}'.format(tgt))
                     self.mResults.append({'name': tgt[0], \
                                           'path': tgt[1]['device_node'], \
                                           'device_type': tgt[1]['device_type'], \
+                                          'conntype': results['msger_type'], \
                                           'size':int(tgt[1]['size']) * 512, \
                                           'id_bus': tgt[1]['id_bus'] if 'id_bus' in tgt[1] else None, \
                                           'uevent': tgt[1]['uevent'] if 'uevent' in tgt[1] else None})
@@ -857,7 +890,7 @@ class scanStorageSlot(QProcessSlot):
             self.success.emit(self.mResults)
             self.fail.emit({'NoError': True})
         else:
-            # no suitable storage found
+            # no suitable storage found, keep probing after click continue from the dialogbox
             _logger.error('Cannot find available storage!!! Insert a sdcard...')
             self.fail.emit({'NoStorage': True})
             QtCore.QTimer.singleShot(1000, self.__detectStorage)
@@ -869,7 +902,6 @@ class scanPartitionSlot(QProcessSlot):
     """
     Search the mounted points from exiting partitions in the system
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(object) # QtGui.PyQt_PyObject
     fail = pyqtSignal(dict)
 
@@ -883,22 +915,19 @@ class scanPartitionSlot(QProcessSlot):
         issue commands to find partitions with mount points
         """
         if self.sender().objectName() == 'detectDevice':
-            _logger.debug('{} - sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
             if not self.mFlag:
                 self.mFlag = True
                 self.__detectMountedPartition()
 
     def __detectMountedPartition(self):
-        self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
-        self.request.emit(self.mCmds[-1])
+        self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'partition'})
 
     def parseResult(self, results):
         if 'cmd' in results and results['cmd'] == 'info' and \
            'target' in results and results['target'] == 'emmc' and \
            'location' in results and results['location'] == 'partition' and \
            'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
-            self._setCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
-            self.request.emit(self.mCmds[-1])
+            self.sendCommand({'cmd': 'info', 'target': 'hd', 'location': 'partition'})
 
         # parse the returned partitions and send them off
         if isinstance(results, dict) and 'status' in results and results['status'] == "success":
@@ -1016,7 +1045,6 @@ class chooseOSSlot(QChooseSlot):
     """
     Handles button click event to issue cmd to choose os
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
@@ -1028,9 +1056,6 @@ class chooseOSSlot(QChooseSlot):
         self.mUserData = None
 
     def process(self, inputs):
-        # update Display the dynamic UI from the available list of found rescue files passed in inputs
-        _logger.debug('chooseOSSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
-
         # update the UI element for later use
         if self.mLstWgtOS is None: self.mLstWgtOS = self._findChildWidget('lstWgtOS')
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
@@ -1112,7 +1137,7 @@ class chooseOSSlot(QChooseSlot):
                 retVer = item['ver']
         return retVer if version > 0.0 else None
 
-    # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
+    # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
     #def parseResult(self, results):
     #    pass
@@ -1140,7 +1165,6 @@ class chooseBoardSlot(QChooseSlot):
     """
     Handles button click event to issue cmd to choose board
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
@@ -1152,9 +1176,6 @@ class chooseBoardSlot(QChooseSlot):
         self.mUserData = None
 
     def process(self, inputs):
-        # update Display the dynamic UI from the available list of found rescue files passed in inputs
-        _logger.debug('chooseBoardSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
-
         # update the UI element for later use
         if self.mLstWgtBoard is None: self.mLstWgtBoard = self._findChildWidget('lstWgtBoard')
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
@@ -1211,7 +1232,7 @@ class chooseBoardSlot(QChooseSlot):
         # come up with a new list to send to GUI container, i.e. QListWidget
         self.mBoardUIList = list({'name': name, 'board': name, 'disable': False} for name in self.mBoardNames)
 
-    # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
+    # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
     #def parseResult(self, results):
     #    pass
@@ -1239,7 +1260,6 @@ class chooseDisplaySlot(QChooseSlot):
     """
     Handles button click event to issue cmd to choose display
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
@@ -1251,9 +1271,6 @@ class chooseDisplaySlot(QChooseSlot):
         self.mIfaceTypes = ['lvds', 'hdmi', 'ttl', 'vga', 'dsi', 'dpi']
 
     def process(self, inputs):
-        # update Display the dynamic UI from the available list of found rescue files passed in inputs
-        _logger.debug('chooseDisplaySlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
-
         # update the UI element for later use
         if self.mLstWgtDisplay is None: self.mLstWgtDisplay = self._findChildWidget('lstWgtDisplay')
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
@@ -1347,7 +1364,7 @@ class chooseDisplaySlot(QChooseSlot):
                 else:
                     self.mDisplayUIList.append({'name': '070', 'display': ['070'], 'ifce_type': 'lvds', 'disable': False})
 
-    # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
+    # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
     #def parseResult(self, results):
     #    pass
@@ -1375,7 +1392,6 @@ class chooseStorageSlot(QChooseSlot):
     """
     Handles button click event to issue cmd to choose board, os, and display
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
@@ -1387,8 +1403,6 @@ class chooseStorageSlot(QChooseSlot):
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
 
     def process(self, inputs):
-        # Display the dynamic UI from the available list of found target storage passed in inputs
-        _logger.debug('chooseStorageSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
         # get the UI element to update
         if self.mLstWgtStorage is None: self.mLstWgtStorage = self._findChildWidget('lstWgtStorage')
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
@@ -1441,13 +1455,14 @@ class chooseStorageSlot(QChooseSlot):
         self.mStorageUIList = list({'name': item['name'], \
                                   'storage': item['path'], \
                                   'device_type': item['device_type'], \
+                                  'conntype': item['conntype'], \
                                   'size': item['size'], \
                                   'id_bus': item['id_bus'], \
                                   'uevent': item['uevent'], \
                                   'disable': False} for item in self.mResults)
         _logger.debug('chooseStorage: mStorageUIList: {}'.format(self.mStorageUIList))
 
-    # NOTE: Not using the resultSlot() and in turn parseResult() because we did not send a request via DBus
+    # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
     #def parseResult(self, results):
     #    pass
@@ -1457,6 +1472,7 @@ class chooseStorageSlot(QChooseSlot):
         # so check for valid storage to flash selected Url file here
         if self.mPick['storage'] is not None:
             # show/hide GUI components
+            if 'conntype' in self.mPick: self.mPick.pop('conntype')
             self.mLstWgtStorage.clearSelection()
             self.success.emit(self.mPick)
             self._updateDisplay()
@@ -1470,7 +1486,6 @@ class chooseSelectionSlot(QChooseSlot):
     """
     Handles button click event to issue cmd to handle re-choose of os, board, display, and storage
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     chosen = pyqtSignal(dict)
     fail = pyqtSignal(dict)
@@ -1487,8 +1502,6 @@ class chooseSelectionSlot(QChooseSlot):
         self.mTotalSectors = {}
 
     def process(self, inputs):
-        # Display the dynamic UI from the available list of found target storage passed in inputs
-        _logger.debug('chooseSelectionSlot: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
         # get the UI element to update
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
         if self.mLstWgtStorage is None: self.mLstWgtStorage = self._findChildWidget('lstWgtStorage')
@@ -1506,14 +1519,15 @@ class chooseSelectionSlot(QChooseSlot):
 
         if self.sender().objectName() == 'btnFlash':
             # receive the btnFlash click signal
-            # issue command to copy first 33MB of target storage
-            # copy the first 69632 sectors(35,651,584 bytes) out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
                 if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
+                    # issue command to copy first partition (size extract from self.mTotalSectors of /dev/mmcblkXp1 to target storage
+                    _logger.warn('send flash command{}'.format({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'}))
+                    self.sendCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
                 else:
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
-                self.request.emit(self.mCmds[-1])
+                    # copy the first 69632 sectors(71,303,168 bytes) out first (mbr boot sector + SPL), NOTE: total sectors = 17408 because mmc blksize is 4096
+                    _logger.warn('send flash command:{}'.format({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '17408', 'chunk_size': '32768'}))
+                    self.sendCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '17408', 'chunk_size': '32768'})
                 self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
 
         if self.sender() == self.mLstWgtSelection:
@@ -1637,7 +1651,6 @@ class downloadImageSlot(QProcessSlot):
     """
     Handles button click event to issue cmd to download and flash
     """
-    request = pyqtSignal(dict)
     progress = pyqtSignal(int)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
@@ -1705,8 +1718,6 @@ class downloadImageSlot(QProcessSlot):
             if self.mProgressBar:
                 self.progress.connect(self.mProgressBar.setValue)
 
-        _logger.warning('downloadImage: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
-
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
             if (self.sender().objectName() == 'crawlWeb' or self.sender().objectName() == 'crawlLocalfs') and isinstance(inputs, list):
@@ -1723,10 +1734,15 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
-                    _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
-                    self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
-                    # send request to installerd
-                    self.request.emit(self.mCmds[-1])
+                    _logger.warn('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
+                    if IsATargetBoard():
+                        # send request to installerd
+                        self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
+                    else:
+                        # send request to installerd on target board, via serial. So download to PC-host first
+                        # send chunk by chunk over serial to be written.
+                        self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': '/tmp/targetboard.img'})
+
                     # show/hide GUI components
                     self._updateDisplay()
                 else:
@@ -1759,7 +1775,7 @@ class downloadImageSlot(QProcessSlot):
         if len(urls):
             self.mFileUrl = urls[0]['url'][:]
         self.mTgtStorage = pick['storage'][:]
-        _logger.warning('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
+        _logger.warn('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
         # step 7: parse the result in a loop until result['status'] != 'processing'
@@ -1782,12 +1798,16 @@ class downloadImageSlot(QProcessSlot):
         # if download and flash is successful, emit success signal to go to next stage
         if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults:
             if self.mResults['status'] == 'success':
-                self.progress.emit(100)
-                self.mLblRemain.setText('Remaining Time: 00:00')
-                self.mPick.update({'url': self.mFileUrl, 'flashed': True})
-                _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
-                self.success.emit(self.mPick)
-                self.fail.emit({'NoError': True})
+                if 'tgt_filename' in self.mResults and self.mResults['tgt_filename'] == '/tmp/targetboard.img':
+                    self.progress.emit(0)
+                    self.sendCommand({'cmd': 'flash', 'src_filename': '/tmp/targetboard.img', 'tgt_filename': self.mTgtStorage })
+                else:
+                    self.progress.emit(100)
+                    self.mLblRemain.setText('Remaining Time: 00:00')
+                    self.mPick.update({'url': self.mFileUrl, 'flashed': True})
+                    _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                    self.success.emit(self.mPick)
+                    self.fail.emit({'NoError': True})
             elif self.mResults['status'] == 'failure':
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
@@ -1813,7 +1833,6 @@ class postDownloadSlot(QProcessSlot):
     """
     Handles post actions after successful download and flash
     """
-    request = pyqtSignal(dict)
     progress = pyqtSignal(int)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
@@ -1886,22 +1905,18 @@ class postDownloadSlot(QProcessSlot):
                     # flash succeeded
                     # gen qrcode save it in /tmp/qrcode.svg and display it before reboot
                     _logger.info('flash success: generate qrcode from from URL {}, STORAGE {}'.format(self.mPick['url'], self.mPick['storage']))
-                    self._setCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
-                    self.request.emit(self.mCmds[-1])
+                    self.sendCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
                     # check for sdcard or emmc
                     _logger.info('flash success: check whether target storage {} is emmc'.format(self.mPick['storage']))
-                    self._setCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
-                    self.request.emit(self.mCmds[-1])
+                    self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
                 else:
                     # flash failed
                     _logger.info('flash failed: recover rescues system to target storage {}'.format(self.mPick['storage']))
                     # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
                     if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
-                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
+                        self.sendCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
                     else:
-                        self._setCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
-
-                    self.request.emit(self.mCmds[-1])
+                        self.sendCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
                     self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
 
         if self.sender().objectName() == 'scanPartition':
@@ -1936,9 +1951,8 @@ class postDownloadSlot(QProcessSlot):
                     # 1. disable mmc boot partition 1 boot option
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
                     _logger.debug('issue command to enable emmc:{} boot partition with write access'.format(self.mPick['storage']))
-                    self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                    self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
                                       'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
-                    self.request.emit(self.mCmds[-1])
                 else:
                     # if not emmc, don't do anything, but emit complete and reboot
                     self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
@@ -1951,14 +1965,12 @@ class postDownloadSlot(QProcessSlot):
             if results['status'] == 'success':
                 if 'androidthings' in self.mPick['os']:
                     _logger.debug('issue command to flash androidthings emmc boot partition')
-                    self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0'})
-                    self.request.emit(self.mCmds[-1])
+                    self.sendCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0'})
                 else:
                     # 2. clear the mmc boot partition
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
                     _logger.debug('issue command to clear {} boot partition'.format(self.mPick['storage']))
-                    self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'})
-                    self.request.emit(self.mCmds[-1])
+                    self.sendCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'})
             elif results['status'] == 'failure':
                 # failed to disable mmc write boot partition option
                 self.fail.emit({'NoEmmcWrite': True, 'ask': 'interrupt'})
@@ -1995,10 +2007,9 @@ class postDownloadSlot(QProcessSlot):
                     # 3. set the mmc boot partition option
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
                     _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
-                    self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                    self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
                                       'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
                                       'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
-                    self.request.emit(self.mCmds[-1])
 
     def _isTargetEMMC(self, result):
         def parse_target_controller(res):
@@ -2042,7 +2053,6 @@ class processErrorSlot(QProcessSlot):
     """
     Handles all errors
     """
-    request = pyqtSignal(dict)
     success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
@@ -2058,7 +2068,6 @@ class processErrorSlot(QProcessSlot):
         """
         Called by all other procslots to handle errors
         """
-        _logger.debug('{}: sender: {} inputs: {}'.format(self.objectName(), self.sender().objectName(), inputs))
         if not self.mMsgBox: self.mMsgBox = self._findChildWidget('msgbox')
 
         self.mErrors.update(inputs)
