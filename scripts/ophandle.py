@@ -3,14 +3,14 @@
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
-# 1. Redistributions of source code must retain the above copyright notice, 
+# 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 #
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
 #
-# 3. The names of the authors may not be used to endorse or promote products 
+# 3. The names of the authors may not be used to endorse or promote products
 #    derived from this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES,
@@ -215,11 +215,11 @@ class BaseOperationHandler(object):
 class FlashOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mSrcFileOps = ['src_filename', 'tgt_filename']
+        self.mArgs = ['src_filename', 'tgt_filename']
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
             if OpParams['cmd'] == 'flash':
                 return True
         return False
@@ -236,27 +236,27 @@ class FlashOperationHandler(BaseOperationHandler):
         _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            if all(s in OpParams.keys() for s in self.mSrcFileOps):
+            if all(s in OpParams for s in self.mArgs):
                 # check for copy from source file to target file
                 self.mActionParam['src_filename'] = str(OpParams['src_filename'])
                 self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
-                if 'src_start_sector' in OpParams.keys():
+                if 'src_start_sector' in OpParams:
                     self.mActionParam['src_start_sector'] = int(OpParams['src_start_sector'])
                 else:
                     self.mActionParam['src_start_sector'] = 0
-                if 'tgt_start_sector' in OpParams.keys():
+                if 'tgt_start_sector' in OpParams:
                     self.mActionParam['tgt_start_sector'] = int(OpParams['tgt_start_sector'])
                 else:
                     self.mActionParam['tgt_start_sector'] = 0
-                if 'src_total_sectors' in OpParams.keys():
+                if 'src_total_sectors' in OpParams:
                     self.mActionParam['src_total_sectors'] = int(OpParams['src_total_sectors'])
                 else:
                     self.mActionParam['src_total_sectors'] = -1
-                if 'chunk_size' in OpParams.keys():
+                if 'chunk_size' in OpParams:
                     self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
                 else:
                     self.mActionParam['chunk_size'] = -1
-                _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
                 return True
         else:
             return False
@@ -266,11 +266,11 @@ class FlashOperationHandler(BaseOperationHandler):
 class QRCodeOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mSrcFileOps = ['dl_url', 'tgt_filename']
+        self.mArgs = ['dl_url', 'tgt_filename']
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
             if OpParams['cmd'] == 'qrcode':
                 return True
         return False
@@ -284,10 +284,10 @@ class QRCodeOperationHandler(BaseOperationHandler):
         return False
 
     def _parseParam(self, OpParams):
-        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            if all(s in OpParams.keys() for s in self.mSrcFileOps):
+            if all(s in OpParams for s in self.mArgs):
                 # check for copy from source file to target file
                 self.mActionParam['dl_url'] = str(OpParams['dl_url'])
                 self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
@@ -299,7 +299,7 @@ class QRCodeOperationHandler(BaseOperationHandler):
                     self.mActionParam['encmode'] = str(OpParams['mode'])
                 if 'img_filename' in OpParams:
                     self.mActionParam['img_filename'] = str(OpParams['img_filename'])
-                _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
                 return True
         else:
             return False
@@ -309,11 +309,11 @@ class QRCodeOperationHandler(BaseOperationHandler):
 class InfoOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mOptions = ['target', 'location']
+        self.mArgs = ['target', 'location']
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
             if OpParams['cmd'] == 'info':
                 return True
         return False
@@ -333,14 +333,14 @@ class InfoOperationHandler(BaseOperationHandler):
         return False
 
     def _parseParam(self, OpParams):
-        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         self.mActionParam.clear()
 #         # default values for type and for all locations
 #         self.mActionParam['tgt_type'] = 'mmc'
 #         self.mActionParam['dst_pos'] = -1
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            for i in self.mOptions:
+            for i in self.mArgs:
                 for k, v in OpParams.items():
                     if k==i and v=='emmc':
                         # check for the correct /dev/mmcblk[x]p[x] path and set it
@@ -379,19 +379,21 @@ class InfoOperationHandler(BaseOperationHandler):
                     elif k==i and v=='baseboard':
                         self.mActionParam['re_pattern'] = '.* (\w+) \w*board'
 
-            if 'tgt_type' in self.mActionParam and not 'dst_pos' in self.mActionParam:
+            if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1
-        if all(s in self.mActionParam.keys() for s in ['tgt_type', 'dst_pos']):
-            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+
+        # determine if we have parsed the info command successfully
+        if all(s in self.mActionParam for s in ['tgt_type', 'dst_pos']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
-        elif all(s in self.mActionParam.keys() for s in ['host_name', 'src_directory']):
-            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+        elif all(s in self.mActionParam for s in ['host_name', 'src_directory']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
-        elif all(s in self.mActionParam.keys() for s in ['local_fs', 'src_directory']):
-            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+        elif all(s in self.mActionParam for s in ['local_fs', 'src_directory']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
-        elif all(s in self.mActionParam.keys() for s in ['src_filename', 're_pattern']):
-            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+        elif all(s in self.mActionParam for s in ['src_filename', 're_pattern']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
         else:
             return False
@@ -401,12 +403,12 @@ class InfoOperationHandler(BaseOperationHandler):
 class DownloadOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
-        self.mDlFileOps = ['dl_module',  'dl_baseboard', 'dl_os', 'dl_version', \
+        self.mArgs = ['dl_module',  'dl_baseboard', 'dl_os', 'dl_version', \
                            'dl_display', 'dl_filetype', 'dl_host', 'dl_protocol']
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys():
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
             if OpParams['cmd'] == 'download':
                 return True
         return False
@@ -420,25 +422,25 @@ class DownloadOperationHandler(BaseOperationHandler):
         return False
 
     def _parseParam(self, OpParams):
-        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            if 'tgt_filename' in OpParams.keys():
+            if 'tgt_filename' in OpParams:
                 self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
             else:
                 self.mActionParam['tgr_filename'] = '/tmp/download.tmp'
-            if 'tgt_start_sector' in OpParams.keys():
+            if 'tgt_start_sector' in OpParams:
                 self.mActionParam['tgt_start_sector'] = int(OpParams['tgt_start_sector'])
             else:
                 self.mActionParam['tgt_start_sector'] = 0
-            if 'src_total_sectors' in OpParams.keys():
+            if 'src_total_sectors' in OpParams:
                 self.mActionParam['src_total_sectors'] = int(OpParams['src_total_sectors'])
             else:
                 self.mActionParam['src_total_sectors'] = -1
-            if 'chunk_size' in OpParams.keys():
+            if 'chunk_size' in OpParams:
                 self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
 
-            if all(s in OpParams.keys() for s in self.mDlFileOps):
+            if all(s in OpParams for s in self.mArgs):
                 # check for download from web and flash to target file
                 # check for copy from source file to target file
                 # 'chunk_size': 65536, 'src_directory': '/pico-imx7/pi-050/',
@@ -452,15 +454,15 @@ class DownloadOperationHandler(BaseOperationHandler):
                 self.mActionParam['src_directory'] = str(OpParams['dl_module']) + '/' + \
                                                  str(OpParams['dl_baseboard']) + '-' + \
                                                  str(OpParams['dl_display'])
-                _logger.debug('{}: __parseParam: mActionParam: {}'.format(self, self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam: {}'.format(type(self).__name__, self.mActionParam))
                 return True
-            elif 'dl_url' in OpParams.keys():
+            elif 'dl_url' in OpParams:
                 urlobj = urllib.parse.urlparse(OpParams['dl_url'])
                 self.mActionParam['host_protocol'] = urlobj.scheme
                 self.mActionParam['host_name'] = urlobj.hostname
                 self.mActionParam['src_filename'] = urlobj.path.split('/')[-1]
                 self.mActionParam['src_directory'] = '/'.join(urlobj.path.split('/')[2:-1])
-                _logger.debug('{}: __parseParam: mActionParam: {}'.format(self, self.mActionParam))
+                _logger.debug('{}: __parseParam: mActionParam: {}'.format(type(self).__name__, self.mActionParam))
                 return True
         else:
             return False
@@ -473,7 +475,7 @@ class ConfigOperationHandler(BaseOperationHandler):
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
-        if isinstance(OpParams, dict) and 'cmd' in OpParams.keys() and 'subcmd' in OpParams.keys():
+        if isinstance(OpParams, dict) and 'cmd' in OpParams and 'subcmd' in OpParams:
             if OpParams['cmd'] == 'config':
                 if any(k in OpParams['subcmd'] for k in ['mmc', 'nic']):
                     return True
@@ -490,7 +492,7 @@ class ConfigOperationHandler(BaseOperationHandler):
         return False
 
     def _parseParam(self, OpParams):
-        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         self.mActionParam.clear()
         # Parse the OpParams and Setup mActionParams
         # e.g. {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart',
@@ -508,8 +510,8 @@ class ConfigOperationHandler(BaseOperationHandler):
                 self.mActionParam.update({'boot_part_no': OpParams['boot_part_no']})
 
         # verify the ActionParam to pass to modeller
-        if all(s in self.mActionParam.keys() for s in ['subcmd', 'target', 'config_id', 'config_action']):
-            _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
+        if all(s in self.mActionParam for s in ['subcmd', 'target', 'config_id', 'config_action']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
         else:
             return False
