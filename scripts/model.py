@@ -403,12 +403,18 @@ class QueryFileActionModeller(BaseActionModeller):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         # setup the input output
-        if 'src_filename' in self.mParam:
+        if 'src_filename' in self.mParam and stat.S_ISREG(os.stat(self.mParam['src_filename']).st_mode):
             self.mIO = FileInputOutput(self.mParam['src_filename'], 'rt')
             if self.mIO:
                 return True
             else:
                 raise IOError('preAction: Cannot create FileInputOutput')
+        elif 'src_filename' in self.mParam and stat.S_ISBLK(os.stat(self.mParam['src_filename']).st_mode):
+            self.mIO = BlockInputOutput(512, self.mParam['src_filename'], 'rb')
+            if self.mIO:
+                return True
+            else:
+                raise IOError('preAction: Cannot create BlockInputOutput')
         else:
             raise ValueError('preAction: No valid source file')
         return False
@@ -426,12 +432,17 @@ class QueryFileActionModeller(BaseActionModeller):
             # only src_total_lines, read from start with total lines
             data = self.mIO.Read(0, int(self.mParam['src_total_lines']))
         else:
-            # no src_start_line and no src_totallines, start from beginning and read all
-            data = self.mIO.Read(0)
+            # guess file type, if text file, then read all, otherwise skip
+            if self.mIO.isBinFile():
+                data = b''
+                self.mResult['lines_read'] = -1
+            else:
+                # no src_start_line and no src_totallines, start from beginning and read all
+                data = self.mIO.Read(0)
+                self.mResult['lines_read'] = len(data)
         _logger.debug('{} read data: {}'.format(type(self).__name__, data))
-        self.mResult['lines_read'] += len(data)
-        self.mResult.update({'file_content': data})
-        return True if len(data) else False
+        self.mResult.update({'content': data})
+        return True if self.mResult['lines_read'] != 0 else False
 
     def _postAction(self):
         ret = False
@@ -439,12 +450,20 @@ class QueryFileActionModeller(BaseActionModeller):
             # if there is a regular express pattern passed in, return the
             # found regular express pattern
             p = re.compile(self.mParam['re_pattern'], re.IGNORECASE)
-            for line in self.mResult['file_content']:
+            for line in self.mResult['content']:
                 m = p.match(line)
                 if m:
                     _logger.debug('{} from pattern {} found_match: {}'.format(type(self).__name__, self.mParam['re_pattern'], m.groups()))
                     self.mResult['found_match'] = ','.join([g for g in m.groups()])
                     ret = True
+        elif 'get_stat' in self.mParam and self.mParam['get_stat'] == True:
+            _logger.debug('{} file stat: {}'.format(type(self).__name__, self.mIO.getStat()))
+            self.mResult.update(self.mIO.getStat())
+            if 'size' in self.mResult and self.mResult['size'] == 0:
+                self.mIO._open()
+                self.mResult['size'] = self.mIO.getFileSize()
+            ret = True
+
         # clear the mIO
         if self.mIO: del self.mIO
         return ret

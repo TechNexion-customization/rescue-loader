@@ -390,44 +390,53 @@ class InfoOperationHandler(BaseOperationHandler):
 #         self.mActionParam['dst_pos'] = -1
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
-            for i in self.mArgs:
-                for k, v in OpParams.items():
-                    if k==i and v=='emmc':
-                        # check for the correct /dev/mmcblk[x]p[x] path and set it
-                        self.mActionParam['tgt_type'] = 'mmc'
-                    elif k==i and v=='sdcard':
-                        # check for the correct /dev/mmcblk[x]p[x] path and set it
-                        self.mActionParam['tgt_type'] = 'sd'
-                    elif k==i and v=='hd':
-                        # check for the correct /dev/sd[x] path and set it
-                        self.mActionParam['tgt_type'] = 'sd'
-                    elif k==i and v.startswith('http'):
-                        self.mActionParam['host_name'] = v # web host address
-                    elif k==i and v == socket.gethostname():
-                        self.mActionParam['local_fs'] = v # local file system
-                    elif k==i and v=='spl':
-                        self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
-                    elif k==i and v=='bootloader':
-                        self.mActionParam['dst_pos'] = 2 # image for android uboot.imx
-                    elif k==i and v=='controller':
-                        self.mActionParam['dst_pos'] = 'c' # controller
-                    elif k==i and v=='disk':
-                        self.mActionParam['dst_pos'] = 'd' # disk
-                    elif k==i and v=='partition':
-                        self.mActionParam['dst_pos'] = 'p' # partition
-                    elif k=='location' and v.startswith('/') and v.endswith('/'):
-                        self.mActionParam['src_directory'] = v # directory/folder
-                    elif k=='location' and v.startswith('/') and v.endswith('xz'):
-                        self.mActionParam['src_directory'] = v # directory/folder
-                    elif k==i and v=='som':
-                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                        self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
-                    elif k==i and v=='cpu':
-                        self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
-                    elif k==i and v=='form':
-                        self.mActionParam['re_pattern'] = '\w+ (\w+)-\w+'
-                    elif k==i and v=='baseboard':
-                        self.mActionParam['re_pattern'] = '.* (\w+) \w*board'
+            for k, v in OpParams.items():
+                # target options
+                if k==self.mArgs[0] and v=='emmc':
+                    # check for the correct /dev/mmcblk[x]p[x] path and set it
+                    self.mActionParam['tgt_type'] = 'mmc'
+                elif k==self.mArgs[0] and v=='sdcard':
+                    # check for the correct /dev/mmcblk[x]p[x] path and set it
+                    self.mActionParam['tgt_type'] = 'sd'
+                elif k==self.mArgs[0] and v=='hd':
+                    # check for the correct /dev/sd[x] path and set it
+                    self.mActionParam['tgt_type'] = 'sd'
+                elif k==self.mArgs[0] and v=='som':
+                    self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                    self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
+                elif k==self.mArgs[0] and v=='cpu':
+                    self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                    self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
+                elif k==self.mArgs[0] and v=='form':
+                    self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                    self.mActionParam['re_pattern'] = '\w+ (\w+)-\w+'
+                elif k==self.mArgs[0] and v=='baseboard':
+                    self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                    self.mActionParam['re_pattern'] = '.* (\w+) \w*board'
+                elif k==self.mArgs[0] and v.startswith('http'):
+                    # check for the correct url, e.g. http://xxx and set it
+                    self.mActionParam['host_name'] = v # web host address
+                elif k==self.mArgs[0] and v == socket.gethostname():
+                    # check for local_fs, which client will send as hostname()
+                    self.mActionParam['local_fs'] = v # local file system
+                # location options
+                elif k==self.mArgs[1] and v=='spl':
+                    self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
+                elif k==self.mArgs[1] and v=='bootloader':
+                    self.mActionParam['dst_pos'] = 2 # image for android uboot.imx
+                elif k==self.mArgs[1] and v=='controller':
+                    self.mActionParam['dst_pos'] = 'c' # controller
+                elif k==self.mArgs[1] and v=='disk':
+                    self.mActionParam['dst_pos'] = 'd' # disk
+                elif k==self.mArgs[1] and v=='partition':
+                    self.mActionParam['dst_pos'] = 'p' # partition
+                elif k==self.mArgs[1] and v=='file':
+                    self.mActionParam['src_filename'] = OpParams['target']
+                    self.mActionParam['get_stat'] = True;
+                elif k==self.mArgs[1] and v.startswith('/') and v.endswith('/'):
+                    self.mActionParam['src_directory'] = v # directory/folder
+                elif k==self.mArgs[1] and v.startswith('/') and v.endswith('xz'):
+                    self.mActionParam['src_directory'] = v # directory/folder
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1
@@ -442,7 +451,7 @@ class InfoOperationHandler(BaseOperationHandler):
         elif all(s in self.mActionParam for s in ['local_fs', 'src_directory']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
-        elif all(s in self.mActionParam for s in ['src_filename', 're_pattern']):
+        elif all(s in self.mActionParam for s in ['src_filename']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
         else:

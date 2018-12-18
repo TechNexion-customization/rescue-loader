@@ -46,7 +46,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import abc
+import os
+import stat
 import logging
 from urllib.parse import urlparse
 
@@ -56,7 +57,7 @@ from threading import Thread, Event
 #from ConfigParser import ConfigParser # read/write config files
 
 from defconfig import DefConfig
-from messenger import DbusMessenger, WebMessenger
+from messenger import DbusMessenger
 
 # get the handler to the current module, and setup logging options
 _logger = logging.getLogger(__name__)
@@ -335,7 +336,7 @@ if __name__ == "__main__":
             except:
                 return False
 
-        supported_targets = ['emmc', 'sdcard', 'hd', 'som']
+        supported_targets = ['emmc', 'sdcard', 'hd', 'som', 'cpu', 'form', 'baseboard']
         if any(s == tgtstr for s in supported_targets):
             return tgtstr
         else:
@@ -345,14 +346,16 @@ if __name__ == "__main__":
             elif tgtstr == uname()[1]:
                 # --target can be the hostname of the local machine
                 return tgtstr
+            elif stat.S_ISREG(os.stat(tgtstr).st_mode) or stat.S_ISBLK(os.stat(tgtstr).st_mode):
+                # --target can be a local file or block device
+                return tgtstr
             else:
                 raise argparse.ArgumentTypeError('Invalid Host URL')
 
     def QueryLocationType(locstr):
         supported_locs = ['all', 'spl', 'bootloader', \
-                          'controller', 'disk', 'partition', \
-                          'bus', 'device', 'sensor', 'connection', \
-                          'kernel', 'dtb', 'rootfs', 'os', 'cpu', 'form', 'baseboard']
+                          'controller', 'disk', 'partition', 'file']
+        # 'bus', 'device', 'sensor', 'connection', 'kernel', 'dtb', 'rootfs', 'os',
         if any(s == locstr for s in supported_locs):
             return locstr
         else:
@@ -389,13 +392,15 @@ if __name__ == "__main__":
     info_parser.add_argument('-t', '--target', type=QueryTargetType, \
                              action='store', dest='target', default='emmc', \
                              help='Specify target storage media, choices are: \
-                                 [emmc, sdcard, hd, or a valid web host URL]')
+                                 [emmc, sdcard, hd, som, cpu, form, baseboard, \
+                                  a local file or a valid web host URL]')
     info_parser.add_argument('-l', '--location', type=QueryLocationType, \
                              action='store', dest='location', default='all', \
                              help='Information of target storage media, choices are: \
-                                 [all, spl, bootloader, controller, disk, partition, \
-                                 bus, device, sensor, connection, kernel, dtb, rootfs, \
-                                 os, or a valid URL directory]')
+                                 [all, spl, bootloader, controller, disk, partition, file, \
+                                   or a valid local directory/folder]')
+    # kernel, dtb, rootfs, os, bus, device, sensor, connection)
+
     ############################################################################
     # read commands
     # 'src_filename', src_start_sector, src_total_sectors, chunk_size
