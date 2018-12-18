@@ -49,7 +49,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import abc
 import stat
 import fcntl
 import mimetypes
@@ -185,7 +184,7 @@ class XZFile (CompressedFile):
                 enddata = f.read(1024)
                 return self.calcRec(enddata)
         except Exception as ex:
-            _logger.error('{} calsize exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (XZFile) calsize exception: {}'.format(type(self).__name__, ex))
             return 0
 
     def calcRec(self, endmatter):
@@ -230,7 +229,7 @@ class XZFile (CompressedFile):
                 self.mCompR = lzma.LZMACompressor(format=lzma.FORMAT_XZ, filters=self.xz_filters) # dict_size=67108864,
             return self.mCompR.compress(data)
         except Exception as ex:
-            _logger.error('{} lzma compress exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (XZFile) lzma compress exception: {}'.format(type(self).__name__, ex))
             raise
 
     def decomp(self, data):
@@ -242,10 +241,10 @@ class XZFile (CompressedFile):
             # decompress the read data and return uncompressed data
             return self.mDecompR.decompress(data)
         except lzma.LZMAError as err:
-            _logger.error('{} lzma fail decompress within given memory limit: {}'.format(self.__class__, err))
+            _logger.error('{} (XZFile) lzma fail decompress within given memory limit: {}'.format(type(self).__name__, err))
             raise
         except Exception as ex:
-            _logger.error('{} lzma decompress exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (XZFile) lzma decompress exception: {}'.format(type(self).__name__, ex))
             raise
         return 0
 
@@ -255,7 +254,7 @@ class XZFile (CompressedFile):
                 self.mCompR = lzma.LZMACompressor(format=lzma.FORMAT_XZ, dict_size=67108864, filters=cls.xz_filters)
             return self.mCompR.flush()
         except Exception as ex:
-            _logger.error('{} lzma compress flush exception: {}'.format(self.__class__, ex))
+            _logger.error('{} XZFile lzma compress flush exception: {}'.format(type(self).__name__, ex))
             raise
         return 0
 
@@ -293,23 +292,21 @@ class GZFile (CompressedFile):
 class BaseInputOutput(object):
     """
     BaseInputOutput
-
     """
-    __metaclass__ = abc.ABCMeta
-
     def __init__(self, filename, mode='rb+'):
         super().__init__()
         self.mHandle = None
         self.mFilename = filename
         self.mMode = mode
+        self.mBuffer = 0 if 'b' in self.mMode else 1
         self._open()
-        _logger.debug('{} init() - filename:{} mode:{}'.format(self.__class__, self.mFilename, self.mMode))
 
     def _write(self, data, start):
+        # should try python3 -u flag to get unbuffered writes for all file I/O
         try:
             if (self._open()):
                 if 'b' in self.mMode:
-                    # seek from start of file
+                    # NOTE: we always seek from start of file
                     self.mHandle.seek(start, 0)
                     ret = self.mHandle.write(data)
                 else:
@@ -319,10 +316,11 @@ class BaseInputOutput(object):
                     ret = self.mHandle.writelines(data)
                 # flush to disk straight away
                 self.mHandle.flush()
-                os.fsync(self.mHandle.fileno())
+                # data sync
+                os.fdatasync(self.mHandle)
                 return ret
         except Exception as ex:
-            _logger.error('{} write exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Base) write exception: {}'.format(type(self).__name__, ex))
             raise
         return 0
 
@@ -330,8 +328,8 @@ class BaseInputOutput(object):
         try:
             if (self._open()):
                 if 'b' in self.mMode:
-                    # seek from start of file if positive else from end of file
-                    self.mHandle.seek(start, 0 if (start >=0) else 2)
+                    # # NOTE: we always seek from start of file
+                    self.mHandle.seek(start, 0)
                     return self.mHandle.read(size) if (size > 0) else self.mHandle.read()
                 else:
                     # change the behaviour to read from start line, and number of lines
@@ -339,7 +337,7 @@ class BaseInputOutput(object):
                     data = self.mHandle.readlines()
                     return data[start:start+size]  if (size > 0) else data[start:]
         except Exception as ex:
-            _logger.error('{} read exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Base) read exception: {}'.format(type(self).__name__, ex))
             raise
         return 0
 
@@ -350,13 +348,13 @@ class BaseInputOutput(object):
                 if os.path.isdir(self.mFilename):
                     raise IOError('{} is a directory folder'.format(self.mFilename))
                 # default buffering, 1 for text file, 0 for direct access
-                self.mHandle = open(self.mFilename, self.mMode, (0 if ('b' in self.mMode) else 1))
+                self.mHandle = open(self.mFilename, mode=self.mMode, buffering=self.mBuffer)
                 if any(s in self.mMode for s in ['w', 'a', '+']) and self.mHandle:
                     fcntl.flock(self.mHandle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                _logger.debug('{} _open: {}'.format(self.__class__, self.mFilename))
+                _logger.debug('{} (Base) _open: {} mode:{} buffering:{}'.format(type(self).__name__, self.mFilename, self.mMode, self.mBuffer))
                 return True
             except Exception as ex:
-                _logger.error('{} open exception: {}'.format(self.__class__, ex))
+                _logger.error('{} (Base) open exception: {}'.format(type(self).__name__, ex))
                 raise
         else:
             # already opened
@@ -367,12 +365,27 @@ class BaseInputOutput(object):
             if any(s in self.mMode for s in ['w', 'a', '+']):
                 fcntl.flock(self.mHandle, fcntl.LOCK_UN)
                 # only flush and fsync files with write mode
+                # metadata (owner, size, mtime, etc) sync
                 self.mHandle.flush()
-                os.fsync(self.mHandle.fileno())
+                os.fsync(self.mHandle)
             self.mHandle.close()
-            _logger.debug('{} _close: {}'.format(self.__class__, self.mFilename))
-        if self.mCFHandle:
-            del self.mCFHandle
+            _logger.debug('{} (Base) _close: {}'.format(type(self).__name__, self.mFilename))
+
+    def isBinFile(self):
+        try:
+            # try open file in text mode
+            with open(self.mFilename, 'tr') as self.mHandle:
+                self.mHandle.readline()
+                return False
+        except:  # if fail then file is non-text (binary)
+            return True
+
+    def isHexData(self, data):
+        try:
+            int(data, 16)
+        except:
+            return False
+        return True
 
     def getFileSize(self):
         """
@@ -380,12 +393,12 @@ class BaseInputOutput(object):
         """
         statinfo = os.stat(self.mFilename)
         if int(statinfo.st_size) > 0:
-            _logger.debug('{} {} - getFileSize: {}'.format(self.__class__, self.mFilename, statinfo.st_size))
+            _logger.debug('{} (Base) {} - getFileSize: {}'.format(type(self).__name__, self.mFilename, statinfo.st_size))
             return int(statinfo.st_size)
         else:
             if self.mHandle:
-                _logger.debug('{} {} - getFileSize: {}'.format(self.__class__, self.mFilename, os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)))
-                return os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)
+                _logger.debug('{} (Base) {} - getFileSize: {}'.format(type(self).__name__, self.mFilename, os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END)))
+                return int(os.lseek(self.mHandle.fileno(), os.SEEK_SET, os.SEEK_END))
         return 0
 
     def getBlockSize(self):
@@ -394,20 +407,24 @@ class BaseInputOutput(object):
         """
         if self.mFilename:
             statinfo = os.stat(self.mFilename)
-            _logger.debug('{} {} - getBlockSize: {}'.format(self.__class__, self.mFilename, statinfo.st_blksize))
+            _logger.debug('{} (Base) {} - getBlockSize: {}'.format(type(self).__name__, self.mFilename, statinfo.st_blksize))
             return int(statinfo.st_blksize)
         return 0
 
     def getFileType(self):
         return mimetypes.guess_type(self.mFilename)
 
-    @abc.abstractmethod
-    def Write(self, data, start):
-        raise NotImplementedError
+    def getStat(self):
+        if self.mFilename:
+            statinfo = os.stat(self.mFilename)
+            _logger.debug('{} (Base) {} - getStatInfo: {}'.format(type(self).__name__, self.mFilename, statinfo))
+            return dict(zip('mode ino dev nlink uid gid size atime mtime ctime'.split(), statinfo))
 
-    @abc.abstractmethod
+    def Write(self, data, start):
+        pass
+
     def Read(self, start, size):
-        raise NotImplementedError
+        pass
 
 
 
@@ -430,26 +447,23 @@ class CompressInputOutput(BaseInputOutput):
 
     def _write(self, data, start):
         """
-        Overrides _write()
+        Overrides BaseInputOutput _write()
         """
         try:
             # compress first
             if self.mCFHandle:
-#                 if self.mHandle:
-#                     ret = self.mHandle.write(compData)
-#                     self.mHandle.flush()
-#                     os.fsync(self.mHandle.fileno())
-                # then write to target file
-                return super()._write(self.mCFHandle.comp(data), 0)
+                # compress the data first then write to target file
+                compdata = self.mCFHandle.comp(data)
+                return super()._write(compdata, start+len(compdata))
             else:
                 return super()._write(data, start)
         except Exception as ex:
-            _logger.error('{} _write exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Comp) _write exception: {}'.format(type(self).__name__, ex))
         return 0
 
     def _read(self, start, size):
         """
-        Overrides _read()
+        Overrides BaseInputOutput _read()
         """
         try:
             # read file blocks from source file first
@@ -459,7 +473,7 @@ class CompressInputOutput(BaseInputOutput):
             else:
                 return super()._read(start, size)
         except Exception as ex:
-            _logger.error('{} _read exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Comp) _read exception: {}'.format(type(self).__name__, ex))
         return 0
 
     def _close(self):
@@ -468,12 +482,13 @@ class CompressInputOutput(BaseInputOutput):
         """
         try:
             if self.mCFHandle:
+                _logger.debug('{} (Comp) _close: {}'.format(type(self).__name__, self.mCFHandle))
                 if any(s in self.mMode for s in ['w', 'a']) and self.mHandle:
-                    # if compress file was written, need to flush the compress file meta
-                    self.mHandle.append(self.mCFHandle.flush())
+                    # FIXME: Check how to write meta data for all compress file types
+                    # for XZFile, need to flush the compress file metadata at the end
+                    super()._write(self.mCFHandle.flush(), self.getFileSize())
                 del self.mCFHandle
             super()._close()
-            _logger.debug('{} _close: {}'.format(self.__class__, self.mFilename))
         except Exception:
             raise
 
@@ -489,15 +504,16 @@ class CompressInputOutput(BaseInputOutput):
         try:
             return self._write(data, start)
         except Exception as ex:
-            _logger.error('{} Write() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Comp) Write() exception: {}'.format(type(self).__name__, ex))
             raise
 
     def Read(self, start, size):
         try:
             return self._read(start, size)
         except Exception as ex:
-            _logger.error('{} Read() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} (Comp) Read() exception: {}'.format(type(self).__name__, ex))
             raise
+
 
 
 class BlockInputOutput(CompressInputOutput):
@@ -508,28 +524,30 @@ class BlockInputOutput(CompressInputOutput):
     def __init__(self, chunksize, filename, mode='rb+'):
         super().__init__(filename, mode)
         self.mChunkSize = chunksize
-        _logger.debug('{} init() - chunksize:{}'.format(self.__class__, self.mChunkSize))
+        _logger.debug('{} init() - chunksize:{}'.format(type(self).__name__, self.mChunkSize))
 
     def Write(self, chunkdata, byteoffset):
         """
+        Overrides CompressInputOutput Write()
         writing raw binary chunkdata, (which is a string of bytes), also support
         a dictionary of { sector_num, binary_data } too.
         """
         try:
             return super().Write(chunkdata, byteoffset)
         except Exception as ex:
-            _logger.error('{} Write() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} Write() exception: {}'.format(type(self).__name__, ex))
             raise
 
     def Read(self, byteoffset, totalchunks):
         """
+        Overrides CompressInputOutput Read()
         returning dictionary, but list of binary blocks is also as good
         """
         try:
             # convert byteoffset to byte byteoffset address, and size in bytes
-            return super().Read(byteoffset, totalchunks*self.mChunkSize)
+            return super().Read(byteoffset, totalchunks * self.mChunkSize)
         except Exception as ex:
-            _logger.error('{} Read() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} Read() exception: {}'.format(type(self).__name__, ex))
             raise
 
 
@@ -543,14 +561,12 @@ class FileInputOutput(BaseInputOutput):
         super().__init__(filename, mode)
 
     def Write(self, lines, startline=0):
-        _logger.debug('{} Write() startline:{}'.format(self.__class__,startline))
         try:
             return self._write(lines, startline)
         except Exception:
             raise
 
     def Read(self, startline, numlines=0):
-        _logger.debug('{} Read() startline:{}\nnumlines:{}'.format(self.__class__,startline, numlines))
         try:
             # read only the lines of a file content
             return self._read(startline, numlines)
@@ -572,7 +588,7 @@ class WebInputOutput(BaseInputOutput):
         super().__init__(filename, mode)
         # and the overridden _open() will be called first for WebInputOutput
         self.mCFHandle = self.__getCompressedFile()
-        _logger.debug('{}: open_url:{} handle:{} CFhandle:{}'.format(self.__class__, self.mUrl, self.mHandle, self.mCFHandle))
+        _logger.debug('{} open_url:{} handle:{} CFhandle:{}'.format(type(self).__name__, self.mUrl, self.mHandle, self.mCFHandle))
 
     # factory function to create a suitable instance for accessing files
     def __getCompressedFile(self):
@@ -590,9 +606,9 @@ class WebInputOutput(BaseInputOutput):
             # FIXME: Upload to remote request
             pass
         except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
         except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} upload exception: {}'.format(self.__class__, err))
+            _logger.error('{} upload exception: {}'.format(type(self).__name__, err))
             raise
         return 0
 
@@ -605,9 +621,9 @@ class WebInputOutput(BaseInputOutput):
                 # download from urllib.response
                 return self.mHandle.read(size) if (size > 0) else self.mHandle.read()
         except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
         except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} download exception: {}'.format(self.__class__, err))
+            _logger.error('{} download exception: {}'.format(type(self).__name__, err))
             raise
         return 0
 
@@ -623,7 +639,7 @@ class WebInputOutput(BaseInputOutput):
                 self.mHandle = urllib.request.urlopen(self.mUrl, None, 30) # timeout 30s
                 if self.mHandle:
                     self.mWebHdrInfo = self.mHandle.info()
-                    _logger.debug('Hdr Info: {}'.format(self.mWebHdrInfo))
+                    _logger.debug('{} Hdr Info: {}'.format(type(self).__name__, self.mWebHdrInfo))
                     if 'content-length' in self.mWebHdrInfo:
                         self.mFileSize = int(self.mWebHdrInfo['content-length'])
                     else:
@@ -636,9 +652,9 @@ class WebInputOutput(BaseInputOutput):
 #             if self.mCFHandle is None:
 #                 raise IOError('Cannot open compressed file')
         except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
         except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} _open error: {}'.format(self.__class__, err))
+            _logger.error('{} _open error: {}'.format(type(self).__name__, err))
             raise
 
     def _close(self):
@@ -646,17 +662,17 @@ class WebInputOutput(BaseInputOutput):
         Overrides _close()
         """
         try:
-            if self.mHandle:
-                self.mHandle.close()
             if self.mCFHandle:
                 if any(s in self.mMode for s in ['w', 'a']):
-                    self.mCFHandle._flush()
+                    self.mCFHandle.flush()
                 del self.mCFHandle
-            _logger.debug('{} _close: {}'.format(self.__class__, self.mUrl))
+            if self.mHandle:
+                self.mHandle.close()
+            _logger.debug('{} _close: {}'.format(type(self).__name__, self.mUrl))
         except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
         except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} _close error: {}'.format(self.__class__, err))
+            _logger.error('{} _close error: {}'.format(type(self).__name__, err))
             raise
 
     def Write(self, data, start):
@@ -670,7 +686,7 @@ class WebInputOutput(BaseInputOutput):
             else:
                 return self._write(data, start)
         except Exception as ex:
-            _logger.error('{} Write() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} Write() exception: {}'.format(type(self).__name__, ex))
             raise
 
     def Read(self, start, size):
@@ -684,7 +700,7 @@ class WebInputOutput(BaseInputOutput):
             else:
                 return self._read(start, size * self.mChunkSize)
         except Exception as ex:
-            _logger.error('{} Read() exception: {}'.format(self.__class__, ex))
+            _logger.error('{} Read() exception: {}'.format(type(self).__name__, ex))
             raise
 
     def getHeaderInfo(self):
@@ -728,13 +744,13 @@ class WebInputOutput(BaseInputOutput):
 
             # Print a message giving the range information.
             if total == '*':
-                _logger.debug("Bytes {} of an unknown total were retrieved.".format(range))
+                _logger.debug("{} Bytes {} of an unknown total were retrieved.".format(type(self).__name__, range))
             else:
-                _logger.debug("Bytes {} of a total of {} were retrieved.".format(range, total))
+                _logger.debug("{} Bytes {} of a total of {} were retrieved.".format(type(self).__name__, range, total))
 
             # And for good measure, lets check how much data we downloaded.
             endmatter = response.read()
-            _logger.debug("Retrieved from {} data size: {} bytes in range {}".format(self.mUrl, len(endmatter), range))
+            _logger.debug("{} Retrieved from {} data size: {} bytes in range {}".format(type(self).__name__, self.mUrl, len(endmatter), range))
 
             if self.mCFHandle:
                 return self.mCFHandle.calcRec(endmatter)

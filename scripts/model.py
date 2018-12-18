@@ -540,8 +540,6 @@ class WebDownloadActionModeller(BaseActionModeller):
                 for count, (srcaddr, tgtaddr) in enumerate(address):
                     self.checkInterruptAndExit()
                     self.__copyChunk(srcaddr, tgtaddr, 1)
-                    if not(count % 500):
-                        self.mIOs[1]._close()
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             return True
