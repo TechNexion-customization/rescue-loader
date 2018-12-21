@@ -56,6 +56,7 @@ import psutil
 import array
 import binascii
 import base64
+import hashlib
 import pyudev
 import socket
 import struct
@@ -63,7 +64,7 @@ import subprocess
 import logging
 import pyqrcode
 from html.parser import HTMLParser
-
+from urllib.parse import urlparse
 from inputoutput import BlockInputOutput, FileInputOutput, BaseInputOutput, WebInputOutput
 
 _logger = logging.getLogger(__name__)
@@ -1150,6 +1151,97 @@ class DriverActionModeller(BaseActionModeller):
             raise ValueError('mainAction: No process commands')
         _logger.info('{} mainAction: retcode: {}'.format(type(self).__name__, self.mResult['retcode']))
         return self.mResult['retcode'] == 0 # 0 means success
+
+
+class CheckBlockActionModeller(BaseActionModeller):
+    def __init__(self):
+        super().__init__()
+        self.mIOs = []
+
+    def _preAction(self):
+        # setup the input/output objects
+        # chunk_size in bytes default 1MB, i.e. 1048576
+        if 'chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0:
+            self.mParam['chunk_size'] = 1048576 # 1MB
+
+        if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
+            if 'http://' in self.mParam['src_filename']:
+                o = urlparse(self.mParam['src_filename'])
+                self.mIOs.append(WebInputOutput(0, o.path))
+            elif stat.S_ISBLK(os.stat(self.mParam['src_filename']).st_mode) or \
+                stat.S_ISREG(os.stat(self.mParam['src_filename']).st_mode):
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
+            elif stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode):
+                _logger.error("cannot checksum on char device")
+
+            if 'http://' in self.mParam['tgt_filename']:
+                o = urlparse(self.mParam['tgt_filename'])
+                self.mIOs.append(WebInputOutput(0, o.path))
+            elif stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode) or \
+                stat.S_ISREG(os.stat(self.mParam['tgt_filename']).st_mode):
+                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'rb'))
+            elif stat.S_ISCHR(os.stat(self.mParam['tgt_filename']).st_mode):
+                _logger.error("cannot checksum on char device")
+        else:
+            raise ValueError('preAction: Neither src nor tgt file specified')
+
+        if len(self.mIOs) > 0 and all(isinstance(ioobj, BaseInputOutput) for ioobj in self.mIOs):
+            return True
+        return False
+
+    def _mainAction(self):
+        # copy specified address range from src file to target file
+        ret = False
+        for ioobj in self.mIOs:
+            if isinstance(ioobj, WebInputOutput):
+                # read the content of the web url.md5
+                md5 = ioobj.Read(0, 0).strip().decode()
+                self.mResult.update({ioobj.mFilename[ioobj.mFilename.rfind('/') + 1:]: md5})
+                ret = True
+            elif isinstance(ioobj, BlockInputOutput):
+                self.mResult.update({'bytes_read': 0})
+                hasher = hashlib.md5()
+
+                blksize = ioobj.getBlockSize()
+                if self.mParam['chunk_size'] > blksize  and \
+                    self.mParam['chunk_size'] % blksize == 0:
+                    chunksize = int(self.mParam['chunk_size'])
+                else:
+                    chunksize = int(blksize)
+                    ioobj.mChunkSize = chunksize
+
+                if 'total_sectors' in self.mParam and int(self.mParam['total_sectors']) > 0:
+                    totalsize = int(self.mParam['total_sectors']) * 512
+                else:
+                    totalsize = ioobj.getFileSize()
+
+                if ioobj.mFilename == self.mParam['src_filename']:
+                    if 'src_start_sector' in self.mParam and self.mParam['src_start_sector'] > 0:
+                        startaddr = int(self.mParam['src_start_sector']) * 512
+                    else:
+                        startaddr = 0
+                elif ioobj.mFilename == self.mParam['tgt_filename']:
+                    if 'tgt_start_sector' in self.mParam and self.mParam['tgt_start_sector'] > 0:
+                        startaddr = int(self.mParam['tgt_start_sector']) * 512
+                    else:
+                        startaddr = 0
+
+                totalchunks = -(-totalsize // chunksize)
+                # loop through the range of sectors and read from Block IO
+                for addr in range (0, totalchunks):
+                    data = ioobj.Read(startaddr + (addr * chunksize), 1)
+                    #_logger.debug('ioobj:{} addr:{:#x} data len:{}'.format(ioobj.mFilename, startaddr + (addr * chunksize), len(data)))
+                    self.mResult['bytes_read'] += len(data)
+                    hasher.update(data)
+
+                self.mResult.update({ioobj.mFilename: hasher.hexdigest()})
+                ret = True
+
+        # close the block device again
+        for ioobj in self.mIOs:
+            ioobj._close()
+        del self.mIOs
+        return ret
 
 
 

@@ -60,6 +60,7 @@ from model import BasicBlockActionModeller, \
                   ConfigMmcActionModeller, \
                   DriverActionModeller, \
                   ConfigNicActionModeller, \
+                  CheckBlockActionModeller, \
                   QRCodeActionModeller
 
 _logger = logging.getLogger(__name__)
@@ -632,6 +633,47 @@ class ConnectOperationHandler(BaseOperationHandler):
                 _logger.debug('connect: callback to create messenger after modprobe')
                 return self.mConnectCbHandler(OpParams)
         return ret
+
+
+
+class CheckOperationHandler(BaseOperationHandler):
+    def __init__(self, UserRequestCB):
+        super().__init__(UserRequestCB)
+        self.mArgs = ['src_filename', 'tgt_filename']
+
+    def isOpSupported(self, OpParams):
+        # Check if cmd is supported
+        if isinstance(OpParams, dict) and 'cmd' in OpParams:
+            if OpParams['cmd'] == 'check':
+                return True
+        return False
+
+    def _setupActions(self):
+        # setup "flash" cmd operations
+        if self.mActionParam:
+            self.mActionModellers.append(CheckBlockActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
+            return True
+        return False
+
+    def _parseParam(self, OpParams):
+        _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
+        # Parse the OpParams and Setup mActionParams
+        if isinstance(OpParams, dict):
+            if all(s in OpParams for s in self.mArgs):
+                # check for copy from source file to target file
+                self.mActionParam['src_filename'] = str(OpParams['src_filename'])
+                self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
+                if 'src_start_sector' in OpParams:
+                    self.mActionParam['src_start_sector'] = int(OpParams['src_start_sector'])
+                if 'tgt_start_sector' in OpParams:
+                    self.mActionParam['tgt_start_sector'] = int(OpParams['tgt_start_sector'])
+                if 'total_sectors' in OpParams:
+                    self.mActionParam['total_sectors'] = int(OpParams['total_sectors'])
+                _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
+                return True
+        else:
+            return False
 
 
 

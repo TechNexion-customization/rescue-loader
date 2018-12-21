@@ -70,7 +70,8 @@ from ophandle import ReadWriteOperationHandler, \
                      DownloadOperationHandler, \
                      ConfigOperationHandler, \
                      QRCodeOperationHandler, \
-                     ConnectOperationHandler
+                     ConnectOperationHandler, \
+                     CheckOperationHandler
 from messenger import DbusMessenger, SerialMessenger, WebMessenger
 
 SetupLogging('/tmp/installer_srv.log')
@@ -182,6 +183,7 @@ class OpController(object):
         self.mOpHandlers.append(DownloadOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(ConfigOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(QRCodeOperationHandler(self.__sendUserRequest))
+        self.mOpHandlers.append(CheckOperationHandler(self.__sendUserRequest))
         self.mOpHandlers.append(ConnectOperationHandler(self.__sendUserRequest, self.__setupMsgerConnection))
         # finally run the dbusmessenger server as the last step, because it is blocking
         for msger in self.mMsger:

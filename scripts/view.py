@@ -541,8 +541,27 @@ if __name__ == "__main__":
                                      nargs='?', default='any', \
                                      help='Specify the nic device path to configure')
     ############################################################################
-    # verify commands
+    # check/verify commands
     ############################################################################
+    check_parser = subparsers.add_parser('check', help='get checksum of src/tgt file/storage')
+    check_parser.add_argument('-t', '--target-filename', dest='tgt_filename', \
+                              action='store', metavar='FILENAME', \
+                              help='Specify target file or storage media')
+    check_parser.add_argument('-b', '--target-start-sector', dest='tgt_start_sector', \
+                              action='store', default='0', \
+                              help='Specify starting locations on the target storage media')
+    check_parser.add_argument('-s', '--source-filename', dest='src_filename', \
+                              action='store', metavar='FILENAME', \
+                              help='Specify source file or storage media')
+    check_parser.add_argument('-f', '--src-start-sector', dest='src_start_sector', \
+                              action='store', default='0', \
+                              help='Specify starting locations on the source storage media')
+    check_parser.add_argument('-n', '--total-sectors', dest='total_sectors', \
+                              action='store', default='-1', \
+                              help='Specify total number of sectors (512 bytes/sector) to check')
+    check_parser.add_argument('-c', '--chunk-size', dest='chunk_size', \
+                              action='store', default='-1', \
+                              help='Specify the chunk size (sector size) in bytes to check')
 
     ############################################################################
     # connect commands
