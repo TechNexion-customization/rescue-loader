@@ -137,7 +137,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         """
         provide sent(request) RPC call_method on the DBus server
         """
-        _logger.debug('dbus i/f send method: callback to {} with {}'.format(self.mCbExecHandler.__name__, request))
+        _logger.debug('dbus i/f send method: callback to {} with {}'.format(self.mCbExecHandler.__name__, request['cmd'] if 'cmd' in request else request))
         return self.receiveMsg(request)
 
     @dbus.service.method(dbus_interface="com.technexion.dbus.interface", in_signature='', out_signature='a{sv}')
@@ -166,7 +166,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         """
         provide receive(response) RPC notify_signal on the DBus server
         """
-        _logger.debug('dbus i/f trigger receive signal: {}'.format(response))
+        _logger.debug('dbus i/f trigger receive signal: {}'.format(response['cmd'] if 'cmd' in response else response))
         pass
 
     def run(self):
@@ -253,7 +253,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
                 return retStatus
         else:
             # called by the CLI/WEB/GUI viewer to ask status from installer server
-            _logger.debug('dbus client calls to dbus i/f status method:')
+            _logger.debug('dbus client calls to dbus i/f status() method')
             if self.mServerObj:
                 retStatus.update(self.mServerObj.status())
                 return retStatus
@@ -283,7 +283,7 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
                 return retResult
         else:
             # called by the CLI/WEB/GUI viewer to ask status from installer server
-            _logger.debug('dbus client calls to dbus i/f result method:')
+            _logger.debug('dbus client calls to dbus i/f result() method')
             if self.mServerObj:
                 retResult.update(self.mServerObj.result())
                 return retResult

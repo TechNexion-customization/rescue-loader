@@ -973,7 +973,7 @@ class GuiViewer(QObject, BaseViewer):
     def _parseResult(self, response):
         # do the result parsing here, and convert it into proper
         # recognizable dictionary to send to the receiving slots
-
+        _logger.debug('parse response from messenger: {}'.format(response))
         # extract the result, and parse the result from server
         if isinstance(response, dict) and 'status' in response:
             if response['status'] in ['processing', 'success', 'failure']:

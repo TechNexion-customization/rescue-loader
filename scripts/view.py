@@ -112,24 +112,19 @@ class BaseViewer(object):
         return True
 
     def _waitForEventTimeout(self, t):
-        _logger.debug('Wait for Response Event Timeout in {}s'.format(t))
         isSet = False
         while not self.mResponseEvent.is_set():
             isSet = self.mResponseEvent.wait(t)
-            if isSet:
-                _logger.debug('Response Event has been set, continue')
-            else:
-                _logger.debug('Wait for Response Event Timed Out')
+            if not isSet:
+                _logger.debug('response event timed out, so return out')
                 break
         return isSet
 
     def _setEvent(self):
         self.mResponseEvent.set()
-        _logger.debug('Set Response Event')
 
     def _clearEvent(self):
         self.mResponseEvent.clear()
-        _logger.debug('Clear Response Event')
 
     def _unflatten(self, value):
         ret = {}

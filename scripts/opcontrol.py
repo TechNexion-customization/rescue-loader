@@ -188,7 +188,7 @@ class OpController(object):
             # find the correct OpHandler
             ophandler = self.__findOpHandler(msg)
             if ophandler:
-                _logger.info("found a handler: {} and queue a worker with dbus msg/cmd to perform operation later".format(ophandler))
+                _logger.info("found a handler: {} and queue a worker with msg/cmd to perform operation later".format(type(ophandler).__name__))
                 self.mQueue.put(Worker(msg, ophandler, self.setRetResult))
                 status = {}
                 status.update(msg)
