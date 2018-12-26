@@ -83,7 +83,7 @@ class SingletonMetaClass(type):
         # declare a local function to replace __new__()
         def replace_new_method(cls, *args, **kwds):
             # if class's variable __instance is None, i.e. nothing
-            if cls.__instance == None:
+            if cls.__instance is None:
                 # call the original new method to create an instance
                 cls.__instance = orig_new_method(cls, *args, **kwds)
             return cls.__instance
@@ -117,7 +117,7 @@ class DefConfig(object):
         """
         _logger.debug('load configurations from file: {}'.format(filename))
         try:
-            if self.mSettings == None:
+            if self.mSettings is None:
                 self.mSettings = ConvertXmlToDict(filename)
             else:
                 self.mSettings.update(ConvertXmlToDict(filename))

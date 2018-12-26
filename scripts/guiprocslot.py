@@ -993,16 +993,16 @@ class QChooseSlot(QProcessSlot):
         self._findChildWidget('tabDisplay').hide()
         self._findChildWidget('tabStorage').hide()
         self._findChildWidget('tabInstall').hide()
-        if self.mPick['os'] == None:
+        if self.mPick['os'] is None:
             self._findChildWidget('tabOS').show()
             self._findChildWidget('lblInstruction').setText('Choose an OS')
-        elif self.mPick['board'] == None:
+        elif self.mPick['board'] is None:
             self._findChildWidget('tabBoard').show()
             self._findChildWidget('lblInstruction').setText('Choose your baseboard type')
-        elif self.mPick['display'] == None:
+        elif self.mPick['display'] is None:
             self._findChildWidget('tabDisplay').show()
             self._findChildWidget('lblInstruction').setText('Choose your panel type')
-        elif self.mPick['storage'] == None:
+        elif self.mPick['storage'] is None:
             self._findChildWidget('tabStorage').show()
             self._findChildWidget('lblInstruction').setText('Choose a storage device to program')
         else:
