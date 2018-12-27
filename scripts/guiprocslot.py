@@ -414,7 +414,7 @@ class detectDeviceSlot(QProcessSlot):
     """
     Handles detecting target device CPU and Form Factor information
     """
-    success = pyqtSignal(str)
+    success = pyqtSignal(dict)
     fail = pyqtSignal(dict)
 
     def __init__(self, parent = None):
@@ -434,6 +434,9 @@ class detectDeviceSlot(QProcessSlot):
         self.mSentFlag = False
         self.mIP = None
         self.mNICName = None
+        self.mTgtIP = None
+        self.mTgtNICName = None
+        self.mTgtMac = None
 
     def process(self, inputs = None):
         """
@@ -442,6 +445,7 @@ class detectDeviceSlot(QProcessSlot):
         QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
+        self.sendCommand({'cmd': 'info', 'target': 'cpu'})
         self.sendCommand({'cmd': 'info', 'target': 'som'})
 
     def __checkDbus(self):
@@ -462,18 +466,37 @@ class detectDeviceSlot(QProcessSlot):
         Handle returned detect network device results from DBus server
         """
         if 'subcmd' in results and results['subcmd'] == 'nic':
-            _logger.warn('subcmd: nic, parse result: {}'.format(results))
-            if 'status' in results and results['status'] == 'success':
-                if 'msger_type' in results and results['msger_type'] == 'dbus':
-                    if 'config_id' in results and results['config_id'] == 'ip':
-                        self.mIP = results['ip']
-                    elif 'config_id' in results and results['config_id'] == 'ifconf':
+            if 'status' in results and results['status'] == 'success' and \
+                'config_id' in results and 'msger_type' in results:
+                if results['config_id'] == 'ip':
+                    if results['msger_type'] == 'dbus':
+                        self.mIP = results['ip'][:]
+                    elif results['msger_type'] == 'serial':
+                        self.mTgtIP = results['ip'][:]
+                    _logger.warn('{}: found ip: {} tgt ip:{}'.format(self.objectName(), self.mIP, self.mTgtIP))
+                if results['config_id'] == 'ifconf':
                         if 'iflist' in results and isinstance(results['iflist'], dict):
                             for k, v in results['iflist'].items():
-                                if v == self.mIP:
-                                    self.mNICName = k
-                                    _logger.warn('found ifname: {} ip: {}'.format(k, v))
-                    elif 'config_id' in results and results['config_id'] == 'ifflags':
+                                _logger.warn('{}: found ifname: {} ip: {}'.format(self.objectName(), k, v))
+                                if results['msger_type'] == 'dbus':
+                                    if v == self.mIP:
+                                        self.mNICName = k[:]
+                                        # send another query to query for ifflags with proper NIC I/F name
+                                        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                                elif results['msger_type'] == 'serial':
+                                    if self.mTgtIP != '127.0.0.1' and self.mTgtIP == v:
+                                        self.mTgtNICName = k[:]
+                                    elif self.mTgtIP != '127.0.0.1' or 'eth' in k:
+                                        self.mTgtNICName = k[:]
+                                    if self.mTgtNICName:
+                                        # query for mac with tgt board proper NIC I/F name
+                                        self.sendCommand({'cmd': 'config', 'subcmd': 'nic', \
+                                                          'config_id': 'ifhwaddr', \
+                                                          'config_action': 'get', \
+                                                          'target': self.mTgtNICName})
+                if results['config_id'] == 'ifflags':
+                    _logger.warn('{}: found ifname: {} state: {}'.format(self.objectName(), results['target'], results['state']))
+                    if results['msger_type'] == 'dbus':
                         if 'state' in results and 'flags' in results:
                             # a. Check whether NIC hardware available (do we have mac?)
                             #if 'LOWER_UP' in results['state']:
@@ -491,41 +514,47 @@ class detectDeviceSlot(QProcessSlot):
                                 self.mErr.update({'NoIface': True, 'NoCable': True, 'NoServer': True})
                             #else:
                             #    self.mErr.update({'NoNIC': True})
+                            # when NIC is not up and running, schedule another
+                            # self.__checkNetwork() and wait until NIC is up
                             self.fail.emit(self.mErr)
                             self.mSentFlag = False
                             QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                if results['config_id'] == 'ifhwaddr': # serial messenger returns target nic mac
+                    if 'hwaddr' in results and results['hwaddr'] != '00:00:00:00:00:00' and results['msger_type'] == 'serial':
+                        self.mTgtMac = results['hwaddr'][:]
+                        _logger.warn('{}: found target board mac address: {}'.format(self.objectName(), self.mTgtMac))
+                        self.finish.emit()
             return
 
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and \
-           'status' in results and results['status'] == 'success':
-            self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
-            if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
-            #if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
+           'status' in results and results['status'] == 'success' and 'target' in results:
+            if results['target'] == 'cpu':
+                self.mCpu = ''.join(c for c in results['found_match'].upper().rstrip('\r\n').rstrip(',') if c != '.')[:]
+            else:
+                self.mForm, cpu, self.mBaseboard = results['found_match'].split(',')
+                if not self.mCpu and cpu.find('-') != -1:
+                    self.mCpu = cpu.split('-',1)[0]
+                # start the timer to check for network connection every 1 second
+                self.__checkNetwork()
+                #if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
+                self._findChildWidget('lblForm').setText(self.mForm)
+                self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
             self._findChildWidget('lblCpu').setText(self.mCpu)
-            self._findChildWidget('lblForm').setText(self.mForm)
-            self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
-            # start the timer to check for network connection every 1 second
-            self.__checkNetwork()
-
-        self.mResults.update(results)
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         # Check for available cpu anf form factor
-        if 'cmd' in self.mResults and self.mResults['cmd'] == 'info' and \
-           'found_match' not in self.mResults and \
-           'status' in self.mResults and self.mResults['status'] == 'failure':
-            self.mErr.update({'NoCpuForm': True, 'ask': 'reboot'})
-            self.fail.emit(self.mErr)
-
-        if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and \
-           'NoError' in self.mErr and self.mErr['NoError']:
-            # tell the processError to display with no icons specified, i.e. hide
-            if not self.mSentFlag:
-                _logger.warning('Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
-                self.success.emit('{} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
+        if self.mSentFlag:
+            if self.mCpu and self.mForm and self.mBaseboard:
+                res = {'cpu': self.mCpu, 'form': self.mForm, 'board': self.mBaseboard}
+                if self.mTgtMac:
+                    res.update({'mac': self.mTgtMac})
+                self.success.emit(res)
+                # tell the processError to display with no icons specified, i.e. hide
                 self.fail.emit({'NoError': True})
-                self.mSentFlag = True
+            else:
+                self.mErr.update({'NoCpuForm': True, 'ask': 'reboot'})
+                self.fail.emit(self.mErr)
 
     def __checkNetwork(self):
         # Check for networks, which means sending commands to installerd.service to request for network status
@@ -537,7 +566,6 @@ class detectDeviceSlot(QProcessSlot):
             # didn't get nic iface name, so query nic iface name first, then queue another timer to do __checkNetwork
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': 'any'})
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
-            QtCore.QTimer.singleShot(1000, self.__checkNetwork)
 
     def __hasValidNetworkConnectivity(self):
         _logger.debug('check whether we have connectivity to server...')
@@ -555,12 +583,11 @@ class detectDeviceSlot(QProcessSlot):
             _logger.error('TechNexion rescue server not available!!! Retrying...')
             self.mSentFlag = False
             QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
-            return
         else:
             self.mErr.update({'NoIface': False, 'NoCable': False, 'NoServer': False, 'NoError': True})
             self.fail.emit(self.mErr)
-        self.mSentFlag = False
-        self.finish.emit()
+            self.mSentFlag = True
+            self.finish.emit()
 
 
 
