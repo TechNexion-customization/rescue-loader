@@ -837,18 +837,25 @@ class scanStorageSlot(QProcessSlot):
         self.mResults = []
         self.mTimerId = None
         self.mFlag = False
+        self.mMacAddr = None
 
     def process(self, inputs = None):
         """
         step 4: request for list of targets storage device
         """
         if self.sender().objectName() == 'detectDevice':
-            if not self.mFlag:
-                self.mFlag = True
-                self.__detectStorage()
+            if IsATargetBoard():
+                if not self.mFlag and 'cpu' in inputs and 'form' in inputs and 'board' in inputs:
+                    self.mFlag = True
+                    self.__detectStorage()
+            else:
+                if not self.mFlag and 'mac' in inputs:
+                    self.mFlag = True
+                    self.mMacAddr = inputs['mac']
+                    self.__detectStorage()
 
     def __detectStorage(self):
-        _logger.debug('scan storage info: {}'.format({'cmd': 'info', 'target': 'emmc', 'location': 'controller'}))
+        _logger.debug('start by scan storage controller info')
         self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
 
     def parseResult(self, results):
@@ -872,55 +879,73 @@ class scanStorageSlot(QProcessSlot):
 
         # query emmc disk if query emmc controller successful
         if 'cmd' in results and results['cmd'] == 'info' and \
-           'target' in results and results['target'] == 'emmc' and \
-           'location' in results and results['location'] == 'controller' and \
-           'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
-            self.mControllers = parse_target_list(results, ['device_node', 'device_type', 'serial', 'uevent'])
-            _logger.debug('scan emmc info: {}'.format({'cmd': 'info', 'target': 'emmc', 'location': 'disk'}))
-            self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
+            'target' in results and 'location' in results and \
+            'msger_type' in results and 'status' in results and results['status'] == 'success':
 
-        # query hd disk if query emmc disk successful
-        if 'cmd' in results and results['cmd'] == 'info' and \
-           'target' in results and results['target'] == 'emmc' and \
-           'location' in results and results['location'] == 'disk' and \
-           'status' in results and (results['status'] == 'success' or results['status'] == 'failure'):
-            _logger.debug('scan hd info: {}'.format({'cmd': 'info', 'target': 'hd', 'location': 'disk'}))
-            self.sendCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
+            # query emmc disk if query controller successful
+            if results['target'] == 'emmc' and results['location'] == 'controller':
+                self.mControllers = parse_target_list(results, ['device_node', 'device_type', 'serial', 'uevent'])
+                _logger.debug('controllers: {}, so query for emmc disk info'.format(self.mControllers))
+                self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'disk'})
 
-        # step 5: parse a list of target devices for user to choose
-        if 'cmd' in results and results['cmd'] == 'info' and \
-            'target' in results and (results['target'] == 'emmc' or results['target'] == 'hd') and \
-            'location' in results and results['location'] == 'disk' and \
-            'status' in results and results['status'] == "success" and 'msger_type' in results:
-            listTarget = parse_target_list(results, ['device_node', 'device_type', 'serial', 'id_bus', 'size', 'uevent'])
-            if len(listTarget):
-                for tgt in listTarget:
-                    # 'name', 'node path', 'disk size'
-                    _logger.warn('found target storage device: {}'.format(tgt))
-                    self.mResults.append({'name': tgt[0], \
-                                          'path': tgt[1]['device_node'], \
-                                          'device_type': tgt[1]['device_type'], \
-                                          'conntype': results['msger_type'], \
-                                          'size':int(tgt[1]['size']) * 512, \
-                                          'id_bus': tgt[1]['id_bus'] if 'id_bus' in tgt[1] else None, \
-                                          'uevent': tgt[1]['uevent'] if 'uevent' in tgt[1] else None})
-                    # find matching serial from the controllers
-                    for ctrl in self.mControllers:
-                        if tgt[1]['serial'] == ctrl[1]['serial']:
-                            self.mResults[-1].update({'uevent': ctrl[1]['uevent']})
+            # query hd disk if query emmc disk successful
+            if results['target'] == 'emmc' and results['location'] == 'disk':
+                _logger.debug('query emmc disk info after got controllers, so query hd disk info')
+                self.sendCommand({'cmd': 'info', 'target': 'hd', 'location': 'disk'})
+
+            # step 5: parse a list of target devices for user to choose
+            if (results['target'] == 'emmc' or results['target'] == 'hd') and \
+                results['location'] == 'disk':
+                listTarget = parse_target_list(results, ['device_node', 'device_type', 'serial', 'id_bus', 'size', 'uevent'])
+                if len(listTarget):
+                    for tgt in listTarget:
+                        # 'name', 'node path', 'disk size'
+                        _logger.warn('found target storage device: {}'.format(tgt))
+                        self.mResults.append({'name': tgt[0], \
+                                              'path': tgt[1]['device_node'], \
+                                              'device_type': tgt[1]['device_type'], \
+                                              'serial': tgt[1]['serial'], \
+                                              'conntype': results['msger_type'], \
+                                              'size':int(tgt[1]['size']) * 512, \
+                                              'id_bus': tgt[1]['id_bus'] if 'id_bus' in tgt[1] else None, \
+                                              'uevent': tgt[1]['uevent'] if 'uevent' in tgt[1] else None})
+                        # find matching serial from the controllers
+                        for ctrl in self.mControllers:
+                            if tgt[1]['serial'] == ctrl[1]['serial']:
+                                self.mResults[-1].update({'uevent': ctrl[1]['uevent']})
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
         if isinstance(self.mResults, list) and len(self.mResults):
+            self._determineTargetDisk()
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
             self.success.emit(self.mResults)
             self.fail.emit({'NoError': True})
         else:
-            # no suitable storage found, keep probing after click continue from the dialogbox
-            _logger.error('Cannot find available storage!!! Insert a sdcard...')
-            self.fail.emit({'NoStorage': True})
+            _logger.error('Cannot find available storage!!! Try insert a sdcard...')
+            self.fail.emit({'NoStorage': True, 'ask': 'retry'})
             QtCore.QTimer.singleShot(1000, self.__detectStorage)
+
+    def _determineTargetDisk(self):
+        if self.mMacAddr:
+            # loop self.mResults and detemine emulated target emmc storage over the USB
+            # find the emmc from target board first (serial conn type)
+            mmcs = [disk for disk in self.mResults if 'mmc:block' in disk['uevent'] and disk['conntype'] == 'serial']
+            if len(mmcs) > 0:
+                # remove emmcs of targetboard from results list
+                for mmc in mmcs:
+                    self.mResults.remove(mmc)
+                for disk in self.mResults:
+                    if self.mMacAddr in disk['serial'] and disk['size'] > 0:
+                        # find matching mac address, than match the emmc size
+                        for mmc in mmcs:
+                            if disk['size'] == mmc['size']:
+                                # Copy the emmc properties over to the disk's id_bus conntype uevent
+                                disk['id_bus'] = mmc['id_bus'][:] if mmc['id_bus'] != None else None
+                                disk['conntype'] = mmc['conntype'][:]
+                                disk['uevent'] = mmc['uevent'][:]
+                                disk['mmc_path'] = mmc['name'][:] if 'dev/' in mmc['name'] else '/dev/{}'.format(mmc['name'])
 
 
 
