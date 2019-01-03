@@ -1551,7 +1551,7 @@ class chooseSelectionSlot(QChooseSlot):
         self.mLstWgtBoard = None
         self.mLstWgtDisplay = None
         self.mUserData = None
-        self.mTotalSectors = {}
+        self.mPartitions = {}
 
     def process(self, inputs):
         # get the UI element to update
@@ -1572,15 +1572,11 @@ class chooseSelectionSlot(QChooseSlot):
         if self.sender().objectName() == 'btnFlash':
             # receive the btnFlash click signal
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
-                if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
-                    # issue command to copy first partition (size extract from self.mTotalSectors of /dev/mmcblkXp1 to target storage
-                    _logger.warn('send flash command{}'.format({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'}))
-                    self.sendCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
-                else:
-                    # copy the first 69632 sectors(71,303,168 bytes) out first (mbr boot sector + SPL), NOTE: total sectors = 17408 because mmc blksize is 4096
-                    _logger.warn('send flash command:{}'.format({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '17408', 'chunk_size': '32768'}))
-                    self.sendCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '17408', 'chunk_size': '32768'})
-                self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
+                ret = self._backupRescue()
+                if ret == 0:
+                    self.mResults.update(self.mPick)
+                    self.mResults.update({'status': 'success', 'cmd': 'dd'})
+                    self.finish.emit()
 
         if self.sender() == self.mLstWgtSelection:
             # parse the QListWidgetItem to get data that indicate which choice it came from
@@ -1611,12 +1607,27 @@ class chooseSelectionSlot(QChooseSlot):
             # figure out the partition size to backup
             if isinstance(inputs, dict):
                 for k, v in inputs.items():
-                    if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
-                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and \
-                        'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
-                        'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
-                            self.mTotalSectors.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size']) + 8}) # add an additional block, i.e 4096/512
-                            _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
+                    if isinstance(v, dict) and 'sys_number' in v and int(v['sys_number']) == 1 and \
+                        'sys_name' in v and 'mmcblk' in v['sys_name'] and \
+                        'attributes' in v and isinstance(v['attributes'], dict) and \
+                        'size' in v['attributes'] and 'start' in v['attributes']:
+                            self.mPartitions.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size'])})
+                            _logger.info('{}: Start: {}, Size: {}, Partition: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mPartitions))
+
+    def _backupRescue(self):
+        self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
+        chunks = '64'
+        if '{}p1'.format(self.mPick['storage']) in self.mPartitions:
+            # dd first partition (size extract from self.mPartitions of /dev/mmcblkXp1 to target storage
+            bsize = int(self.mPartitions['{}p1'.format(self.mPick['storage'])] * 8) # 512/64 = 8
+        else:
+            # dd the first 139264 sectors(71,303,168 bytes, i.e. mbr boot sector + SPL), NOTE: bs = 1114112 = 71,303,168 * 512 / 64
+            bsize = 1114112
+        try:
+            ret = subprocess.check_call(['dd', 'if={}'.format(self.mPick['storage']), 'of=/tmp/rescue.img', 'bs={}'.format(bsize), 'count={}'.format(chunks), 'iflag=dsync'])
+        except subprocess.CalledProcessError as err:
+            return err.returncode
+        return ret
 
     def parseResult(self, results):
         # flash command complete and the results are updated/parsed here
@@ -1624,17 +1635,10 @@ class chooseSelectionSlot(QChooseSlot):
 
     def validateResult(self):
         # flow comes here after self.finish.emit() - gets called or when cmd is removed from self.mCmds
-        if self.mResults['status'] == 'success' and self.mResults['cmd'] == 'flash':
+        if self.mResults['status'] == 'success' and self.mResults['cmd'] == 'dd':
             # send the mPick to downloadImage procslot
             if all(p is not None for p in self.mPick if (key in self.mPick for key in ['os', 'board', 'display', 'storage'])):
-                if hasattr(self._findChildWidget('downloadImage'), 'processSlot'):
-                    try:
-                        self.chosen.disconnect()
-                        # disconnect chosen signal first
-                    except:
-                        _logger.debug("disconnect chosen signal first")
-                    self.chosen.connect(getattr(self._findChildWidget('downloadImage'), 'processSlot'))
-                    self.chosen.emit(self.mPick)
+                self.chosen.emit(self.mPick)
 
     def _updateDisplay(self):
         if 'os' in self.mUserData:
@@ -1690,11 +1694,14 @@ class chooseSelectionSlot(QChooseSlot):
                 self._findChildWidget('lblStorage').setPixmap(item.icon().pixmap(self._findChildWidget('lblStorage').size()))
                 # determine eMMC vs SDCard
                 if 'MMC_TYPE=MMC' in data['uevent']:
-                    self._findChildWidget('lblStorageTxt').setText('eMMC')
+                    text = 'eMMC'
                 elif 'id_bus' in data and data['id_bus'] == 'ata':
-                    self._findChildWidget('lblStorageTxt').setText('HD')
+                    text = 'HD'
                 else:
-                    self._findChildWidget('lblStorageTxt').setText('SDCard')
+                    text = 'SDCard'
+                if data['conntype'] == 'serial':
+                    text = text + '\non Target'
+                    self._findChildWidget('lblStorageTxt').setText(text)
 
 
 

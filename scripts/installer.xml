@@ -1747,6 +1747,22 @@
 							</hints>
 						</connection>
 						<connection>
+							<sender>chooseSelection</sender>
+							<signal>chosen()</signal>
+							<receiver>downloadImage</receiver>
+							<slot>processSlot()</slot>
+							<hints>
+								<hint type="sourcelabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+								<hint type="destinationlabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+							</hints>
+						</connection>
+						<connection>
 							<sender>btnFlash</sender>
 							<signal>clicked()</signal>
 							<receiver>chooseSelection</receiver>
@@ -3519,6 +3535,22 @@
 							<sender>chooseSelection</sender>
 							<signal>success()</signal>
 							<receiver>chooseStorage</receiver>
+							<slot>processSlot()</slot>
+							<hints>
+								<hint type="sourcelabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+								<hint type="destinationlabel">
+									<x>49</x>
+									<y>14</y>
+								</hint>
+							</hints>
+						</connection>
+						<connection>
+							<sender>chooseSelection</sender>
+							<signal>chosen()</signal>
+							<receiver>downloadImage</receiver>
 							<slot>processSlot()</slot>
 							<hints>
 								<hint type="sourcelabel">
