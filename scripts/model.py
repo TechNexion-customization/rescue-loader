@@ -892,6 +892,8 @@ class ConfigNicActionModeller(BaseActionModeller):
          char sa_data[16];
     }
 
+    parse results according to C struct below
+
     # define IF_NAMESIZE    16
     # define IFHWADDRLEN    6
     # define IFNAMSIZ       IF_NAMESIZE
@@ -1078,14 +1080,22 @@ class ConfigNicActionModeller(BaseActionModeller):
                 namestr = self.mNames.tostring()
                 self.mResult['iflist'] = {}
                 for i in range(0, max_bytes_out, 40):
-                    name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8')
+                    name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8') # ifr_name
                     ip = []
-                    for netaddr in namestr[ i+20 : i+24 ]:
+                    for netaddr in namestr[ i+20 : i+24 ]: # ifr_addr
                         if isinstance(netaddr, int):
                             ip.append(str(netaddr))
                         elif isinstance(netaddr, str):
                             ip.append(str(ord(netaddr)))
                     self.mResult['iflist'].update({name: '.'.join(ip)})
+                for dname in os.listdir('/sys/class/net/'):
+                    if dname not in self.mResult['iflist']:
+                        self.mResult['iflist'].update({dname: 'unknown'})
+                return True
+            elif self.mParam['config_id'] == 'ifhwaddr':
+                self.mResult['ifname'], macaddr = struct.unpack('16s8s232x', self.mResult['retcode'])
+                self.mResult['hwaddr'] = "".join(["%02x:" % ch for ch in macaddr[2:]])[:-1]
+                _logger.info('ifname: {} mac: {}'.format(self.mResult['ifname'], self.mResult['hwaddr']))
                 return True
             elif self.mParam['config_id'] == 'ip':
                 return True
