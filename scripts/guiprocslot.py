@@ -51,6 +51,7 @@ import io
 import re
 import os
 import sys
+import signal
 import subprocess
 import math
 import socket
@@ -1911,7 +1912,11 @@ class postDownloadSlot(QProcessSlot):
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
         self.mQRIcon = None
-        self.mTotalSectors = {}
+        self.mCheckSumFlag = False
+        self.mRestoreRescueFlag = False
+        self.mClearEmmcFlag = False
+        self.mDisks = []
+        self.mPartitions = []
 
     def _queryResult(self):
         """
@@ -1920,19 +1925,17 @@ class postDownloadSlot(QProcessSlot):
         """
         if self.mViewer:
             try:
-                res = self.mViewer.queryResult()
+                res = self.mViewer.queryResult(self.mConnType)
             except:
-                # cannot query installerd dbus server anymore, something wrong.
-                # stop the timer, and recover the rescue system
-                self.killTimer(self.mTimerId)
-                # use subprocess to restor the rescue system
-                # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-                try:
-                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'oflag=dsync'])
-                except subprocess.CalledProcessError as err:
-                    _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
-                    raise
-                self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
+                if IsATargetBoard():
+                    # cannot query installerd dbus server anymore, something wrong.
+                    # stop the timer, and recover the rescue system
+                    self.killTimer(self.mTimerId)
+                    self._recoverRescue()
+                    self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
+                else:
+                    # Serious error for installerd on TargetBoard while running on PC-Host
+                    self.fail.emit({'NoDbus': True, 'ask': 'halt'})
                 return
 
             if 'total_size' in res and 'bytes_written' in res:
@@ -1961,148 +1964,173 @@ class postDownloadSlot(QProcessSlot):
         if self.sender().objectName() == 'downloadImage':
             # get the pick choices and target torage and url from downloadImage
             self.mPick.update(inputs)
+            _logger.debug('{}: from downloadImage: inputs:{}'.format(self.objectName(), self.mPick))
             if 'flashed' in self.mPick:
                 if self.mPick['flashed']:
                     # flash succeeded
-                    # gen qrcode save it in /tmp/qrcode.svg and display it before reboot
-                    _logger.info('flash success: generate qrcode from from URL {}, STORAGE {}'.format(self.mPick['url'], self.mPick['storage']))
+                    _logger.info('download success: generate qrcode from from URL {}, STORAGE {}'.format(self.mPick['url'], self.mPick['storage']))
                     self.sendCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
-                    # check for sdcard or emmc
-                    _logger.info('flash success: check whether target storage {} is emmc'.format(self.mPick['storage']))
-                    self.sendCommand({'cmd': 'info', 'target': 'emmc', 'location': 'controller'})
+                    # do checksum
+                    _logger.info('download success: do checksum')
+                    self.sendCommand({'cmd': 'check', 'tgt_filename': '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')), 'src_filename': self.mPick['storage'], 'total_sectors': str(int(self.mPick['bytes_written']/512))})
+                    self._findChildWidget('lblInstruction').setText('Perform md5 checksum on {}...'.format(self.mPick['storage']))
                 else:
                     # flash failed
                     _logger.info('flash failed: recover rescues system to target storage {}'.format(self.mPick['storage']))
-                    # copy back the first 69632 sectors - 35,651,584 bytes (mbr boot sector + SPL), 8704 because mmc blksize is 4096
-                    if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
-                        self.sendCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
-                    else:
-                        self.sendCommand({'cmd': 'flash', 'tgt_filename': self.mPick['storage'], 'src_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
-                    self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
+                    self._recoverRescue()
 
-        if self.sender().objectName() == 'scanPartition':
-            # figure out the partition size to backup
-            if isinstance(inputs, dict):
-                for k, v in inputs.items():
-                    if isinstance(v, dict) and 'sys_number' in v.keys() and int(v['sys_number']) == 1 and \
-                        'sys_name' in v.keys() and 'mmcblk' in v['sys_name'] and \
-                        'attributes' in v.keys() and isinstance(v['attributes'], dict) and \
-                        'size' in v['attributes'].keys() and 'start' in v['attributes'].keys():
-                            self.mTotalSectors.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size']) + 8}) # add an additional block, i.e 4096/512
-                            _logger.info('{} Start: {}, Size: {}, Total Sectors: {}'.format(k, int(v['attributes']['start']), int(v['attributes']['size']), self.mTotalSectors))
+        if self.sender().objectName() == 'scanStorage' and isinstance(inputs, list):
+            # parse the available storage for checking
+            if isinstance(inputs, list):
+                self.mDisks = [d for d in inputs if 'size' in d and d['size'] > 0]
+                _logger.info('{}: disks: {}'.format(self.objectName(), self.mDisks))
+
+    def _recoverRescue(self):
+        # copy back the backed up /tmp/rescue.img to target eMMC
+        self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
+        try:
+            subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'oflag=dsync'])
+        except subprocess.CalledProcessError as err:
+            _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
+            raise
 
     def parseResult(self, results):
         self.mResults.clear()
         self.mResults.update(results)
+        _logger.warn('{} results: {}'.format(self.objectName(), results))
 
         # Get qrcode and display
         if results['cmd'] == 'qrcode' and results['status'] == 'success':
             self.mQRIcon = True if 'svg_buffer' in results else False
 
-        # Get controller info back and determine whether target storage is emmc
-        if results['cmd'] == 'info':
+        if results['cmd'] == 'check' and results['msger_type'] == 'dbus':
             if results['status'] == 'success':
-                # determine whether target device is an emmc, if it is, then do the mmc boot partition clearing
-                if self._isTargetEMMC(results):
-                    self.progress.emit(0)
-                    if 'androidthings' in self.mPick['os']:
-                        self._findChildWidget('lblInstruction').setText('Flash target emmc boot partition...')
+                # match the received md5s
+                for k, v in results.items():
+                    if k in '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')):
+                        md5url = v[:]
+                    if k in self.mPick['storage']:
+                        md5dsk = v[:]
+                _logger.warn('url md5:{} disk md5:{}'.format(md5url, md5dsk))
+                if md5url == md5dsk:
+                    self.mCheckSumFlag = True
+                    # check for sdcard or emmc
+                    # NOTE: on PC-version, need to know storage device path of the target board
+                    if self._isTargetEMMC(self.mPick['storage']):
+                        _logger.info('check whether target storage {} is emmc'.format(self.mPick['storage']))
+                        self._findChildWidget('lblInstruction').setText('{} target emmc boot partition...'.format('Flash' if 'androidthings' in self.mPick['os'] else 'Clear'))
+                        # 1. disable mmc boot partition 1 boot option
+                        # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
+                        _logger.debug('issue command to enable emmc:{} boot partition with write access'.format(self.mPick['storage']))
+                        self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
+                                          'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
                     else:
-                        self._findChildWidget('lblInstruction').setText('Clearing target emmc boot partition...')
-                    # 1. disable mmc boot partition 1 boot option
-                    # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
-                    _logger.debug('issue command to enable emmc:{} boot partition with write access'.format(self.mPick['storage']))
-                    self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
-                                      'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
-                else:
-                    # if not emmc, don't do anything, but emit complete and reboot
-                    self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
+                        if IsATargetBoard():
+                            # if not emmc, don't do anything, but emit complete and reboot
+                            self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
+                        else:
+                            # if not emmc, on host pc, just emit complete and quit
+                            self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'quit'})
             elif results['status'] == 'failure':
-                # even if cmd 'info' to query target storage failed, still emit complete and reboot
-                self.fail.emit({'NoError': True, 'NoTgtEmmcCheck': True, 'ask': 'reboot'})
+                # if checksum failed due to HTTP Error 404: Not Found, just fail
+                self.fail.emit({'NoChecksum': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
 
         # target emmc has been set to writable
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'readonly':
             if results['status'] == 'success':
                 if 'androidthings' in self.mPick['os']:
                     _logger.debug('issue command to flash androidthings emmc boot partition')
-                    self.sendCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0'})
+                    self.sendCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': '{}boot0'.format(self.mPick['storage']), 'chunk_size': '32768'})
                 else:
                     # 2. clear the mmc boot partition
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
                     _logger.debug('issue command to clear {} boot partition'.format(self.mPick['storage']))
-                    self.sendCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'})
+                    self.sendCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': '{}boot0'.format(self.mPick['storage']), 'src_total_sectors': '8192', 'chunk_size': '32768'})
             elif results['status'] == 'failure':
-                # failed to disable mmc write boot partition option
-                self.fail.emit({'NoEmmcWrite': True, 'ask': 'interrupt'})
+                if IsATargetBoard():
+                    # failed to disable mmc write boot partition option
+                    self.fail.emit({'NoEmmcWrite': True, 'ask': 'interrupt'})
 
-        # target emmc boot option disabled
-        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
-            if self.mResults['status'] == 'success':
-                # Final notification, all successful, reboot
-                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
-            elif self.mResults['status'] == 'failure':
-                # failed to set emmc boot option, still reboot
-                self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
-
+        # flash either zero of androidthing uboot.imx into emmc boot part
         if results['cmd'] == 'flash':
             if results['status'] == 'processing':
-                _logger.debug('start timer to update progressbar for clearing emmc {} boot partition'.format(self.mPick['storage']))
+                _logger.debug('start timer for updating progress bar of clearing status on emmc {} boot partition'.format(self.mPick['storage']))
                 self.mTimerId = self.startTimer(1000) # 1000 ms
                 self.mFlashFlag = True
-            elif (results['status'] == 'success' or results['status'] == 'failure'):
-                # do one last query result before killing the timer
-                self._queryResult()
+            elif results['status'] == 'success':
+                # success on serial or dbus, if success update the progress bar
+                self.progress.emit(100)
+                self.mLblRemain.setText('Remaining Time: 00:00')
                 # flash job either success or failure, stop the timer
                 self.killTimer(self.mTimerId)
                 self.mFlashFlag = False
                 if results['src_filename'] == '/tmp/rescue.img':
-                    # recover rescue system success or failure
-                    if results['status'] == 'success':
-                        self.fail.emit({'Restore': True, 'ask': 'reboot'})
-                    else:
-                        # critical error, cannot recover the boot image and also failed to download and flash
-                        self.fail.emit({'NoFlash': True, 'ask': 'halt'})
-                else:
-                    # target emmc has been flashed with zeros or failed, so anyway
+                    # recover rescue system success
+                    self.mRestoreRescueFlag = True
+                    self.fail.emit({'Restore': True, 'ask': 'reboot'})
+                elif results['src_filename'] == '/dev/zero' or results['src_filename'] == 'u-boot.imx':
+                    # target emmc has been flashed with zeros or androidthings bootloader, so
                     # 3. set the mmc boot partition option
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
                     _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
                     self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
                                       'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
                                       'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
+            elif results['status'] == 'failure':
+                # failed to flash on serial or dbus, if failure on serial for PC-Host, kill timer
+                self.progress.emit(0)
+                self.mLblRemain.setText('Remaining Time: Unknown')
+                if IsATargetBoard():
+                    # critical error, cannot recover the boot image and also failed to download and flash
+                    self.mFlashFlag = False
+                    self.killTimer(self.mTimerId)
+                    if results['src_filename'] == '/tmp/rescue.img':
+                        self.fail.emit({'NoFlash': True, 'ask': 'halt'})
+                    elif results['src_filename'] == '/dev/zero' or results['src_filename'] == 'u-boot.imx':
+                        self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                                      'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                                      'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
+                else:
+                    if results['msger_type'] == 'serial':
+                        self.mFlashFlag = False
+                        self.killTimer(self.mTimerId)
+                        if results['src_filename'] == '/tmp/rescue.img':
+                            self.fail.emit({'NoFlash': True, 'ask': 'quit'})
+                        elif results['src_filename'] == '/dev/zero' or results['src_filename'] == 'u-boot.imx':
+                            self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
+                                      'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
+                                      'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
 
-    def _isTargetEMMC(self, result):
-        def parse_target_controller(res):
-        # Parse the target storage controller info
-            def findAttrs(keys, dc):
-                # find in dictionary and dictionary within a dictionary
-                for k, v in dc.items():
-                    if k in keys:
-                        yield (k, v)
-                    elif isinstance(v, dict):
-                        for ret in findAttrs(keys, v):
-                            yield ret
-            data = {}
-            for k, v in res.items():
-                if isinstance(v, dict):
-                    data.update({k: {att[0]:att[1] for att in findAttrs(['sys_name', 'subsystem', 'driver', 'type'], v)}})
-            return [(k, v) for (k, v) in data.items()]
+        # target emmc boot option disabled
+        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
+            if self.mResults['status'] == 'success':
+                self.mClearEmmcFlag = True
+                # Final notification, all successful, reboot
+                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
+            elif self.mResults['status'] == 'failure':
+                if IsATargetBoard():
+                    # failed to set emmc boot option, still reboot or quit for PC-host
+                    self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
 
-        lstTargets =  parse_target_controller(result)
-        for tgt in lstTargets:
-            sysname, sysno = tgt[1]['sys_name'].split(':', 1)
-            nodepath = tgt[1]['driver'] + sysname.lstrip(tgt[1]['subsystem'])
-            if nodepath in self.mPick['storage'] and tgt[1]['type'] == 'MMC':
-                return True
+    def _isTargetEMMC(self, storage_path):
+        _logger.warn('isTargetEMMC: disks:{} \npartitions:{} \npick: {}'.format(self.mDisks, self.mPartitions, self.mPick))
+        for d in self.mDisks:
+            # find the disk info first from storage_path
+            if storage_path == d['path']:
+                # use info in disk to find the correct partition size
+                if 'mmc_path' in d:
+                    self.mPick['storage'] = d['mmc_path'][:] if 'dev' in d['mmc_path'] else '/dev/{}'.format(d['mmc_path'])
+                    self.mConnType = 'serial'
+                    return True
+                else:
+                    if 'MMC' in d['uevent']:
+                        self.mConnType = 'dbus'
+                        return True
         return False
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
-        _logger.debug('validateResult: {}'.format(self.mResults))
-        if self.mResults['cmd'] == 'flash' and self.mResults['status'] == 'success':
-            self.progress.emit(100)
-            self.mLblRemain.setText('Remaining Time: 00:00')
+        _logger.debug('{} validateResult: {}'.format(self.objectName(), self.mResults))
 
     def timerEvent(self, event):
         self._queryResult()
