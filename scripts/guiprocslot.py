@@ -2157,7 +2157,8 @@ class processErrorSlot(QProcessSlot):
         """
         Called by all other procslots to handle errors
         """
-        if not self.mMsgBox: self.mMsgBox = self._findChildWidget('msgbox')
+        if not self.mMsgBox:
+            self.mMsgBox = self._findChildWidget('msgbox')
 
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
@@ -2268,7 +2269,7 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setMessage('QRCode')
             _logger.warning('Set QRCode for the download files')
 
-
+        # Handles prompt for user response in the dialogue box
         if self.mAsk:
             self.mMsgBox.setModal(True) # modal dialog
             if self.mAsk == 'reboot':
@@ -2298,6 +2299,12 @@ class processErrorSlot(QProcessSlot):
                         subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
                     except:
                         raise
+            elif self.mAsk == 'quit':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
+                if ret:
+                    # exit the GUI
+                    os.kill(os.getpid(), signal.SIGUSR1)
             elif self.mAsk == 'continue':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
