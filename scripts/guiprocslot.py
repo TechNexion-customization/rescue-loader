@@ -1737,23 +1737,23 @@ class downloadImageSlot(QProcessSlot):
         """
         if self.mViewer:
             try:
-                res = self.mViewer.queryResult()
+                # this will issue query results to all the different messengers
+                res = self.mViewer.queryResult('dbus')
             except:
-                _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
-                # cannot query installerd dbus server anymore, something wrong.
-                # stop the timer, and recover the rescue system
-                self.killTimer(self.mTimerId)
-                # use subprocess to restor the rescue system
-                # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
-                try:
-                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage), 'bs=1M', 'oflag=dsync'])
-                except subprocess.CalledProcessError as err:
-                    _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
-                    raise
-                self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
+                if IsATargetBoard():
+                    _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
+                    # cannot query installerd dbus server anymore, something wrong.
+                    # stop the timer, and recover the rescue system
+                    self.killTimer(self.mTimerId)
+                    self._recoverRescue()
+                    self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
+                else:
+                    # Serious error for installerd on TargetBoard while running on PC-Host
+                    self.fail.emit({'NoDbus': True, 'ask': 'halt'})
                 return
             else:
                 if 'total_uncompressed' in res and 'bytes_written' in res:
+                    # but we ignore downloadImage on serial msger entirely
                     smoothing = 0.005
                     lastSpeed = int(res['bytes_written']) - self.mLastWritten
                     # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
@@ -1793,17 +1793,11 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
-                    _logger.warn('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
-                    if IsATargetBoard():
-                        # send request to installerd
-                        self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
-                    else:
-                        # send request to installerd on target board, via serial. So download to PC-host first
-                        # send chunk by chunk over serial to be written.
-                        self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': '/tmp/targetboard.img'})
-
+                    _logger.warn('user choice: download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
                     # show/hide GUI components
                     self._updateDisplay()
+                    # send request to installerd
+                    self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
                 else:
                     # prompt error message for incorrectly chosen URL and Storage selection
                     self.fail.emit({'NoSelection': True, 'ask': 'continue'})
@@ -1836,40 +1830,48 @@ class downloadImageSlot(QProcessSlot):
         self.mTgtStorage = pick['storage'][:]
         _logger.warn('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
+    def _recoverRescue(self):
+        # copy back the backed up /tmp/rescue.img to target eMMC
+        self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
+        try:
+            subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'oflag=dsync'])
+        except subprocess.CalledProcessError as err:
+            _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
+            raise
+
     def parseResult(self, results):
         # step 7: parse the result in a loop until result['status'] != 'processing'
         # Start a timer to query results every 1 second
         self.mResults.update(results)
-        if results['cmd'] == 'download' and results['status'] == 'processing':
-            self.mTimerId = self.startTimer(1000) # 1000 ms
-            self.mFlashFlag = True
-        else:
-            # do one last query result before killing the timer
-            self._queryResult()
-            # flash job either success or failure
-            self.killTimer(self.mTimerId)
-            self.mFlashFlag = False
+        # ignore downloadImage on serial msger entirely
+        if 'cmd' in results and results['cmd'] == 'download' and 'status' in results and \
+            'msger_type' in results and results['msger_type'] == 'dbus':
+            if results['status'] == 'processing':
+                self.mTimerId = self.startTimer(1000) # 1000 ms
+                self.mFlashFlag = True
+            else:
+                if results['status'] == 'success':
+                    self.progress.emit(100)
+                    self.mLblRemain.setText('Remaining Time: 00:00')
+                else:
+                    self.progress.emit(0)
+                    self.mLblRemain.setText('Remaining Time: Unknown')
+                # stop flash job either success or failure
+                self.killTimer(self.mTimerId)
+                self.mFlashFlag = False
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
-        _logger.debug('{} validateResult: {}'.format(self.objectName(), self.mResults))
+        _logger.warn('{} validateResult: {}'.format(self.objectName(), self.mResults))
 
         # if download and flash is successful, emit success signal to go to next stage
         if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults:
             if self.mResults['status'] == 'success':
-                if 'tgt_filename' in self.mResults and self.mResults['tgt_filename'] == '/tmp/targetboard.img':
-                    self.progress.emit(0)
-                    self.sendCommand({'cmd': 'flash', 'src_filename': '/tmp/targetboard.img', 'tgt_filename': self.mTgtStorage })
-                else:
-                    self.progress.emit(100)
-                    self.mLblRemain.setText('Remaining Time: 00:00')
-                    self.mPick.update({'url': self.mFileUrl, 'flashed': True})
-                    _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
-                    self.success.emit(self.mPick)
-                    self.fail.emit({'NoError': True})
+                self.mPick.update({'url': self.mFileUrl, 'flashed': True, 'bytes_written': int(self.mResults['bytes_written'])})
+                self.success.emit(self.mPick)
+                self.fail.emit({'NoError': True})
             elif self.mResults['status'] == 'failure':
-                self.mPick.update({'url': self.mFileUrl, 'flashed': False})
-                _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                self.mPick.update({'url': self.mFileUrl, 'flashed': False, 'bytes_written': int(self.mResults['bytes_written'])})
                 self.fail.emit({'NoDownload': True, 'ask': 'continue'})
                 self.success.emit(self.mPick)
 
