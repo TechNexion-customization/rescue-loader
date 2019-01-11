@@ -512,7 +512,7 @@
 										<item>
 											<widget class="QLabel" name="lblVersion">
 												<property name="text">
-													<string>Ver 2018.06.30.2</string>
+													<string>Ver 2018.12.31.2</string>
 												</property>
 												<property name="alignment">
 													<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2310,7 +2310,7 @@
 													<item>
 														<widget class="QLabel" name="lblVersion">
 															<property name="text">
-																<string>Ver 2018.06.30.2</string>
+																<string>Ver 2018.12.31.2</string>
 															</property>
 															<property name="alignment">
 																<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
