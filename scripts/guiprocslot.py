@@ -2692,6 +2692,8 @@ class QMessageDialog(QtGui.QDialog):
             self.setButtons({'accept': 'RETRY'})
         elif asktype == 'continue':
             self.setButtons({'accept': 'CONTINUE'})
+        elif asktype == 'quit':
+            self.setButtons({'accept': 'QUIT'})
         elif asktype == 'interrupt':
             self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
 
