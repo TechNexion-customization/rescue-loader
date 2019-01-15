@@ -554,7 +554,7 @@ class detectDeviceSlot(QProcessSlot):
                 # tell the processError to display with no icons specified, i.e. hide
                 self.fail.emit({'NoError': True})
             else:
-                self.mErr.update({'NoCpuForm': True, 'ask': 'reboot'})
+                self.mErr.update({'NoCpuForm': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
                 self.fail.emit(self.mErr)
 
     def __checkNetwork(self):
@@ -1741,16 +1741,12 @@ class downloadImageSlot(QProcessSlot):
                 # this will issue query results to all the different messengers
                 res = self.mViewer.queryResult('dbus')
             except:
-                if IsATargetBoard():
-                    _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
-                    # cannot query installerd dbus server anymore, something wrong.
-                    # stop the timer, and recover the rescue system
-                    self.killTimer(self.mTimerId)
-                    self._recoverRescue()
-                    self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
-                else:
-                    # Serious error for installerd on TargetBoard while running on PC-Host
-                    self.fail.emit({'NoDbus': True, 'ask': 'halt'})
+                _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
+                # cannot query installerd dbus server anymore, something wrong.
+                # stop the timer, and recover the rescue system
+                self.killTimer(self.mTimerId)
+                self._recoverRescue()
+                self.fail.emit({'NoDbus': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
                 return
             else:
                 if 'total_uncompressed' in res and 'bytes_written' in res:
@@ -1927,15 +1923,11 @@ class postDownloadSlot(QProcessSlot):
             try:
                 res = self.mViewer.queryResult(self.mConnType)
             except:
-                if IsATargetBoard():
-                    # cannot query installerd dbus server anymore, something wrong.
-                    # stop the timer, and recover the rescue system
-                    self.killTimer(self.mTimerId)
-                    self._recoverRescue()
-                    self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
-                else:
-                    # Serious error for installerd on TargetBoard while running on PC-Host
-                    self.fail.emit({'NoDbus': True, 'ask': 'halt'})
+                # cannot query installerd dbus server anymore, something wrong.
+                # stop the timer, and recover the rescue system
+                self.killTimer(self.mTimerId)
+                self._recoverRescue()
+                self.fail.emit({'NoDbus': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
                 return
 
             if 'total_size' in res and 'bytes_written' in res:
@@ -2067,7 +2059,7 @@ class postDownloadSlot(QProcessSlot):
                 if results['src_filename'] == '/tmp/rescue.img':
                     # recover rescue system success
                     self.mRestoreRescueFlag = True
-                    self.fail.emit({'Restore': True, 'ask': 'reboot'})
+                    self.fail.emit({'Restore': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
                 elif results['src_filename'] == '/dev/zero' or results['src_filename'] == 'u-boot.imx':
                     # target emmc has been flashed with zeros or androidthings bootloader, so
                     # 3. set the mmc boot partition option
@@ -2110,7 +2102,7 @@ class postDownloadSlot(QProcessSlot):
             elif self.mResults['status'] == 'failure':
                 if IsATargetBoard():
                     # failed to set emmc boot option, still reboot or quit for PC-host
-                    self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
+                    self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
 
     def _isTargetEMMC(self, storage_path):
         _logger.warn('isTargetEMMC: disks:{} \npartitions:{} \npick: {}'.format(self.mDisks, self.mPartitions, self.mPick))
@@ -2295,8 +2287,11 @@ class processErrorSlot(QProcessSlot):
                 ret = self.mMsgBox.display(True)
                 if ret == QtGui.QDialog.Rejected:
                     try:
-                        # reset/reboot the system
-                        subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
+                        if IsATargetBoard():
+                            # reset/reboot the system
+                            subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
+                        else:
+                            os.kill(os.getpid(), signal.SIGUSR1)
                     except:
                         raise
             elif self.mAsk == 'quit':
