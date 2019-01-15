@@ -406,8 +406,8 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
                     self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
                 elif k==self.mArgs[0] and v=='cpu':
-                    self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                    self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
+                    self.mActionParam['src_filename'] = '/sys/devices/soc0/soc_id'
+                    self.mActionParam['re_pattern'] = '^(.*)[\s|\n]$'
                 elif k==self.mArgs[0] and v=='form':
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
                     self.mActionParam['re_pattern'] = '\w+ (\w+)-\w+'
