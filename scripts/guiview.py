@@ -83,7 +83,7 @@ _logger.setLevel(logging.INFO)
 
 ###############################################################################
 #
-# Unix OS Signal Handler
+# Unix OS Signal Handler / PC-Host OS Signal Handler
 #
 ###############################################################################
 class SignalHandler(QtNetwork.QAbstractSocket):
@@ -118,24 +118,25 @@ class SignalHandler(QtNetwork.QAbstractSocket):
                 self.mOrigSignalHandlers[sig] = signal.signal(sig, self.interrupt)
                 _logger.info('capture signal {} original handler {}'.format(sig, self.mOrigSignalHandlers[sig]))
 
-            if not UseTimer and hasattr(signal, 'set_wakeup_fd'):
-                _logger.debug('socket pair setup')
-                # get a pair of file descriptors from creating a socket pair
-                self.wsock, self.rsock = socket.socketpair(type=socket.SOCK_DGRAM)
-                # Let Qt AbstractSocket listen on the one end
-                self.setSocketDescriptor(self.rsock.fileno())
-                # Un-blocking the write socket and let Python write on the other end
-                self.wsock.setblocking(False)
-                # Set the wakeup file descriptor to fd. When a signal is received,
-                # the signal number is written as a single byte into the fd.
-                self.mOrigWakeupFd = signal.set_wakeup_fd(self.wsock.fileno())
-                # setup the AbstractSocket's readyRead signal to handleSignalWakeup slot
-                self.readyRead.connect(lambda : None) # the first time connect generates exception
-                self.readyRead.connect(self.handleSignalWakeup)
-            else:
-                # Dirty timer hack to get timer slice from mainloop (MS-Windows)
-                self.mTimer.timeout.connect(lambda: None)
-                self.mTimer.start(1000)
+            if IsATargetBoard():
+                if not UseTimer and hasattr(signal, 'set_wakeup_fd'):
+                    _logger.debug('socket pair setup')
+                    # get a pair of file descriptors from creating a socket pair
+                    self.wsock, self.rsock = socket.socketpair(type=socket.SOCK_DGRAM)
+                    # Let Qt AbstractSocket listen on the one end
+                    self.setSocketDescriptor(self.rsock.fileno())
+                    # Un-blocking the write socket and let Python write on the other end
+                    self.wsock.setblocking(False)
+                    # Set the wakeup file descriptor to fd. When a signal is received,
+                    # the signal number is written as a single byte into the fd.
+                    self.mOrigWakeupFd = signal.set_wakeup_fd(self.wsock.fileno())
+                    # setup the AbstractSocket's readyRead signal to handleSignalWakeup slot
+                    self.readyRead.connect(lambda : None) # the first time connect generates exception
+                    self.readyRead.connect(self.handleSignalWakeup)
+                else:
+                    # Dirty timer hack to get timer slice from mainloop (MS-Windows)
+                    self.mTimer.timeout.connect(lambda: None)
+                    self.mTimer.start(1000)
 
             self.mActivatedFlag = True
 
@@ -146,16 +147,16 @@ class SignalHandler(QtNetwork.QAbstractSocket):
         if not self.mActivatedFlag:
             return
 
-        # Restore any old handler on deletion
-        if self.mOrigWakeupFd is not None and hasattr(signal, 'set_wakeup_fd'):
-            signal.set_wakeup_fd(self.mOrigWakeupFd)
-
         # restore original signal handler
         for sig, origHandler in self.mOrigSignalHandlers.items():
             signal.signal(sig, origHandler)
 
-        # stop the timer slicing
-        self.mTimer.stop()
+        if IsATargetBoard():
+            # Restore any old handler on deletion
+            if self.mOrigWakeupFd is not None and hasattr(signal, 'set_wakeup_fd'):
+                signal.set_wakeup_fd(self.mOrigWakeupFd)
+            # stop the timer slicing
+            self.mTimer.stop()
         self.mActivatedFlag = False
 
     @pyqtSlot()
@@ -175,10 +176,15 @@ class SignalHandler(QtNetwork.QAbstractSocket):
         """
         Handler for signals to gracefully shutdown (SIGINT/SIGTERM).
         """
-        data = self.readData(1)
+        if IsATargetBoard():
+            data = self.readData(1)
+        else:
+            data = [0]
         _logger.warning('Received Unix Signal:{} read data: {}...'.format(signum, data[0]))
         # Emit a Qt signal for convenience
         self.signalReceived.emit(int(data[0]))
+        # deactivate signals, so we only capture signal once
+        self.deactivate()
 
 
 
@@ -388,6 +394,15 @@ class QtDbusMessenger(QObject, BaseMessenger):
             # add_signal_receiver() to handle receive signals from QtDBus, the equivalent in Qt is connect()
             ret = self.mSessDBus.connect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self.receiveMsg)
             _logger.debug('mSessBus returns: {} mSessBus connected? {} mIface isValid: {}'.format(ret, self.mSessDBus.isConnected(), self.mIface.isValid()))
+
+    def stop(self):
+        _logger.debug("shutting down dbus messenger...")
+        if self.mIsServer:
+            self.mSessDBus.unregisterObject(self.mObjPath)
+            self.mSessDBus.unregisterService(self.mBusName)
+            del self.mAdapter
+        else:
+            self.mSessDBus.disconnect(self.mBusName, self.mObjPath, self.mIfaceName, 'receive', self.receiveMsg)
 
     def hasValidConn(self):
         if self.mSessDBus.isConnected():
@@ -612,6 +627,11 @@ class GuiViewer(QObject, BaseViewer):
         # used to sequentialize QProcessSlot's request
         self._setEvent()
 
+    def stop(self):
+        for mgr in self.mMsger:
+            mgr.stop()
+            QtCore.QCoreApplication.instance().quit()
+
     def __setupMsger(self):
         """
         get the DefConfig, and create mMsger as the dbus client with the root widget
@@ -741,7 +761,9 @@ class GuiViewer(QObject, BaseViewer):
                 # Window Additional Flags
                 self.mGuiRootWidget.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint) #QtCore.Qt.SplashScreen | QtCore.Qt.WindowStaysOnTopHint)
             else:
-                self.mGuiRootWidget.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
+                self.mGuiRootWidget.setWindowFlags(QtCore.Qt.WindowCloseButtonHint)
+                self.mGuiRootWidget.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+                self.mGuiRootWidget.finished.connect(self.stop)
         else:
             # takes the old parent, and return itself as the new parent
             parent = GuiDraw.GenGuiDraw(confdict, parent)
@@ -1071,16 +1093,16 @@ class GuiViewer(QObject, BaseViewer):
 def guiview():
     app = QtGui.QApplication(sys.argv)
     sighdl = SignalHandler(app)
-    sighdl.activate([signal.SIGTERM, signal.SIGUSR1], app.exit)
-
     geo = app.desktop().screenGeometry()
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
     view = GuiViewer(sys.argv[-1], orient)
+    sighdl.activate([signal.SIGINT, signal.SIGTERM, signal.SIGUSR1], view.stop)
     view.show(geo)
 
-    ret = app.exec_()
-    sighdl.deactivate()
-    sys.exit(ret)
+    try:
+        sys.exit(app.exec_())
+    except KeyboardInterrupt:
+        sys.exit(-1)
 
 if __name__ == '__main__':
     guiview()
