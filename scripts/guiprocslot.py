@@ -443,7 +443,16 @@ class detectDeviceSlot(QProcessSlot):
         """
         Handle detect device callback slot
         """
-        QtCore.QTimer.singleShot(1000, self.__checkDbus)
+        if self.sender().objectName() == 'processError':
+            # Start serial messenger when there is no network
+            # Or continue to probe for network
+            if 'accept' in inputs and 'reject' in inputs:
+                if inputs['accept'] and IsATargetBoard():
+                    self.sendCommand({'cmd': 'connect', 'type': 'serialstorage', 'src_filename': '/dev/mmcblk0'})
+                else:
+                    QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+        else:
+            QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
         self.sendCommand({'cmd': 'info', 'target': 'cpu'})
@@ -517,15 +526,20 @@ class detectDeviceSlot(QProcessSlot):
                             #    self.mErr.update({'NoNIC': True})
                             # when NIC is not up and running, schedule another
                             # self.__checkNetwork() and wait until NIC is up
-                            self.fail.emit(self.mErr)
+                            if IsATargetBoard():
+                                self.mErr.update({'ask': 'serial'})
                             self.mSentFlag = False
-                            QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                            self.fail.emit(self.mErr)
                 if results['config_id'] == 'ifhwaddr': # serial messenger returns target nic mac
                     if 'hwaddr' in results and results['hwaddr'] != '00:00:00:00:00:00' and results['msger_type'] == 'serial':
                         self.mTgtMac = results['hwaddr'][:]
                         _logger.warn('{}: found target board mac address: {}'.format(self.objectName(), self.mTgtMac))
                         self.finish.emit()
-            return
+
+        if 'cmd' in results and results['cmd'] == 'connect' and 'status' in results and results['status'] == 'success':
+            self.mErr.clear()
+            self.mErr.update({'SerialMode': True, 'ask': 'reboot'})
+            self.fail.emit(self.mErr)
 
         if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and \
            'status' in results and results['status'] == 'success' and 'target' in results:
