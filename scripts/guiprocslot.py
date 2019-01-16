@@ -2582,8 +2582,10 @@ class QMessageDialog(QtGui.QDialog):
         self.mQRcode = None
         self.mWgtContent = None
         self.mWgtContentLayout = None
-        self.mButtons = {}
         self.mCheckFlags = {}
+        self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel')}
+        self.mButtons['accept'].clicked.connect(self.accept)
+        self.mButtons['reject'].clicked.connect(self.reject)
 
     def resizeEvent(self, event):
         #rect = event.rect()
@@ -2641,22 +2643,20 @@ class QMessageDialog(QtGui.QDialog):
         painter.end()
 
     def setButtons(self, buttons):
+        self.clearButtons()
+        _logger.warn('setButtons... {}'.format(buttons))
         if isinstance(buttons, dict):
             if 'accept' in buttons.keys():
-                btn = QtGui.QPushButton(buttons['accept'])
-                btn.clicked.connect(self.accept)
-                self.layout().addWidget(btn, 4, 5)
+                self.mButtons['accept'].setText(buttons['accept'])
+                self.layout().addWidget(self.mButtons['accept'], 4, 5)
             if 'reject' in buttons.keys():
-                btn = QtGui.QPushButton(buttons['reject'])
-                btn.clicked.connect(self.reject)
-                self.layout().addWidget(btn, 4, 4 if 'accept' in buttons.keys() else 5)
+                self.mButtons['reject'].setText(buttons['reject'])
+                self.layout().addWidget(self.mButtons['reject'], 4, 4 if 'accept' in buttons.keys() else 5)
 
     def clearButtons(self):
-        for col in [4, 5]:
-            if self.layout().itemAtPosition(4, col):
-                index = self.layout().indexOf(self.layout().itemAtPosition(4, col).widget())
-                wgt = self.layout().takeAt(index)
-                del wgt
+        for k, btn in self.mButtons.items():
+            btn.setParent(None)
+            _logger.warn('button setParent to None to remove from layer: {}'.format(btn.text()))
 
     def setIcon(self, icon):
         if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
@@ -2803,7 +2803,7 @@ class QMessageDialog(QtGui.QDialog):
                 if flag: # True or False
                     pixmap = QtGui.QIcon(':res/images/cross.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
                 else:
-                    if ('NoDbus' in flags or 'NoCpuForm' in flags) and key in ['NoIface', 'NoCable', 'NoServer']:
+                    if ('NoDbus' in flags or 'NoCpuForm' in flags):
                         pixmap = None
                     else:
                         pixmap = QtGui.QIcon(':res/images/tick.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
@@ -2832,7 +2832,7 @@ class QMessageDialog(QtGui.QDialog):
                                      'NoIface': ':res/images/no_iface.svg', \
                                      'NoCable': ':res/images/no_cable.svg'})
             if msgtype == 'NoNIC':
-                self.setStatus('No network adeptor found.')
+                self.setStatus('No network adaptor found.')
             elif msgtype == 'NoIface':
                 self.setStatus('Ethernet interface is not available.')
             elif msgtype == 'NoCable':
@@ -2846,7 +2846,7 @@ class QMessageDialog(QtGui.QDialog):
             if msgtype == 'NoServer':
                 self.setStatus('TechNexion server is temporary unavailable, try again later.')
             elif msgtype == 'NoDNS':
-                self.setStatus('Cannot resolve domain name: rescue.technexion.net')
+                self.setStatus('Cannot resolve domain name')
             elif msgtype == 'NoIP':
                 self.setStatus('No IP address assigned')
         elif msgtype == 'NoCpuForm':
