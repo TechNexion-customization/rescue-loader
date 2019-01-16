@@ -489,8 +489,15 @@ class detectDeviceSlot(QProcessSlot):
                             for k, v in results['iflist'].items():
                                 _logger.warn('{}: found ifname: {} ip: {}'.format(self.objectName(), k, v))
                                 if results['msger_type'] == 'dbus':
-                                    if v == self.mIP:
-                                        self.mNICName = k[:]
+                                    if IsATargetBoard():
+                                        if self.mIP != '127.0.0.1' and v == self.mIP:
+                                            self.mNICName = k[:]
+                                        elif self.mIP != '127.0.0.1' or 'eth' in k:
+                                            self.mNICName = k[:]
+                                    else:
+                                        if v == self.mIP:
+                                            self.mNICName = k[:]
+                                    if self.mNICName:
                                         # send another query to query for ifflags with proper NIC I/F name
                                         QtCore.QTimer.singleShot(1000, self.__checkNetwork)
                                 elif results['msger_type'] == 'serial':
@@ -574,7 +581,7 @@ class detectDeviceSlot(QProcessSlot):
     def __checkNetwork(self):
         # Check for networks, which means sending commands to installerd.service to request for network status
         # send request to installerd.service to request for network status.
-        _logger.debug('send request to installerd to query network status...')
+        _logger.debug('send request to installerd to query network status of NIC: {}...'.format(self.mNICName))
         if self.mNICName:
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': self.mNICName})
         else:
