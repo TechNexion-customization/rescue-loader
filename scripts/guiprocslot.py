@@ -2444,8 +2444,8 @@ class QMessageDialog(QtGui.QDialog):
         self.mQRcode = None
         self.mWgtContent = None
         self.mWgtContentLayout = None
-        self.mButtons = {}
         self.mCheckFlags = {}
+        self.mButtons = []
 
     def resizeEvent(self, event):
         #rect = event.rect()
@@ -2508,17 +2508,21 @@ class QMessageDialog(QtGui.QDialog):
                 btn = QtGui.QPushButton(buttons['accept'])
                 btn.clicked.connect(self.accept)
                 self.layout().addWidget(btn, 4, 5)
+                self.mButtons.append(btn)
             if 'reject' in buttons.keys():
                 btn = QtGui.QPushButton(buttons['reject'])
                 btn.clicked.connect(self.reject)
                 self.layout().addWidget(btn, 4, 4 if 'accept' in buttons.keys() else 5)
+                self.mButtons.append(btn)
 
     def clearButtons(self):
-        for col in [4, 5]:
-            if self.layout().itemAtPosition(4, col):
-                index = self.layout().indexOf(self.layout().itemAtPosition(4, col).widget())
-                wgt = self.layout().takeAt(index)
-                del wgt
+        _logger.warn('clearButtons...')
+        for btn in self.mButtons:
+            _logger.warn('remove button: {}'.format(btn))
+            btn.hide()
+            self.layout().removeWidget(btn)
+            btn.deleteLater()
+            del btn
 
     def setIcon(self, icon):
         if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
