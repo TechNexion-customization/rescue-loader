@@ -2134,8 +2134,7 @@ class processErrorSlot(QProcessSlot):
     """
     Handles all errors
     """
-    success = pyqtSignal(dict)
-    fail = pyqtSignal(dict)
+    userinputs = pyqtSignal(dict)
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -2151,12 +2150,18 @@ class processErrorSlot(QProcessSlot):
         """
         if not self.mMsgBox:
             self.mMsgBox = self._findChildWidget('msgbox')
-
+        if hasattr(self.sender(), 'processSlot'):
+            # connect signal to sender's processSlot
+            self.userinputs.connect(self.sender().processSlot)
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
         self.mDisplay = False if ('NoError' in inputs and inputs['NoError']) else True
         self.__handleError()
         self.mErrors.clear()
+        try:
+            self.userinputs.disconnect()
+        except:
+            pass
 
     def __handleError(self):
         # Display appropriate messagebox
@@ -2292,6 +2297,21 @@ class processErrorSlot(QProcessSlot):
                             subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
                         else:
                             os.kill(os.getpid(), signal.SIGUSR1)
+                    except:
+                        raise
+            elif self.mAsk == 'serial':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
+                if ret == QtGui.QDialog.Accepted:
+                    try:
+                        self.mErrors.update({'reject': False, 'accept': True})
+                        self.userinputs.emit(self.mErrors)
+                    except:
+                        raise
+                elif ret == QtGui.QDialog.Rejected:
+                    try:
+                        self.mErrors.update({'reject': True, 'accept': False})
+                        self.userinputs.emit(self.mErrors)
                     except:
                         raise
             elif self.mAsk == 'quit':
@@ -2691,6 +2711,8 @@ class QMessageDialog(QtGui.QDialog):
             self.setButtons({'accept': 'QUIT'})
         elif asktype == 'interrupt':
             self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
+        elif asktype == 'serial':
+            self.setButtons({'accept': 'SERIAL', 'reject': 'RECHECK'})
 
     def clearMessage(self):
         self.clearIcon()
