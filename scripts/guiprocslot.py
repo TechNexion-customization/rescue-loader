@@ -2187,6 +2187,7 @@ class processErrorSlot(QProcessSlot):
     def __handleError(self):
         # Display appropriate messagebox
         self.mMsgBox.clearCheckFlags()
+        self.mMsgBox.clearMessage()
 
         if 'NoCpuForm' in self.mErrors:
             # Add NoCpuForm icon and critical notice
@@ -2283,9 +2284,12 @@ class processErrorSlot(QProcessSlot):
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
             _logger.warning('Flash complete, reboot the system into new OS...')
+        if 'SerialMode' in self.mErrors:
+            self.mMsgBox.setMessage('SerialMode')
+            _logger.warning('Set to SerialMode for PC-Host version...')
         if 'QRCode' in self.mErrors:
             self.mMsgBox.setMessage('QRCode')
-            _logger.warning('Set QRCode for the download files')
+            _logger.warning('Set QRCode for the download files...')
 
         # Handles prompt for user response in the dialogue box
         if self.mAsk:
@@ -2716,8 +2720,13 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
             self.setContent("Do you want to stop?")
-        # special qrcode setting
+        elif msgtype == 'SerialMode':
+            # special serialmode setting
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setTitle("Serial Communication Mode")
+            self.setContent("Please run Rescue host version on your PC\nto program target board...")
         if msgtype == 'QRCode':
+            # special qrcode setting
             qrIcon = QtGui.QIcon('/tmp/qrcode.svg')
             self.setQrCode(qrIcon)
 
