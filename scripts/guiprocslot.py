@@ -613,7 +613,7 @@ class crawlWebSlot(QProcessSlot):
             # exact match of cpu in the filename, including imx6ul, imx6ull
             return True
         else:
-            if cpu.lower() == 'imx6ul' or cpu.lower() == 'imx6ull':
+            if cpu.lower() == 'imx6ul' or cpu.lower() == 'imx6ull' or cpu[0:4].lower() == 'imx8':
                 return False
             if cpu[0:4] in filename.lower():
                 if form.lower() in filename.lower():
