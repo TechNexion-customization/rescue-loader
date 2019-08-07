@@ -438,11 +438,21 @@ class detectDeviceSlot(QProcessSlot):
         self.mTgtIP = None
         self.mTgtNICName = None
         self.mTgtMac = None
+        self.mHostName = None
 
     def process(self, inputs = None):
         """
         Handle detect device callback slot
         """
+        # get the default remote http server host_name from defconfig in self.mViewer
+        if self.mHostName is None:
+            remotehost = self.mViewer.getRemoteHostUrl() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostUrl") else None
+            url = urlparse(remotehost)
+            if all([url.scheme, url.netloc]):
+                self.mHostName = url.geturl()
+            else:
+                self.mHostName = 'http://rescue.technexion.net'
+
         if self.sender().objectName() == 'processError':
             # Start serial messenger when there is no network
             # Or continue to probe for network
@@ -590,9 +600,8 @@ class detectDeviceSlot(QProcessSlot):
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
 
     def __hasValidNetworkConnectivity(self):
-        _logger.debug('check whether we have connectivity to server...')
-        url = 'http://rescue.technexion.net'
-        req = QtNetwork.QNetworkRequest(QtCore.QUrl(url))
+        _logger.debug('check whether we have connectivity to server...{}'.format(self.mHostName))
+        req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
         self.mNetMgr.get(req)
 
     def _urlResponse(self, reply):
@@ -627,17 +636,27 @@ class crawlWebSlot(QProcessSlot):
         self.mInputs = {}
         self.mResults = []
         self.mTimerId = None
+        self.mHostName = None
 
     def process(self, inputs):
         """
         Handle crawlWeb process slot (signalled by initialized signal)
         """
+        # get the default remote http server host_name from defconfig in self.mViewer
+        if self.mHostName is None:
+            remotehost = self.mViewer.getRemoteHostUrl() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostUrl") else None
+            url = self.__checkUrl(remotehost)
+            if url is not None:
+                self.mHostName = url.geturl()
+            else:
+                self.mHostName = 'http://rescue.technexion.net'
+
         if self.sender().objectName() == 'scanStorage':
             # setup rescue server and location if there isn't any
             if 'location' not in inputs:
                 self.mInputs.update({'location': '/'})
             if 'target' not in inputs:
-                self.mInputs.update({'target': 'http://rescue.technexion.net'})
+                self.mInputs.update({'target': self.mHostName})
 
             _logger.debug('start the crawl process: {}'.format(self.mInputs))
             # start the crawl process
@@ -681,12 +700,12 @@ class crawlWebSlot(QProcessSlot):
                             pobj = self.__checkUrl(item[2])
                             if pobj is not None:
                                 _logger.debug('internet item path: {}'.format(pobj.path))
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location':pobj.path.replace('/rescue/', '/')})
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path.replace('/rescue/', '/')})
                         elif item[1].endswith('.xz'):
                             # match against the target device, and send request to obtain uncompressed size
                             _logger.debug('internet xzfile path: {} {} {}'.format(item[1], item[2], item[2].split('/rescue/',1)))
                             if self.__matchDevice(item[2].split('/rescue/', 1)[1]):
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':'http://rescue.technexion.net', 'location': '/' + item[2].split('/rescue/', 1)[1]})
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '/' + item[2].split('/rescue/', 1)[1]})
                 _logger.debug('Crawling url {} to find suitable xz file.\n'.format(results['location']))
 
         # Emit our own finished signal, because network check will cause a premature finish.emit()

@@ -661,6 +661,14 @@ class GuiViewer(QObject, BaseViewer):
             return "serial"
         return None
 
+    def getRemoteHostUrl(self):
+        if self.mDefConfig:
+            prot = self.mDefConfig.getSettings('host_protocol')
+            host = self.mDefConfig.getSettings('host_name')
+            if prot and host:
+                return '{}://{}'.format(prot['host_protocol'], host['host_name'])
+        return None
+
     ###########################################################################
     # PyQt GUI related
     ###########################################################################
