@@ -181,17 +181,14 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif row['device_type'].lower() == 'partition':
                     radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(":/res/images/micro_sd_recover.png")))
             if 'os' in row:
-                if row['os'].lower() == 'android':
-                    radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(":/res/images/android.png")))
-                elif row['os'].lower() == 'ubuntu':
-                    radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(":/res/images/ubuntu.png")))
-                elif row['os'].lower() == 'yocto':
-                    radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(":/res/images/yocto.png")))
+                resName = ":/res/images/os_{}.svg".format(row['os'].lower())
+                radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(resName)))
             layoutBox.addWidget(radioItem)
         if qContainer.layout() is None: qContainer.setLayout(layoutBox)
 
     elif isinstance(qContainer, QtGui.QGraphicsView):
-
+        # insert into a graphics view (widget)
+        # setup graphics view items
         scene = qContainer.scene() if qContainer.scene() else QtGui.QGraphicsScene()
         gitems = scene.items()
         if len(gitems):
@@ -211,12 +208,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif row['device_type'].lower() == 'partition':
                     resName = ":/res/images/micro_sd_recover.png"
             elif 'os' in row:
-                if row['os'].lower() == 'android':
-                    resName = ":/res/images/android.png"
-                elif row['os'].lower() == 'ubuntu':
-                    resName = ":/res/images/ubuntu.png"
-                elif row['os'].lower() == 'yocto':
-                    resName = ":/res/images/yocto.png"
+                resName = ":/res/images/os_{}.svg".format(row['os'].lower())
             else:
                 resName = ":/res/images/NewTux.svg"
             # add the returned proxywidget from scene addItem to the layout
