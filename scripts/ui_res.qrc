@@ -5,7 +5,6 @@
     <file>images/tn_bg.svg</file>
     <file>images/tn_logo.svg</file>
     <file>images/tn_bar.svg</file>
-    <file>images/os_rescue.svg</file>
     <file>images/storage_ata.svg</file>
     <file>images/storage_usb.svg</file>
     <file>images/storage_emmc.svg</file>
@@ -28,6 +27,8 @@
     <file>images/os_tux.svg</file>
     <file>images/os_ubuntu.svg</file>
     <file>images/os_yocto.svg</file>
+    <file>images/os_boot2qt.svg</file>
+    <file>images/os_rescue.svg</file>
     <file>images/did_you_know1.png</file>
     <file>images/no_cable.svg</file>
     <file>images/no_nic.svg</file>
