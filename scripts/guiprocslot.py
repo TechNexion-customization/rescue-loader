@@ -950,7 +950,7 @@ class QChooseSlot(QProcessSlot):
     def _filterList(self, key, pick, parsedUIList, origList):
 
         def enableList(key, parsedUIList, enabledSet):
-            _logger.info('enable following ui: {}'.format(enabledSet))
+            _logger.info('{}: Enable following ui: {}'.format(self.objectName(), enabledSet))
             for ui in parsedUIList:
                 if ui[key] is not None:
                     ui['disable'] = True
@@ -976,7 +976,7 @@ class QChooseSlot(QProcessSlot):
             else:
                 enabled.extend(item[key] for item in origList if item[key] is not None)
         enabledSet = list(set(enabled))
-        _logger.debug('{}: Enbled Set: {}'.format(self.Name(), enabledSet))
+        _logger.debug('{}: Enabled set: {}'.format(self.objectName(), enabledSet))
         enableList(key, parsedUIList, enabledSet)
 
     def _updateDisplay(self):
@@ -1301,7 +1301,7 @@ class chooseDisplaySlot(QChooseSlot):
         lstTemp = []
         # gets the unique set of available boards, OS, version, Display from the crawled list
         self.mDisplayNames = set(dlfile['display'] for dlfile in self.mResults if ('display' in dlfile))
-        if 'pico' in self._findChildWidget('lblForm').text().lower():
+        if any(formfactor in self._findChildWidget('lblForm').text().lower() for formfactor in ['pico', 'flex', 'axon', 'edm']):
             # PICO form factor display lists
             for name in self.mDisplayNames:
                 if any(sz in name for sz in ['050', '070', '101', '150', 'lcd']):
