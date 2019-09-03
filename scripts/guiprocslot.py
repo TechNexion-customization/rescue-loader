@@ -105,13 +105,24 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                             resName = ":/res/images/storage_emmc.svg"
                         else:
                             resName = ":/res/images/storage_sd.svg"
-                    item.setToolTip('{}'.format(row['name']))
+                    item.setToolTip(row['name'].lower())
                 elif 'os' in row:
-                    resName = ":/res/images/os_{}.svg".format(row['os'].lower())
-                    item.setToolTip(row['os'].lower())
+                    if row['os'] in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                        resName = ":/res/images/os_{}.svg".format(row['os'].lower())
+                    else:
+                        resName = ":/res/images/os_tux.svg"
+                        item.setToolTip(row['os'].lower())
                 elif 'board' in row:
-                    #update the VERSION within the svg resource byte array, and draw the svg
-                    resName = ":/res/images/board_{}.svg".format(row['board'].lower())
+                    # could update the VERSION within the svg resource byte array, and draw the svg
+                    if row['board'] is not None:
+                        for bd in ['dwarf', 'nymph', 'hobbit', 'pi', 'fairy', 'gnome', 'tep', 'tek', 'toucan', 'wizard']:
+                            if bd in row['board']:
+                                resName = ":/res/images/board_{}.svg".format(bd)
+                                break
+                    elif 'tc' in row['board']:
+                        resName = ":/res/images/board_toucan.svg"
+                    else:
+                        resName = ":/res/images/board.svg"
                     #font = QtGui.QFont('Lato', 32, QtGui.QFont.Bold)
                     #item.setFont(font)
                     #item.setTextColor(QtGui.QColor(184, 24, 34))
@@ -181,7 +192,10 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif row['device_type'].lower() == 'partition':
                     radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(":/res/images/micro_sd_recover.png")))
             if 'os' in row:
-                resName = ":/res/images/os_{}.svg".format(row['os'].lower())
+                if row['os'] in ["rescue", "android", "ubuntu", "boot2qt", "yocto", "androidthings"]:
+                    resName = ":/res/images/os_{}.svg".format(row['os'].lower())
+                else:
+                    resName = ":/res/images/os_tux.svg"
                 radioItem.setIcon(QtGui.QIcon(QtGui.QPixmap(resName)))
             layoutBox.addWidget(radioItem)
         if qContainer.layout() is None: qContainer.setLayout(layoutBox)
@@ -451,11 +465,30 @@ class detectDeviceSlot(QProcessSlot):
                     QtCore.QTimer.singleShot(1000, self.__checkNetwork)
             return
 
-        if 'cmd' in results and results['cmd'] == 'info' and 'found_match' in results and \
+        _logger.debug('returned results: {}'.format(results))
+        if 'cmd' in results and results['cmd'] == 'info' and \
            'status' in results and results['status'] == 'success':
-            self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
-            if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
-            #if 'pico' in self.mForm.lower(): self._findChildWidget('lblBaseboard').hide()
+            if 'found_match' in results:
+                self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
+                if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
+            else:
+                if 'file_content' in results:
+                    # fall through to parse file content from /proc/device-tree/model returned from installerd
+                    lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
+                    _logger.debug('parsed:{}'.format(lstWords))
+                    for i, w in enumerate(lstWords):
+                        _logger.debug('i:{} w:{}'.format(i, w))
+                        if '-' in w:
+                            self.mCpu = w.split('-')[1]
+                            self.mForm = w.split('-')[0]
+                        if 'board' in w or 'Board' in w and 'baseboard' not in w:
+                            # for most edm system boards without baseboards
+                            for bd in ['TEP', 'TEK']:
+                                if bd in self.mForm:
+                                    self.mBaseboard = bd
+                if self.mCpu and self.mForm:
+                    self.mResults.update({'found_match':'{},{},{}'.format(self.mForm, self.mCpu, self.mBaseboard)})
+            _logger.debug('cpu:{} form:{} board:{}'.format(self.mCpu, self.mForm, self.mBaseboard))
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
@@ -1301,16 +1334,15 @@ class chooseDisplaySlot(QChooseSlot):
         lstTemp = []
         # gets the unique set of available boards, OS, version, Display from the crawled list
         self.mDisplayNames = set(dlfile['display'] for dlfile in self.mResults if ('display' in dlfile))
-        if any(formfactor in self._findChildWidget('lblForm').text().lower() for formfactor in ['pico', 'flex', 'axon', 'edm']):
+        if any(formfactor in self._findChildWidget('lblForm').text().lower() for formfactor in ['pico', 'flex', 'axon', 'edm', 'tep', 'tek']):
             # PICO form factor display lists
             for name in self.mDisplayNames:
-                if any(sz in name for sz in ['050', '070', '101', '150', 'lcd']):
+                if any(sz in name for sz in ['050', '070']):
                     iftype = 'ttl'
+                elif any(sz in name for sz in ['101', '150']):
+                    iftype = 'lvds'
                 elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
-                    if 'dsi' in name:
-                        iftype = 'dsi'
-                    else:
-                        iftype = 'dpi'
+                    iftype = 'dsi' if 'dsi' in name else 'dpi'
                 else:
                     for t in self.mIfaceTypes:
                         if t in name:
