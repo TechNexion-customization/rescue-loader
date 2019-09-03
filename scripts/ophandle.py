@@ -404,7 +404,7 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['tgt_type'] = 'sd'
                 elif k==self.mArgs[0] and v=='som':
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                    self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
+                    self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
                 elif k==self.mArgs[0] and v=='cpu':
                     self.mActionParam['src_filename'] = '/sys/devices/soc0/soc_id'
                     self.mActionParam['re_pattern'] = '^(.*)[\s|\n]$'
@@ -440,6 +440,7 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['src_directory'] = v # directory/folder
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
+
                 self.mActionParam['dst_pos'] = -1
 
         # determine if we have parsed the info command successfully
@@ -688,7 +689,16 @@ if __name__ == "__main__":
         param = {'cmd': 'flash', 'src_filename': './test.bin', 'src_start_sector': 0, 'src_total_sectors': 64, 'tgt_filename': './target.bin', 'tgt_start_sector': 32}
     elif sys.argv[1] == 'som':
         hdlr = InfoOperationHandler(opcb)
-        param = {'cmd': 'info', 'target': 'som', 'location': 'baseboard'}
+        param = {'cmd': 'info', 'target': 'som'}
+    elif sys.argv[1] == 'cpu':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'cpu'}
+    elif sys.argv[1] == 'form':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'form'}
+    elif sys.argv[1] == 'baseboard':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'baseboard'}
     elif sys.argv[1] == 'web':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
