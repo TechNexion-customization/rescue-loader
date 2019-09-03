@@ -371,12 +371,15 @@ class InfoOperationHandler(BaseOperationHandler):
                         self.mActionParam['src_directory'] = v # directory/folder
                     elif k==i and v=='som':
                         self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                        self.mActionParam['re_pattern'] = '\w+ (\w+)-(imx[\w-]+|IMX[\w-]+) .* (\w+) \w*board'
+                        self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
                     elif k==i and v=='cpu':
-                        self.mActionParam['re_pattern'] = '.*-(imx\w+|IMX\w+).*'
+                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
+                        self.mActionParam['re_pattern'] = '.*-([imx|IMX]\w+).*'
                     elif k==i and v=='form':
+                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
                         self.mActionParam['re_pattern'] = '\w+ (\w+)-\w+'
                     elif k==i and v=='baseboard':
+                        self.mActionParam['src_filename'] = '/proc/device-tree/model'
                         self.mActionParam['re_pattern'] = '.* (\w+) \w*board'
 
             if 'tgt_type' in self.mActionParam and not 'dst_pos' in self.mActionParam:
@@ -527,7 +530,16 @@ if __name__ == "__main__":
         param = {'cmd': 'flash', 'src_filename': './test.bin', 'src_start_sector': 0, 'src_total_sectors': 64, 'tgt_filename': './target.bin', 'tgt_start_sector': 32}
     elif sys.argv[1] == 'som':
         hdlr = InfoOperationHandler(opcb)
-        param = {'cmd': 'info', 'target': 'som', 'location': 'baseboard'}
+        param = {'cmd': 'info', 'target': 'som'}
+    elif sys.argv[1] == 'cpu':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'cpu'}
+    elif sys.argv[1] == 'form':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'form'}
+    elif sys.argv[1] == 'baseboard':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'baseboard'}
     elif sys.argv[1] == 'web':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
