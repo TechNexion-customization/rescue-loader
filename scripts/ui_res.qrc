@@ -22,6 +22,10 @@
     <file>images/board_pi.svg</file>
     <file>images/board_fairy.svg</file>
     <file>images/board_toucan.svg</file>
+    <file>images/board_gnome.svg</file>
+    <file>images/board_wizard.svg</file>
+    <file>images/board_tek.svg</file>
+    <file>images/board_tep.svg</file>
     <file>images/os_android.svg</file>
     <file>images/os_androidthings.svg</file>
     <file>images/os_tux.svg</file>
