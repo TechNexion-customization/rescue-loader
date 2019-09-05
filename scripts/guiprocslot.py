@@ -2587,14 +2587,14 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
-            self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
+            self.setContent('Please reset your board.\n(For boards with a boot jumper, set it to BOOT MODE.)')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
-            self.setContent('Please set your jumper to BOOT MODE,\nand reset your board.')
+            self.setContent('Please reset your board.\n(For boards with a boot jumper, set it to BOOT MODE.)')
         elif msgtype == 'Interrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
