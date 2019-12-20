@@ -710,7 +710,8 @@ class crawlWebSlot(QProcessSlot):
                 # make up the XZ file URL
                 url = results['target'] + '/rescue' + results['location']
                 # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
-                self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
+                if os in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                    self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
 
             elif 'file_list' in results:
                 # recursively request into the rescue server directories to find XZ files
