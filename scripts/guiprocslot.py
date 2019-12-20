@@ -472,7 +472,6 @@ class detectDeviceSlot(QProcessSlot):
             QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
-        self.sendCommand({'cmd': 'info', 'target': 'cpu'})
         self.sendCommand({'cmd': 'info', 'target': 'som'})
 
     def __checkDbus(self):
@@ -572,9 +571,9 @@ class detectDeviceSlot(QProcessSlot):
                 self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
                 if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
             else:
-                if 'file_content' in results:
+                if 'content' in results:
                     # fall through to parse file content from /proc/device-tree/model returned from installerd
-                    lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
+                    lstWords = results['content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
                     _logger.debug('parsed:{}'.format(lstWords))
                     for i, w in enumerate(lstWords):
                         _logger.debug('i:{} w:{}'.format(i, w))
@@ -590,6 +589,10 @@ class detectDeviceSlot(QProcessSlot):
                     self.mResults.update({'found_match':'{},{},{}'.format(self.mForm, self.mCpu, self.mBaseboard)})
             _logger.debug('cpu:{} form:{} board:{}'.format(self.mCpu, self.mForm, self.mBaseboard))
             self._findChildWidget('lblCpu').setText(self.mCpu)
+            self._findChildWidget('lblForm').setText(self.mForm)
+            self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
+            # start checking the network if info returned success
+            self.__checkNetwork()
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
