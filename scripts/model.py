@@ -492,6 +492,8 @@ class WebDownloadActionModeller(BaseActionModeller):
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
+        # get memory information from the system
+        self.__meminfo = psutil.virtual_memory()
 
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
@@ -523,26 +525,42 @@ class WebDownloadActionModeller(BaseActionModeller):
     def _mainAction(self):
         # copy specified address range from downloaded src file to target file
         try:
-            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
-            totalbytes = self.mIOs[0].getFileSize()
             self.mResult['total_uncompressed'] = self.mIOs[0].getUncompressedSize()
+
+            # shell subprocess Popen
+            DecompCmd = {'tar': 'tar xvf', 'zip':'zip -d', 'xz':'xz -d', 'bz':'bzip2 -d', 'gz':'gzip -d'}
+            decompcmd = 'xz -d'
+            for k, v in DecompCmd.items():
+                if k in self.mIOs[0].getFileType():
+                    decompcmd = v
+            wgetcmd = 'wget -O - {}'.format(self.mIOs[0].mUrl)
+            ddcmd = 'dd of={} bs=512k oflag=dsync status=progress'.format(self.mIOs[1].mFilename)
+
+            # python lzma method
+            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
             srcstart = 0
             tgtstart = self.mParam['tgt_start_sector']
-
+            totalbytes = self.mIOs[0].getFileSize()
             # sector addresses of a very large file for looping
             if totalbytes > 0:
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
             else:
                 raise IOError('There is 0 Total Bytes to download')
-            _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
-            if len(address) > 1:
-                for count, (srcaddr, tgtaddr) in enumerate(address):
-                    self.checkInterruptAndExit()
-                    self.__copyChunk(srcaddr, tgtaddr, 1)
-                    if not(count % 500):
-                        self.mIOs[1]._close()
+
+            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+                # if available memory > 640MB, use python lzma module
+                _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
+                if len(address) > 1:
+                    for count, (srcaddr, tgtaddr) in enumerate(address):
+                        self.checkInterruptAndExit()
+                        self.__copyChunk(srcaddr, tgtaddr, 1, wgetcmd, decompcmd, ddcmd)
+                        if not(count % 500):
+                            self.mIOs[1]._close()
+                else:
+                    self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
             else:
-                self.__copyChunk(srcstart, tgtstart, totalbytes)
+                # otherwise use subprocess's Popen
+                self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
             return True
         except Exception as ex:
             _logger.error('WebDownload main-action exception: {}'.format(ex))
@@ -554,24 +572,101 @@ class WebDownloadActionModeller(BaseActionModeller):
             for ioobj in self.mIOs:
                 ioobj._close()
 
-    def __copyChunk(self, srcaddr, tgtaddr, numChunks):
-        try:
-            # read src and write to the target
-            data = self.mIOs[0].Read(srcaddr, numChunks)
-            self.mResult['bytes_read'] += len(data)
-            written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
-            # write should return number of bytes written
-            if (written > 0):
-                self.mResult['bytes_written'] += written
-            del data # hopefully this would clear the write data buffer
-        except Exception:
-            raise
-
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
         parts = int(totalbytes / chunksize) + (1 if (totalbytes % chunksize) else 0)
         return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
+
+    def __parseProgress(self, pid, line, rex):
+        # extract percentage and size downloaded from web
+        _logger.debug('parseProgress: regex: {} on {}'.format(rex, line))
+        p = re.compile(rex, re.IGNORECASE)
+        m = p.match(line)
+        if m:
+            _logger.debug('matched: {}'.format(m.groups()))
+            if pid == self.__pddpid:
+                copied = m.groups()[0]
+                self.mResult['bytes_read'] = copied
+                self.mResult['bytes_written'] = copied
+            else:
+                percent, read, eta = m.groups()
+                self.mResult['bytes_read'] = read
+                self.mResult['bytes_written'] = self.mResult['total_uncompressed'] * int(percent) // 100
+                self.mResult['eta'] = eta
+
+    def __copyChunk(self, srcaddr, tgtaddr, numChunks, wgetcmd, decompcmd, ddcmd):
+        def read_stream(fd):
+            try:
+                # set non-blocking flag while preserving old flags
+                fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                fd.seek(0)
+                line = fd.readlines()
+                if line is not None:
+                    _logger.debug('last progress line: {}'.format(line[-1]))
+                    self.__parseProgress(self.__pddpid, line[-1], '(.*) bytes .* copied')
+            except Exception as ex:
+                # waiting for data to be available on stderr
+                _logger.error('read_stream exception: {}'.format(ex))
+                return False
+            return True
+
+        try:
+            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+                # read src and write to the target
+                data = self.mIOs[0].Read(srcaddr, numChunks)
+                self.mResult['bytes_read'] += len(data)
+                written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
+                _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
+                # write should return number of bytes written
+                if (written > 0):
+                    self.mResult['bytes_written'] += written
+                del data # hopefully this would clear the write data buffer
+            else:
+                fd = open('/tmp/progress.log', 'w+')
+                _logger.info('copyChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
+                pwget = subprocess.Popen(
+                    [wgetcmd],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=True,
+                )
+                pxz = subprocess.Popen(
+                    [decompcmd],
+                    stdin=pwget.stdout,
+                    stdout=subprocess.PIPE,
+                    shell=True,
+                )
+                pdd = subprocess.Popen(
+                    [ddcmd],
+                    stdin=pxz.stdout,
+                    stderr=subprocess.PIPE,
+                    shell=True,
+                )
+                fd.flush()
+                ptee = subprocess.Popen(
+                    ['tee'],
+                    stdin=pdd.stderr,
+                    stdout=fd,
+                    shell=True,
+                )
+                self.__pddpid = pdd.pid
+                while True:
+                    try:
+                        out, err = ptee.communicate(timeout=1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        read_stream(fd)
+                        continue
+                    except:
+                        read_stream(fd)
+                        fd.close()
+                        raise BlockingIOError('Subprocess Popen failed')
+                read_stream(fd)
+                fd.close()
+
+        except Exception:
+            raise
 
 
 
