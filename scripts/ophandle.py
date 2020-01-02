@@ -49,9 +49,9 @@
 import socket
 import logging
 import urllib.parse
-from threading import Event, RLock
-from model import BasicBlockActionModeller, \
-                  CopyBlockActionModeller, \
+from threading import Thread, Event, RLock
+from model import CopyBlockActionModeller, \
+                  QueryMemActionModeller, \
                   QueryFileActionModeller, \
                   QueryBlockDevActionModeller, \
                   WebDownloadActionModeller, \
@@ -380,6 +380,8 @@ class InfoOperationHandler(BaseOperationHandler):
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(QueryLocalFileActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
+            self.mActionModellers.append(QueryMemActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         return False
 
@@ -402,6 +404,10 @@ class InfoOperationHandler(BaseOperationHandler):
                 elif k==self.mArgs[0] and v=='hd':
                     # check for the correct /dev/sd[x] path and set it
                     self.mActionParam['tgt_type'] = 'sd'
+                elif k==i and v=='mem':
+                    self.mActionParam['tgt_type'] = 'mem'
+                elif k=='location' and v is not None:
+                    self.mActionParam['mem_type'] = v
                 elif k==self.mArgs[0] and v=='som':
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
                     self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
@@ -440,7 +446,6 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['src_directory'] = v # directory/folder
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
-
                 self.mActionParam['dst_pos'] = -1
 
         # determine if we have parsed the info command successfully

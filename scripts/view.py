@@ -336,7 +336,7 @@ if __name__ == "__main__":
             except:
                 return False
 
-        supported_targets = ['emmc', 'sdcard', 'hd', 'som', 'cpu', 'form', 'baseboard']
+        supported_targets = ['mem', 'emmc', 'sdcard', 'hd', 'som', 'cpu', 'form', 'baseboard']
         if any(s == tgtstr for s in supported_targets):
             return tgtstr
         else:
@@ -354,8 +354,11 @@ if __name__ == "__main__":
 
     def QueryLocationType(locstr):
         supported_locs = ['all', 'spl', 'bootloader', \
-                          'controller', 'disk', 'partition', 'file']
-        # 'bus', 'device', 'sensor', 'connection', 'kernel', 'dtb', 'rootfs', 'os',
+                          'controller', 'disk', 'partition', 'file', \
+        # 'bus', 'device', 'sensor', 'connection', \
+        # 'kernel', 'dtb', 'rootfs', 'os', \
+                          'cpu', 'form', 'baseboard', \
+                          'total', 'available', 'percent', 'used', 'free', 'active', 'inactive', 'buffers', 'cached', 'shared']
         if any(s == locstr for s in supported_locs):
             return locstr
         else:
@@ -396,9 +399,9 @@ if __name__ == "__main__":
                                   a local file or a valid web host URL]')
     info_parser.add_argument('-l', '--location', type=QueryLocationType, \
                              action='store', dest='location', default='all', \
-                             help='Information of target storage media, choices are: \
-                                 [all, spl, bootloader, controller, disk, partition, file, \
-                                   or a valid local directory/folder]')
+                             help='''Information of target storage media, choices are: \
+                                 for emmc [all, spl, bootloader, controller, disk, partition, file, or a valid local directory/folder], \
+                                 for memory: [all, total, available, percent, used, free, active, inactive, buffers, cached, shared]''')
     # kernel, dtb, rootfs, os, bus, device, sensor, connection)
 
     ############################################################################

@@ -391,6 +391,49 @@ class CopyBlockActionModeller(BaseActionModeller):
 
 
 
+class QueryMemActionModeller(BaseActionModeller):
+    """
+    Query Memory Action Model to query system information
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+
+    def _preAction(self):
+        # setup the input output
+        if all(s in self.mParam for s in ['tgt_type', 'mem_type']) and \
+            self.mParam['tgt_type'] == 'mem' and \
+            self.mParam['mem_type'] in ['total', 'available', 'percent', 'used', \
+                                         'free', 'active', 'inactive', 'buffers', \
+                                         'cached', 'shared', 'all']:
+            return True
+        else:
+            raise ReferenceError('No Valid Params')
+        return False
+
+    def _mainAction(self):
+        # read the file, and return read lines
+        # TODO: should implement writing files in the future
+        try:
+            self.mIO = dict(psutil.virtual_memory()._asdict())
+            if self.mIO:
+                if self.mParam['mem_type'] == 'all':
+                    self.mResult.update(self.mIO)
+                    return True
+                else:
+                    if self.mParam['mem_type'] in self.mIO.keys():
+                        self.mResult[self.mParam['mem_type']] = self.mIO[self.mParam['mem_type']]
+                        return True
+                    else:
+                        raise IOError('Cannot get spefic system memory info: {}'.format(self.mParam['mem_type']))
+            raise IOError('Cannot get system memory info')
+        except Exception:
+            raise
+        return False
+
+
+
 class QueryFileActionModeller(BaseActionModeller):
     """
     Query File Action Model to query information from a file
