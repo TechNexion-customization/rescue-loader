@@ -340,7 +340,7 @@ if __name__ == "__main__":
             except:
                 return False
 
-        supported_targets = ['emmc', 'sdcard', 'hd', 'som']
+        supported_targets = ['mem', 'emmc', 'sdcard', 'hd', 'som']
         if any(s == tgtstr for s in supported_targets):
             return tgtstr
         else:
@@ -357,7 +357,8 @@ if __name__ == "__main__":
         supported_locs = ['all', 'spl', 'bootloader', \
                           'controller', 'disk', 'partition', \
                           'bus', 'device', 'sensor', 'connection', \
-                          'kernel', 'dtb', 'rootfs', 'os', 'cpu', 'form', 'baseboard']
+                          'kernel', 'dtb', 'rootfs', 'os', 'cpu', 'form', 'baseboard', \
+                          'total', 'available', 'percent', 'used', 'free', 'active', 'inactive', 'buffers', 'cached', 'shared']
         if any(s == locstr for s in supported_locs):
             return locstr
         else:
@@ -391,13 +392,12 @@ if __name__ == "__main__":
     info_parser = subparsers.add_parser('info', help='information queries')
     info_parser.add_argument('-t', '--target', type=QueryTargetType, \
                              action='store', dest='target', default='emmc', \
-                             help='Specify target storage media, choices are: [emmc, sdcard, hd, or a valid web host URL]')
+                             help='Specify target storage media, choices are: [mem, emmc, sdcard, hd, or a valid web host URL]')
     info_parser.add_argument('-l', '--location', type=QueryLocationType, \
                              action='store', dest='location', default='all', \
-                             help='Information of target storage media, choices are: [all, spl, bootloader, \
-                                    controller, disk, partition, bus, device, \
-                                    sensor, connection, kernel, dtb, rootfs, os, or \
-                                    a valid URL directory]')
+                             help='''Information of target storage media, choices are:
+                                     for emmc: [all, spl, bootloader, controller, disk, partition, bus, device, sensor, connection, kernel, dtb, rootfs, os, a valid URL directory]
+                                     for memory: [total, available, percent, used, free, active, inactive, buffers, cached, shared]''')
 
     # flash commands
     # 'src_filename', 'tgt_filename', src_start_sector, tgt_start_sector, src_total_sectors

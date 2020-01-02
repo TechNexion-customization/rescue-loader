@@ -52,6 +52,7 @@ import logging
 import urllib.parse
 from threading import Thread, Event, RLock
 from model import CopyBlockActionModeller, \
+                  QueryMemActionModeller, \
                   QueryFileActionModeller, \
                   QueryBlockDevActionModeller, \
                   WebDownloadActionModeller, \
@@ -329,6 +330,8 @@ class InfoOperationHandler(BaseOperationHandler):
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(QueryLocalFileActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
+            self.mActionModellers.append(QueryMemActionModeller())
+            self.mActionModellers[-1].setActionParam(self.mActionParam)
             return True
         return False
 
@@ -369,6 +372,10 @@ class InfoOperationHandler(BaseOperationHandler):
                         self.mActionParam['src_directory'] = v # directory/folder
                     elif k=='location' and v.startswith('/') and v.endswith('xz'):
                         self.mActionParam['src_directory'] = v # directory/folder
+                    elif k==i and v=='mem':
+                        self.mActionParam['tgt_type'] = 'mem'
+                    elif k=='location' and v is not None:
+                        self.mActionParam['mem_type'] = v
                     elif k==i and v=='som':
                         self.mActionParam['src_filename'] = '/proc/device-tree/model'
                         self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
