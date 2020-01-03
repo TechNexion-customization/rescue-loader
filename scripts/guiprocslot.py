@@ -1440,42 +1440,29 @@ class chooseDisplaySlot(QChooseSlot):
         lstTemp = []
         # gets the unique set of available boards, OS, version, Display from the crawled list
         self.mDisplayNames = set(dlfile['display'] for dlfile in self.mResults if ('display' in dlfile))
-        if any(formfactor in self._findChildWidget('lblForm').text().lower() for formfactor in ['pico', 'flex', 'axon', 'edm', 'tep', 'tek']):
-            # PICO form factor display lists
-            for name in self.mDisplayNames:
-                if any(sz in name for sz in ['050', '070']):
-                    iftype = 'ttl'
-                elif any(sz in name for sz in ['101', '150']):
-                    iftype = 'lvds'
-                elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
-                    iftype = 'dsi' if 'dsi' in name else 'dpi'
-                else:
-                    for t in self.mIfaceTypes:
-                        if t in name:
-                            iftype = t
-                            break
+        for name in self.mDisplayNames:
+            if any(sz in name for sz in ['050', 'lcd']):
+                iftype = 'ttl'
+            elif any(sz in name for sz in ['070']):
+                # filter out 050, 070 they are mostly lcds
+                iftype = 'lvds' if any (sz in self._findChildWidget('lblForm').text().lower() for sz in ['edm']) else 'ttl'
+            elif any(sz in name for sz in ['101', '150']):
+                iftype = 'lvds'
+            elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
+                iftype = 'dpi' if 'dpi' in name else 'dsi'
+            elif any(sz in name for sz in ['hdmi']):
+                iftype = 'hdmi'
+            else:
+                iftype = 'vga'
+
+            if iftype is not None:
                 lstTemp.append({'name': name, 'display': name, 'ifce_type': iftype, 'disable': False})
 
-            # come up with a new list to send to GUI container, i.e. QListWidget
-            for t in self.mIfaceTypes:
-                disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
-                if len(disps) > 0:
-                    self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
-        else:
-            # EDM form factor display lists (1:1 relationship per baseboard)
-            baseboard = self._findChildWidget('lblBaseboard').text().lower()
-            if '1000' in baseboard:
-                if len(self.mDisplayUIList) > 0:
-                    if 'display' in self.mDisplayUIList[0] and '101' not in self.mDisplayUIList[0]['display']:
-                        self.mDisplayUIList.append({'name': '101', 'display': ['101'], 'ifce_type': 'lvds', 'disable': False})
-                else:
-                    self.mDisplayUIList.append({'name': '101', 'display': ['101'], 'ifce_type': 'lvds', 'disable': False})
-            elif '700' in baseboard:
-                if len(self.mDisplayUIList) > 0:
-                    if 'display' in self.mDisplayUIList[0] and '070' not in self.mDisplayUIList[0]['display']:
-                        self.mDisplayUIList.append({'name': '070', 'display': ['070'], 'ifce_type': 'lvds', 'disable': False})
-                else:
-                    self.mDisplayUIList.append({'name': '070', 'display': ['070'], 'ifce_type': 'lvds', 'disable': False})
+        # come up with a new list to send to GUI container, i.e. QListWidget
+        for t in self.mIfaceTypes:
+            disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
+            if len(disps) > 0:
+                self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
