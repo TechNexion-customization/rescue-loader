@@ -1777,6 +1777,7 @@ class downloadImageSlot(QProcessSlot):
         self.mLstWgtSelection = None
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
+        self.mTotalMem = None
 
     def _queryResult(self):
         """
@@ -1809,13 +1810,36 @@ class downloadImageSlot(QProcessSlot):
                     pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
                     self.progress.emit(pcent)
 
+
+    def __checkMemory(self):
+        self._setCommand({'cmd': 'info', 'target': 'mem', 'location': 'total'})
+        self.request.emit(self.mCmds[-1])
+
+    def __checkBeforeFlash(self):
+        if self.mPick['os'] == 'android' and self.mPick['ver'] == '9.0' and self.mTotalMem < 671088640: # 640 MB
+            self.fail.emit({'NoResource': True, 'ask': 'continue'})
+        else:
+            _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
+            self._setCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
+            # send request to installerd
+            self.request.emit(self.mCmds[-1])
+            # show/hide GUI components
+            self._updateDisplay()
+
     def process(self, inputs):
+        """
+        get the system memory first
+        """
+        if self.mTotalMem is None:
+            self.__checkMemory()
         """
         grab the dl_url and tgt_filename from the tableRescueFile and tableTargetStorage itemClicked() signals
         when signal sender is from btnFlash, issue flash command with clicked rescue file and target storage.
         """
-        if self.mLblRemain is None: self.mLblRemain = self._findChildWidget('lblRemaining')
-        if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
+        if self.mLblRemain is None:
+            self.mLblRemain = self._findChildWidget('lblRemaining')
+        if self.mLstWgtSelection is None:
+            self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
         if self.mProgressBar is None:
             self.mProgressBar = self._findChildWidget('progressBarStatus')
             if self.mProgressBar:
@@ -1837,11 +1861,7 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.emit(0)
                 # if has URL and Target, then send command to download and flash
                 if self.mFileUrl and self.mTgtStorage:
-                    _logger.warn('user choice: download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
-                    # show/hide GUI components
-                    self._updateDisplay()
-                    # send request to installerd
-                    self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
+                    self.__checkBeforeFlash()
                 else:
                     # prompt error message for incorrectly chosen URL and Storage selection
                     self.fail.emit({'NoSelection': True, 'ask': 'continue'})
@@ -1903,6 +1923,8 @@ class downloadImageSlot(QProcessSlot):
                 # stop flash job either success or failure
                 self.killTimer(self.mTimerId)
                 self.mFlashFlag = False
+        elif results['cmd'] == 'info' and results['target'] == 'mem' and results['status'] == 'success':
+            self.mTotalMem = int(results['total'])
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
@@ -2271,6 +2293,9 @@ class processErrorSlot(QProcessSlot):
             _logger.warning('No Mounted Partition Found.')
             self.mMsgBox.display(False)
             return
+        if 'NoResource' in self.mErrors:
+            self.mMsgBox.setMessage('NoResource')
+            _logger.error('Limited Resources on Target Board.')
         if 'NoSelection' in self.mErrors:
             # serious error
             self.mMsgBox.setMessage('NoSelection')
@@ -2714,7 +2739,11 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoSelection':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
-            self.setContent("Please Choose a valid image file to download and an existing storage device to flash.")
+            self.setContent("Please choose a valid image file to download and an existing storage device to flash.")
+        elif msgtype == 'NoResource':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("Input Error")
+            self.setContent("Chosen image is not suitable due to limited resource, please choose a different image file.")
         elif msgtype == 'NoInterrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
@@ -2730,7 +2759,7 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoEmmcWrite':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
-            self.setContent("Cannot set writable to emmc boot partition.\nRestart Rescue to try again.")
+            self.setContent("Cannot set writable to emmc boot partition.\nRestart rescue to try again.")
         elif msgtype == 'NoEmmcBoot':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
