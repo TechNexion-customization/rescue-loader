@@ -609,10 +609,11 @@ class crawlWebSlot(QProcessSlot):
             form, cpu, board, display, fname = self.__parseSOMInfo(results['location'])
             # extract the os and ver number from the extracted filename of the XZ file
             os, ver, extra = self.__parseFilename(fname.rstrip('.xz'))
-            # make up the XZ file URL
-            url = results['target'] + '/rescue' + results['location']
-            # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
-            self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
+            if os in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                # make up the XZ file URL
+                url = results['target'] + '/rescue' + results['location']
+                # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
+                self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
 
         elif 'file_list' in results.keys():
             # recursively request into the rescue server directories to find XZ files
