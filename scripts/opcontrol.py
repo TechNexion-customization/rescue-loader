@@ -156,11 +156,12 @@ class OpController(object):
         super().__init__()
         # initialize a DbusMessenger for sending and receiving messages
         self.mMsger = []
-        self.mSetting = conf.getSettings(flatten=True)
-        self.mSetting.update({'IS_SERVER': True})
+        self.mSetting = conf 
+        setting = conf.getSettings(flatten=True)
+        setting.update({'IS_SERVER': True})
 
         _logger.info("Initiate dbus messenger")
-        self.mMsger.append(DbusMessenger(self.mSetting, \
+        self.mMsger.append(DbusMessenger(setting, \
                                     self.__handleCmdMessage, \
                                     self.__handleGetStatus, \
                                     self.__handleGetResult, \
@@ -266,6 +267,8 @@ class OpController(object):
             # signal client/viewer with receive signal with request to get user input
             for msger in self.mMsger:
                 msger.sendMsg(self.__flatten(userReq))
+        elif req == 'setting':
+            return self.mSetting
 
     def setRetResult(self, result):
         if isinstance(result, dict):

@@ -119,8 +119,7 @@ class BaseMessenger(object):
     """
     def __init__(self, config):
         super().__init__()
-        self.mConfig = {}
-        self.mConfig.update(config)
+        self.mConfig = config
 
     def sendMsg(self, msg):
         """

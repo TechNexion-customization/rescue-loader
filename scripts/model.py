@@ -677,11 +677,15 @@ class WebDownloadActionModeller(BaseActionModeller):
 
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
-        srcPath = '/rescue/' + self.mParam['src_directory'].strip('/') + '/' + self.mParam['src_filename'].lstrip('/')
+        srcPath = '{}/{}'.format(self.mParam['src_directory'].strip('/'), self.mParam['src_filename'].lstrip('/'))
         host = self.mParam['host_name'] if ('host_name' in self.mParam) else 'rescue.technexion.net'
+        port = self.mParam['host_port'] if ('host_port' in self.mParam) else None
         protocol = self.mParam['host_protocol'] if ('host_protocol' in self.mParam) else 'http'
-        dlhost = protocol.rstrip('://') + '://' + host.rstrip('/')
-        _logger.debug('{} chunksize: {}, srcPath: {}, host: {}'.format(type(self).__name__, chunksize, srcPath, dlhost))
+        if port is not None:
+            dlhost = '{}://{}:{}'.format(protocol.rstrip('://'), host.rstrip('/'), port)
+        else:
+            dlhost = '{}://{}'.format(protocol.rstrip('://'), host.rstrip('/'))
+        _logger.debug('chunksize: {}, srcPath: {}, host: {}'.format(chunksize, srcPath, dlhost))
 
         # setup the input/output objects
         if 'tgt_filename' in self.mParam:
@@ -856,18 +860,24 @@ class QueryWebFileActionModeller(BaseActionModeller):
         self.mResult['lines_read'] = 0
         self.mResult['lines_written'] = 0
         if all(s in self.mParam for s in ['host_name', 'src_directory']):
+            # parse host name
             if 'host_name' in self.mParam and self.mParam['host_name'].lower().startswith('http'):
                 self.mWebHost = self.mParam['host_name']
             else:
                 self.mWebHost = 'http://rescue.technexion.net'
+            # parse host directory
             if ('src_directory' in self.mParam):
-                if self.mParam['src_directory'] == '/':
-                    self.mSrcPath = '/rescue/'
+                if self.mParam['host_dir'] in self.mParam['src_directory']:
+                    self.mSrcPath = '{}'.format(self.mParam['src_directory'])
+                elif '/rescue/' in self.mParam['src_directory']:
+                    self.mSrcPath = '{}'.format(self.mParam['src_directory'])
                 else:
-                    if self.mParam['src_directory'].endswith('/'):
-                        self.mSrcPath = '/rescue/' + self.mParam['src_directory'].strip('/') + '/'
+                    if self.mParam['src_directory'] == '/':
+                        self.mSrcPath = '/rescue/'
+                    elif self.mParam['src_directory'].endswith('/'):
+                        self.mSrcPath = '/rescue/{}/'.format(self.mParam['src_directory'].strip('/'))
                     else:
-                        self.mSrcPath = '/rescue/' + self.mParam['src_directory'].lstrip('/')
+                        self.mSrcPath = '/rescue/{}'.format(self.mParam['src_directory'].lstrip('/'))
             if self.mWebHost and self.mSrcPath:
                 return True
         return False

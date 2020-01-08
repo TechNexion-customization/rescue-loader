@@ -49,6 +49,7 @@
 import socket
 import logging
 import urllib.parse
+from defconfig import DefConfig
 from threading import Thread, Event, RLock
 from model import CopyBlockActionModeller, \
                   QueryMemActionModeller, \
@@ -388,6 +389,7 @@ class InfoOperationHandler(BaseOperationHandler):
     def _parseParam(self, OpParams):
         _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         self.mActionParam.clear()
+        conf = self.mUserRequestHandler('setting')
 #         # default values for type and for all locations
 #         self.mActionParam['tgt_type'] = 'mmc'
 #         self.mActionParam['dst_pos'] = -1
@@ -442,8 +444,10 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['get_stat'] = True;
                 elif k==self.mArgs[1] and v.startswith('/') and v.endswith('/'):
                     self.mActionParam['src_directory'] = v # directory/folder
+                    self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
                 elif k==self.mArgs[1] and v.startswith('/') and v.endswith('xz'):
                     self.mActionParam['src_directory'] = v # directory/folder
+                    self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1
@@ -526,9 +530,10 @@ class DownloadOperationHandler(BaseOperationHandler):
                 urlobj = urllib.parse.urlparse(OpParams['dl_url'])
                 self.mActionParam['host_protocol'] = urlobj.scheme
                 self.mActionParam['host_name'] = urlobj.hostname
+                self.mActionParam['host_port'] = urlobj.port
                 self.mActionParam['src_filename'] = urlobj.path.split('/')[-1]
-                self.mActionParam['src_directory'] = '/'.join(urlobj.path.split('/')[2:-1])
-                _logger.debug('{}: __parseParam: mActionParam: {}'.format(type(self).__name__, self.mActionParam))
+                self.mActionParam['src_directory'] = '/'.join(urlobj.path.split('/')[:-1])
+                _logger.debug('{}: __parseParam: mActionParam: {}'.format(self, self.mActionParam))
                 return True
         else:
             return False
