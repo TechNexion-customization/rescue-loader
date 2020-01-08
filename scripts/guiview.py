@@ -576,6 +576,12 @@ class GuiViewer(QObject, BaseViewer):
                 return '{}://{}'.format(prot['host_protocol'], host['host_name'])
         return None
 
+    def getRemoteHostDir(self):
+        hostdir = None
+        if self.mDefConfig:
+            hostdir = self.mDefConfig.getSettings('host_dir')
+        return '/{}/'.format(hostdir['host_dir']) if hostdir else None
+
     ###########################################################################
     # PyQt GUI related
     ###########################################################################

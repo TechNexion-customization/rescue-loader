@@ -4,6 +4,7 @@
 		<rescue>
 			<host_protocol>http</host_protocol>
 			<host_name>rescue.technexion.net</host_name>
+			<host_dir>images</host_dir>
 		</rescue>
 		<dbus>
 			<busname>com.technexion.rescue</busname>
