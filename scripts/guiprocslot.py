@@ -55,6 +55,7 @@ import signal
 import subprocess
 import math
 import socket
+import datetime
 from urllib.parse import urlparse
 from PyQt4 import QtGui, QtCore, QtSvg, QtNetwork
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -656,8 +657,14 @@ class crawlWebSlot(QProcessSlot):
         super().__init__(parent)
         self.mInputs = {}
         self.mResults = []
+        self.mCpu = None
+        self.mForm = None
+        self.mBoard = None
         self.mTimerId = None
         self.mHostName = None
+        self.mRemoteDir = None
+        self.mRescueIndex = None
+        self.mRescueChecked = False
 
     def process(self, inputs):
         """
@@ -671,11 +678,13 @@ class crawlWebSlot(QProcessSlot):
                 self.mHostName = url.geturl()
             else:
                 self.mHostName = 'http://rescue.technexion.net'
+        if self.mRemoteDir is None:
+            self.mRemoteDir = self.mViewer.getRemoteHostDir() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostDir") else None
 
         if self.sender().objectName() == 'scanStorage':
             # setup rescue server and location if there isn't any
             if 'location' not in inputs:
-                self.mInputs.update({'location': '/'})
+                self.mInputs.update({'location': self.mRemoteDir if self.mRemoteDir else '/'})
             if 'target' not in inputs:
                 self.mInputs.update({'target': self.mHostName})
 
@@ -704,16 +713,17 @@ class crawlWebSlot(QProcessSlot):
                 else:
                     uncompsize = 0
                 # extract form, cpu, board, display, and filename of the XZ file
-                form, cpu, board, display, fname = self.__parseSOMInfo(results['location'])
+                form, cpu, board, display, fname = self.__parseSOMInfo(results['location'].split(self.mRemoteDir,1)[1])
                 # extract the os and ver number from the extracted filename of the XZ file
                 os, ver, extra = self.__parseFilename(fname.rstrip('.xz'))
                 # make up the XZ file URL
-                url = results['target'] + '/rescue' + results['location']
+                url = results['target'] + results['location']
                 # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
                 if os in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                    _logger.debug('append result: {} {} {} {} {} {} {} {} {}'.format(cpu, form, board, display, os, ver, uncompsize, url, extra))
                     self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
 
-            elif 'file_list' in results:
+            elif 'file_list' in results():
                 # recursively request into the rescue server directories to find XZ files
                 parsedList = self.__parseWebList(results)
                 if len(parsedList) > 0 and isinstance(parsedList, list):
@@ -722,13 +732,12 @@ class crawlWebSlot(QProcessSlot):
                             pobj = self.__checkUrl(item[2])
                             if pobj is not None:
                                 _logger.debug('internet item path: {}'.format(pobj.path))
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path.replace('/rescue/', '/')})
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
                         elif item[1].endswith('.xz'):
                             # match against the target device, and send request to obtain uncompressed size
-                            _logger.debug('internet xzfile path: {} {} {}'.format(item[1], item[2], item[2].split('/rescue/',1)))
-                            if self.__matchDevice(item[2].split('/rescue/', 1)[1]):
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '/' + item[2].split('/rescue/', 1)[1]})
-                _logger.debug('Crawling url {} to find suitable xz file.\n'.format(results['location']))
+                            _logger.debug('internet xzfile {} path: {}'.format(item[1], item[2]))
+                            if self.__matchDevice(item[2].split(self.mHostName, 1)[1]):
+                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '{}'.format(item[2].split(self.mHostName, 1)[1])})
 
         # Emit our own finished signal, because network check will cause a premature finish.emit()
         if len(self.mCmds) == 0:
@@ -748,18 +757,23 @@ class crawlWebSlot(QProcessSlot):
             return None
 
     def __matchDevice(self, filename):
+        # get the default cpu, form and board setting from detectDevice
+        if self.mCpu is None:
+            self.mCpu = self._findChildWidget('lblCpu').text().lower()
+        if self.mForm is None:
+            self.mForm = self._findChildWidget('lblForm').text().lower()
+        if self.mBoard is None:
+            self.mBoard = self._findChildWidget('lblBaseboard').text().lower()
+        _logger.debug('__matchDevice xzfile {} cpu: {} form: {}'.format(filename, self.mCpu, self.mForm))
         # step 2: find menu items that matches as cpu, form, but not baseboard
-        cpu = self._findChildWidget('lblCpu').text().lower()
-        form = self._findChildWidget('lblForm').text().lower()
-        baseboard = self._findChildWidget('lblBaseboard').text().lower()
-        if cpu in filename.lower() and form in filename.lower():
+        if self.mCpu in filename.lower() and self.mForm in filename.lower():
             # exact match of cpu in the filename, including imx6ul, imx6ull
             return True
         else:
-            if cpu.lower() == 'imx6ul' or cpu.lower() == 'imx6ull' or cpu[0:4].lower() == 'imx8':
+            if self.mCpu.lower() == 'imx6ul' or self.mCpu.lower() == 'imx6ull' or self.mCpu[0:4].lower() == 'imx8':
                 return False
-            if cpu[0:4] in filename.lower():
-                if form.lower() in filename.lower():
+            if self.mCpu[0:4] in filename.lower():
+                if self.mForm.lower() in filename.lower():
                     return True
         return False
 
@@ -786,21 +800,60 @@ class crawlWebSlot(QProcessSlot):
             self._findChildWidget('waitingIndicator').hide()
             _logger.debug('crawlWeb result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
-            self.success.emit(self.mResults)
+            # but check for rescue update first.
+            if not self.mRescueChecked:
+                self.__checkForRescueUpdate()
+                self.success.emit(self.mResults)
             self.fail.emit({'NoError': True})
         else:
             # Did not find any suitable xz file
             self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
 
+    def __checkForRescueUpdate(self):
+        # check for rescue.xz in the extrated list
+        year1, month1, day1, minor1 = self._findChildWidget('lblVersion').text().lower().split(' ')[1].split('.')
+        date1 = datetime.date(int(year1), int(month1), int(day1))
+        # get the latest rescue version
+        year2, month2, day2, minor2 = (2000, 1, 1, 0)
+        for index, item in enumerate(self.mResults):
+            # has to match the target board as well
+            if item['os'] == 'rescue' and item['board'] == self.mBoard:
+                if item['ver'] and len(item['ver']):
+                    y, m, d, r = item['ver'].split('.')
+                    d1 = datetime.date(int(year2), int(month2), int(day2))
+                    d2 = datetime.date(int(y), int(m), int(d))
+                    if d2 > d1 or (d2 == d1 and int(r) > int(minor2)):
+                        year2 = y
+                        month2 = m
+                        day2 = d
+                        minor2 = r
+                        self.mRescueIndex = index
+
+        date2 = datetime.date(int(year2), int(month2), int(day2))
+        _logger.debug('Check whether rescue needs update date1: {} minor1: {} date2: {} minor2: {} item: {}'.format(date1, minor1, date2, minor2, self.mRescueIndex))
+        if date2 > date1 or (date2 == date1 and int(minor2) > int(minor1)):
+            # if needs updates, remove all other xz files from results
+            if self.mRescueIndex is not None:
+                # keep the RescueIndexed item in self.mResults
+                rescue = self.mResults.pop(self.mRescueIndex)
+                del self.mResults[:]
+                self.mResults.append(rescue)
+        else:
+            # if no need for updates, remove the rescue from xz files
+            if len(self.mResults) >  1 and self.mRescueIndex is not None:
+                self.mResults.pop(self.mRescueIndex)
+        self.mRescueChecked = True
+
     # FIXME: If we do not get reponses from all the requests to each URL \
     #        after 2 min, we should also issue an error
     def timerEvent(self, event):
+        self.killTimer(self.mTimerId)
         if self.mTotalReq == self.mTotalRemove:
             _logger.info('crawlWeb receive all request/response')
         else:
             self.fail.emit({'NoCrawl': False, 'ask': 'continue'})
             _logger.info('crawlWeb receive some request/response')
-        self.killTimer(self.mTimerId)
+            self.mTimerId = self.startTimer(120000) # 2m
 
 
 
@@ -1922,7 +1975,8 @@ class downloadImageSlot(QProcessSlot):
                     self.progress.emit(0)
                     self.mLblRemain.setText('Remaining Time: Unknown')
                 # stop flash job either success or failure
-                self.killTimer(self.mTimerId)
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
                 self.mFlashFlag = False
         elif results['cmd'] == 'info' and results['target'] == 'mem' and results['status'] == 'success':
             self.mTotalMem = int(results['total'])
