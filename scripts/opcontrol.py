@@ -150,6 +150,7 @@ class OpController(object):
     def __init__(self, conf):
         super().__init__()
         # initialize a DbusMessenger for sending and receiving messages
+        self.mSetting = conf
         setting = conf.getSettings(flatten=True)
         setting.update({'IS_SERVER': True})
         self.mMsger = DbusMessenger(setting, \
@@ -236,6 +237,8 @@ class OpController(object):
             userReq.update(req)
             # signal client/viewer with receive signal with request to get user input
             self.mMsger.sendMsg(self.__flatten(userReq))
+        elif req == 'setting':
+            return self.mSetting
 
     def setRetResult(self, result):
         if isinstance(result, dict):
