@@ -1233,7 +1233,13 @@ class chooseOSSlot(QChooseSlot):
             # parse the download files into selectable options, i.e. board, OS, ver, display
             self._parseResultList(inputs)
             self._extractUIList()
-            _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
+            if self.mOSUIList is not None and len(self.mOSUIList) == 1:
+                # if crawlWeb only send 1 item in the inputs, automatically select it.
+                for item in self.mOSUIList:
+                    item['disable'] = False
+                _insertToContainer(self.mOSUIList, self.mLstWgtOS, self.mLstWgtOS.itemClicked)
+            else:
+                _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage' or \
@@ -1286,7 +1292,7 @@ class chooseOSSlot(QChooseSlot):
             if all(not (d == n) for n in self.mVerList):
                 self.mVerList.append(d)
         # come up with a new list to send to GUI container, i.e. QListWidget
-        self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames) # if name.lower() != 'rescue')
+        self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
