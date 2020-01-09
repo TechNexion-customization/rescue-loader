@@ -838,6 +838,7 @@ class crawlWebSlot(QProcessSlot):
                 rescue = self.mResults.pop(self.mRescueIndex)
                 del self.mResults[:]
                 self.mResults.append(rescue)
+                self.fail.emit({'Update': True, 'ask': 'continue'})
         else:
             # if no need for updates, remove the rescue from xz files
             if len(self.mResults) >  1 and self.mRescueIndex is not None:
@@ -2383,6 +2384,9 @@ class processErrorSlot(QProcessSlot):
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
             _logger.warning('Flash complete, ignore target storage not emmc...')
+        if 'Update' in self.mErrors:
+            self.mMsgBox.setMessage('Update')
+            _logger.warning('New Rescue Loader Release, please update your rescue loader...')
         if 'Restore' in self.mErrors:
             self.mMsgBox.setMessage('Restore')
             _logger.warning('Restore complete, reboot the system into Rescue...')
@@ -2819,6 +2823,10 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("Cannot set emmc boot options.")
+        elif msgtype == 'Update':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setTitle("System Update")
+            self.setContent("Please update to the latest release of rescue loader.")
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
