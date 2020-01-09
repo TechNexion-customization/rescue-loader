@@ -1458,9 +1458,13 @@ class chooseDisplaySlot(QChooseSlot):
             # parse the download files into selectable options, i.e. board, OS, ver, display
             self._parseResultList(inputs)
             self._extractUIList()
-            _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, None)
             if self.mDisplayUIList is not None and len(self.mDisplayUIList) == 1:
-                self.finish.emit()
+                # if crawlWeb only send 1 item in the inputs, automatically select it.
+                for item in self.mDisplayUIList:
+                    item['disable'] = False
+                _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, self.mLstWgtDisplay.itemClicked)
+            else:
+                _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, None)
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage' or \
