@@ -1359,9 +1359,13 @@ class chooseBoardSlot(QChooseSlot):
             # parse the download files into selectable options, i.e. board, OS, ver, display
             self._parseResultList(inputs)
             self._extractUIList()
-            _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, None)
             if self.mBoardUIList is not None and len(self.mBoardUIList) == 1:
-                self.finish.emit()
+                # if crawlWeb only send 1 item in the inputs, automatically select it.
+                for item in self.mBoardUIList:
+                    item['disable'] = False
+                _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, self.mLstWgtBoard.itemClicked)
+            else:
+                _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, None)
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage' or \
