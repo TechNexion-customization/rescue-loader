@@ -565,7 +565,6 @@ class crawlWebSlot(QProcessSlot):
         self.mTimerId = None
         self.mHostName = None
         self.mRemoteDir = None
-        self.mRescueIndex = None
         self.mRescueChecked = False
 
     def process(self, inputs):
@@ -712,43 +711,48 @@ class crawlWebSlot(QProcessSlot):
             self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
 
     def __checkForRescueUpdate(self):
-        # check for rescue.xz in the extrated list
-        year1, month1, day1, minor1 = self._findChildWidget('lblVersion').text().lower().split(' ')[1].split('.')
-        date1 = datetime.date(int(year1), int(month1), int(day1))
-        # get the latest rescue version
-        year2, month2, day2, minor2 = (2000, 1, 1, 0)
-        for index, item in enumerate(self.mResults):
-            # has to match the target board as well
-            if item['os'] == 'rescue' and item['board'] == self.mBoard:
-                if item['ver'] and len(item['ver']):
-                    y, m, d, r = item['ver'].split('.')
-                    d1 = datetime.date(int(year2), int(month2), int(day2))
-                    d2 = datetime.date(int(y), int(m), int(d))
-                    if d2 > d1 or (d2 == d1 and int(r) > int(minor2)):
-                        year2 = y
-                        month2 = m
-                        day2 = d
-                        minor2 = r
-                        self.mRescueIndex = index
+        if not self.mRescueChecked:
+            # check for rescue.xz in the extrated list
+            year1, month1, day1, minor1 = self._findChildWidget('lblVersion').text().lower().split(' ')[1].split('.')
+            date1 = datetime.date(int(year1), int(month1), int(day1))
+            # get the latest rescue version
+            year2, month2, day2, minor2 = (2000, 1, 1, 0)
+            rescue_index = None
+            rescues = []
+            for item in self.mResults:
+                if item['os'] == 'rescue':
+                    rescues.append(item)
+                    # has to match the target board
+                    if item['board'] == self.mBoard and item['ver'] and len(item['ver']):
+                        y, m, d, r = item['ver'].split('.')
+                        d1 = datetime.date(int(year2), int(month2), int(day2))
+                        d2 = datetime.date(int(y), int(m), int(d))
+                        if d2 > d1 or (d2 == d1 and int(r) > int(minor2)):
+                            year2 = y
+                            month2 = m
+                            day2 = d
+                            minor2 = r
+                            rescue_index = item
 
-        date2 = datetime.date(int(year2), int(month2), int(day2))
-        _logger.debug('Check whether rescue needs update date1: {} minor1: {} date2: {} minor2: {} item: {}'.format(date1, minor1, date2, minor2, self.mRescueIndex))
-        if date2 > date1 or (date2 == date1 and int(minor2) > int(minor1)):
-            # if needs updates, remove all other xz files from results
-            if self.mRescueIndex is not None:
-                # keep the RescueIndexed item in self.mResults
-                rescue = self.mResults.pop(self.mRescueIndex)
-                del self.mResults[:]
-                self.mResults.append(rescue)
-                self.fail.emit({'Update': True, 'ask': 'continue'})
-        else:
-            # if no need for updates, remove the rescue from xz files
-            if len(self.mResults) >  1 and self.mRescueIndex is not None:
-                self.mResults.pop(self.mRescueIndex)
-        self.mRescueChecked = True
+            date2 = datetime.date(int(year2), int(month2), int(day2))
+            _logger.debug('Check whether rescue needs update date1: {} / {} date2: {} / {} items: {} index: {}'.format(date1, minor1, date2, minor2, rescues, rescue_index))
+            if date2 > date1 or (date2 == date1 and int(minor2) > int(minor1)):
+                # if needs updates, remove all other xz files from results
+                # keep only the RescueIndexed item in self.mResults
+                # found a rescue
+                if rescue_index is not None:
+                    rescues.remove(rescue_index)
+                    del self.mResults[:]
+                    self.mResults.append(rescue_index)
+                    self.fail.emit({'Update': True, 'ask': 'continue'})
 
-    # FIXME: If we do not get reponses from all the requests to each URL \
-    #        after 2 min, we should also issue an error
+            # if no need for updates, remove all rescue files from xz file list
+            if len(self.mResults) > 1 and len(rescues) > 0:
+                for item in rescues:
+                    self.mResults.remove(item)
+            self.mRescueChecked = True
+
+    # If we do not get reponses from all the requests to each URL after 2 min, we should also issue an error
     def timerEvent(self, event):
         self.killTimer(self.mTimerId)
         if self.mTotalReq == self.mTotalRemove:
