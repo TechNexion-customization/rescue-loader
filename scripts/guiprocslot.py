@@ -87,7 +87,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
     Insert results to a container, e.g. QListWidget, QTableWidget, QTreeWidget
     parse the results in a list of dictionaries, and add them to container
     """
-    if isinstance(qContainer, QtGui.QListWidget):
+    if isinstance(qContainer, QtGui.QListWidget) and lstResult is not None:
         # insert into a listWidget
 
         # setup widget items
@@ -153,7 +153,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
 
             if qSignal: qSignal.emit(item)
 
-    elif isinstance(qContainer, QtGui.QTableWidget):
+    elif isinstance(qContainer, QtGui.QTableWidget) and lstResult is not None:
         # insert into a tableWidget
 
         # setup table headers
@@ -174,11 +174,11 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                     item.setData(QtCore.Qt.UserRole, row['url'])
                 if qSignal: qSignal.emit(r, i, item)
 
-    elif isinstance(qContainer, QtGui.QTreeWidget):
+    elif isinstance(qContainer, QtGui.QTreeWidget) and lstResult is not None:
         # TODO: Add support for insert into a treeWidget
         return False
 
-    elif isinstance(qContainer, QtGui.QGroupBox):
+    elif isinstance(qContainer, QtGui.QGroupBox) and lstResult is not None:
         # insert into a groupbox widget
         # setup widget items
         layoutBox = qContainer.layout() if qContainer.layout() else QtGui.QVBoxLayout()
@@ -204,7 +204,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
             layoutBox.addWidget(radioItem)
         if qContainer.layout() is None: qContainer.setLayout(layoutBox)
 
-    elif isinstance(qContainer, QtGui.QGraphicsView):
+    elif isinstance(qContainer, QtGui.QGraphicsView) and lstResult is not None:
         # insert into a graphics view (widget)
         # setup graphics view items
         scene = qContainer.scene() if qContainer.scene() else QtGui.QGraphicsScene()
@@ -1157,13 +1157,14 @@ class QChooseSlot(QProcessSlot):
 
         def enableList(key, parsedUIList, enabledSet):
             _logger.info('{}: Enable following ui: {}'.format(self.objectName(), enabledSet))
-            for ui in parsedUIList:
-                if ui[key] is not None:
-                    ui['disable'] = True
-            for enable in enabledSet:
+            if parsedUIList is not None:
                 for ui in parsedUIList:
-                    if (enable in ui[key]):
-                        ui['disable'] = False
+                    if ui[key] is not None:
+                        ui['disable'] = True
+                for enable in enabledSet:
+                    for ui in parsedUIList:
+                        if (enable in ui[key]):
+                            ui['disable'] = False
 
         # filter picked options to construct a disabled set list
         enabled = []
