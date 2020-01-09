@@ -1590,7 +1590,13 @@ class chooseStorageSlot(QChooseSlot):
                 _logger.info('self:{}, sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 #self._disableList('storage', self.mStorageUIList, self.mResults)
-                #_insertToContainer(self.mStorageUIList, self.mLstWgtStorage, None)
+            if self.mPick['os'] is not None and self.mPick['ver'] is not None and \
+               self.mPick['board'] is not None and self.mPick['display'] is not None and \
+               self.mStorageUIList is not None and len(self.mStorageUIList) == 1:
+                # if scanStorage only send 1 item in the inputs, automatically select it.
+                for item in self.mStorageUIList:
+                    item['disable'] = False
+                _insertToContainer(self.mStorageUIList, self.mLstWgtStorage, self.mLstWgtStorage.itemClicked)
 
         if self.sender() == self.mLstWgtStorage:
             # parse the QListWidgetItem to get the chosen storage
