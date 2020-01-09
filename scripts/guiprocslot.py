@@ -663,7 +663,7 @@ class crawlWebSlot(QProcessSlot):
         self.mTimerId = None
         self.mHostName = None
         self.mRemoteDir = None
-        self.mRescueIndex = None
+        self.mRescueIndex = []
         self.mRescueChecked = False
 
     def process(self, inputs):
@@ -815,6 +815,7 @@ class crawlWebSlot(QProcessSlot):
         date1 = datetime.date(int(year1), int(month1), int(day1))
         # get the latest rescue version
         year2, month2, day2, minor2 = (2000, 1, 1, 0)
+        rescue_index = None
         for index, item in enumerate(self.mResults):
             # has to match the target board as well
             if item['os'] == 'rescue' and item['board'] == self.mBoard:
@@ -827,22 +828,27 @@ class crawlWebSlot(QProcessSlot):
                         month2 = m
                         day2 = d
                         minor2 = r
-                        self.mRescueIndex = index
+                        rescue_index = index
+                        self.mRescueIndex.append(index)
+
+            elif item['os'] == 'rescue' and item['board'] is not self.mBoard:
+                self.mRescueIndex.append(index)
 
         date2 = datetime.date(int(year2), int(month2), int(day2))
         _logger.debug('Check whether rescue needs update date1: {} minor1: {} date2: {} minor2: {} item: {}'.format(date1, minor1, date2, minor2, self.mRescueIndex))
         if date2 > date1 or (date2 == date1 and int(minor2) > int(minor1)):
             # if needs updates, remove all other xz files from results
-            if self.mRescueIndex is not None:
+            if self.mRescueIndex == []:
                 # keep the RescueIndexed item in self.mResults
-                rescue = self.mResults.pop(self.mRescueIndex)
+                rescue = self.mResults.pop(rescue_index)
                 del self.mResults[:]
                 self.mResults.append(rescue)
                 self.fail.emit({'Update': True, 'ask': 'continue'})
         else:
-            # if no need for updates, remove the rescue from xz files
-            if len(self.mResults) >  1 and self.mRescueIndex is not None:
-                self.mResults.pop(self.mRescueIndex)
+            # if no need for updates, remove all rescue files from xz file list
+            if len(self.mResults) > 1 and len(self.mRescueIndex) > 0:
+                for index in self.mRescueIndex:
+                    self.mResults.pop(index)
         self.mRescueChecked = True
 
     # FIXME: If we do not get reponses from all the requests to each URL \
