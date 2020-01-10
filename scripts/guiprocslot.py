@@ -110,9 +110,11 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif 'os' in row:
                     if row['os'] in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
                         resName = ":/res/images/os_{}.svg".format(row['os'].lower())
-                    else:
+                    elif row['os'] in ['linux', 'debian', 'redhat']:
                         resName = ":/res/images/os_tux.svg"
-                        item.setToolTip(row['os'].lower())
+                    else:
+                        resName = ":/res/images/NoImage.svg"
+                    item.setToolTip(row['os'].lower())
                 elif 'board' in row:
                     # could update the VERSION within the svg resource byte array, and draw the svg
                     if row['board'] is not None:
