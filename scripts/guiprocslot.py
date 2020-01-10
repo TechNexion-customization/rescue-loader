@@ -408,11 +408,13 @@ class detectDeviceSlot(QProcessSlot):
         self.mNetMgr = QtNetwork.QNetworkAccessManager()
         # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
         self.mNetMgr.finished.connect(self._urlResponse)
-        self.mErr = {'NoIface': False, 'NoCable': False, 'NoServer': False}
+        self.mNicErr = {'NoNic': True, 'NoIface': True, 'NoCable': True}
+        self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True}
         self.mSentFlag = False
         self.mHostName = None
-        self.mIP = None
-        self.mNICName = None
+        self.mLocalIPs = {}
+        self.mNICNames = []
+        self.mNIC = None
 
     def process(self, inputs = None):
         """
@@ -447,36 +449,56 @@ class detectDeviceSlot(QProcessSlot):
         """
         if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
             _logger.info('subcmd: nic, parse result: {}'.format(results))
-            if 'status' in results and results['status'] == 'success':
-                if 'config_id' in results.keys() and results['config_id'] == 'ip':
-                    self.mIP = results['ip']
-                elif 'config_id' in results.keys() and results['config_id'] == 'ifconf':
+            if 'config_id' in results.keys() and results['config_id'] == 'ifconf':
+                if 'status' in results and results['status'] == 'success':
                     if 'iflist' in results.keys() and isinstance(results['iflist'], dict):
-                        for k, v in results['iflist'].items():
-                            if v == self.mIP:
-                                self.mNICName = k
-                                _logger.warn('Found NIC iface: {} ip: {}'.format(k, v))
-                elif 'config_id' in results.keys() and results['config_id'] == 'ifflags':
-                    if 'state' in results.keys() and 'flags' in results.keys():
-                        # a. Check whether NIC hardware available (do we have mac?)
-                        #if 'LOWER_UP' in results['state']:
-                        # b. Check NIC connection is up (flag says IFF_UP?)
-                        if 'UP' in results['state']:
-                            # c. Check NIC connection is running (flag says IFF_RUNNING?)
-                            if 'RUNNING' in results['state']:
-                                # d. when all is running, check to see if we can connect to our rescue server.
-                                self.mErr.update({'NoIface': False, 'NoCable': False})
-                                self.__hasValidNetworkConnectivity()
-                                return
+                        self.mLocalIPs.update(results['iflist'])
+                        for k, v in self.mLocalIPs.items():
+                            if v not in ['unknown', '127.0.0.1']:
+                                self.mNicErr.update({'NoNIC': False})
+                                self.fail.emit(self.mNicErr)
+                                self.mNICNames.append(k)
+                        if self.mNICNames == []:
+                            self.mNicErr.update({'NoNIC': True})
+                            self.fail.emit(self.mNicErr)
+                        QtCore.QTimer.singleShot(1000, self.__checkNIC)
+            elif 'config_id' in results.keys() and results['config_id'] == 'ip':
+                if 'status' in results and results['status'] == 'success':
+                    # find the NIC Name
+                    for k, v in self.mLocalIPs.items():
+                        if v == results['ip']:
+                            if k == self.mNIC:
+                                _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
+                                self.mNetErr.update({'NoIP': False, 'NoDNS': False})
+                                self.fail.emit(self.mNetErr)
+                                QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             else:
-                                self.mErr.update({'NoCable': True, 'NoServer': True})
+                                self.mNetErr.update({'NoIP': False, 'NoDNS': True})
+                                self.fail.emit(self.mNetErr)
+                                QtCore.QTimer.singleShot(1000, self.__checkDNS)
+            elif 'config_id' in results.keys() and results['config_id'] == 'ifflags':
+                if 'state' in results.keys() and 'flags' in results.keys():
+                    # a. Check whether NIC hardware available (do we have mac?)
+                    #if 'LOWER_UP' in results['state']:
+                    # b. Check NIC connection is up (flag says IFF_UP?)
+                    if 'UP' in results['state']:
+                        self.mNicErr.update({'NoIface': False})
+                        # c. Check NIC connection is running (flag says IFF_RUNNING?)
+                        if 'RUNNING' in results['state']:
+                            # d. when all is running, check to see if we can connect to our rescue server.
+                            self.mNicErr.update({'NoCable': False, 'NoError': True})
+                            self.fail.emit(self.mNicErr)
+                            self.mNIC = results['target'][:]
+                            QtCore.QTimer.singleShot(1000, self.__checkDNS)
+                            return
                         else:
-                            self.mErr.update({'NoIface': True, 'NoCable': True, 'NoServer': True})
-                        #else:
-                        #    self.mErr.update({'NoNIC': True})
-                        self.fail.emit(self.mErr)
-                        self.mSentFlag = False
-                        QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+                            self.mNicErr.update({'NoCable': True})
+                    else:
+                        self.mNicErr.update({'NoIface': True})
+                    #else:
+                    #    self.mErr.update({'NoNIC': True})
+                    self.fail.emit(self.mNicErr)
+                    QtCore.QTimer.singleShot(1000, self.__checkNIC)
             return
 
         _logger.debug('returned results: {}'.format(results))
@@ -506,8 +528,10 @@ class detectDeviceSlot(QProcessSlot):
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
-            # start the timer to check for network connection every 1 second
-            self.__checkNetwork()
+            # start the timer to check for network connection every 1 second,
+            # and show the message dialog box during the nic check
+            self.fail.emit(self.mNicErr)
+            self.__checkNIC()
 
         self.mResults.update(results)
 
@@ -517,11 +541,10 @@ class detectDeviceSlot(QProcessSlot):
         if 'cmd' in self.mResults and self.mResults['cmd'] == 'info' and \
            'found_match' not in self.mResults and \
            'status' in self.mResults and self.mResults['status'] == 'failure':
-            self.mErr.update({'NoCpuForm': True, 'ask': 'reboot'})
-            self.fail.emit(self.mErr)
+            self.fail.emit({'NoCpuForm': True, 'ask': 'reboot'})
 
         if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and \
-           'NoError' in self.mErr.keys() and self.mErr['NoError']:
+           'NoError' in self.mNicErr and self.mNicErr['NoError']:
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
                 _logger.warning('Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
@@ -529,22 +552,30 @@ class detectDeviceSlot(QProcessSlot):
                 self.fail.emit({'NoError': True})
                 self.mSentFlag = True
 
-    def __checkNetwork(self):
-        # Check for networks, which means sending commands to installerd.service to request for network status
+    def __checkNIC(self):
         # send request to installerd.service to request for network status.
-        _logger.debug('send request to installerd to query network status...')
-        if self.mNICName:
-            self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': self.mNICName})
-            self.request.emit(self.mCmds[-1])
-        else:
-            # didn't get nic iface name, so query nic iface name first, then queue another timer to do __checkNetwork
-            self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': 'any'})
-            self.request.emit(self.mCmds[-1])
+        if self.mNICNames == []:
+            # 1. didn't get nic iface name, so query ifconfig first,
+            _logger.debug('check ifconfig for all local nic interfaces...')
             self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
             self.request.emit(self.mCmds[-1])
-            QtCore.QTimer.singleShot(1000, self.__checkNetwork)
+        else:
+            # 2. check ifflags on local nic interfaces
+            if self.mNICNames != []:
+                for name in self.mNICNames:
+                    _logger.debug('check ifflags on found local nic interface: {}...'.format(name))
+                    self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': name})
+                    self.request.emit(self.mCmds[-1])
 
-    def __hasValidNetworkConnectivity(self):
+    def __checkDNS(self):
+        self.fail.emit(self.mNetErr)
+        _logger.debug('check whether we have IP and connectable to 8.8.8.8...')
+        # 3. finally get IP from iface to get for DNS
+        self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': self.mNIC})
+        self.request.emit(self.mCmds[-1])
+
+    def __checkTNServer(self):
+        # 4. check connectivity to TechNexion server
         _logger.debug('check whether we have connectivity to server... {}'.format(self.mHostName))
         req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
         self.mNetMgr.get(req)
@@ -554,13 +585,13 @@ class detectDeviceSlot(QProcessSlot):
         if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
             _logger.error("Network Access Manager Error occured: {}, {}".format(reply.error(), reply.errorString()))
             # the system cannot connect to our rescue server
-            self.mErr.update({'NoServer': True})
-            self.fail.emit(self.mErr)
+            self.mNetErr.update({'NoServer': True})
+            self.fail.emit(self.mNetErr)
             _logger.error('TechNexion rescue server not available!!! Retrying...')
-            QtCore.QTimer.singleShot(1000, self.__hasValidNetworkConnectivity)
+            QtCore.QTimer.singleShot(1000, self.__checkTNServer)
         else:
-            self.mErr.update({'NoIface': False, 'NoCable': False, 'NoServer': False, 'NoError': True})
-            self.fail.emit(self.mErr)
+            self.mNetErr.update({'NoServer': False, 'NoError': True})
+            self.fail.emit(self.mNetErr)
         self.mSentFlag = False
         self.finish.emit()
 
