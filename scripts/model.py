@@ -962,9 +962,11 @@ class ConfigNicActionModeller(BaseActionModeller):
         try:
             # doesn't even have to be reachable, so use DNS
             s.connect(('8.8.8.8', 53))
+            with open('/etc/resolv.conf', 'a') as f:
+                f.write('nameserver 8.8.8.8')
             IP = s.getsockname()[0]
         except:
-            IP = '127.0.0.1'
+            IP = None
         finally:
             s.close()
         return IP
@@ -1058,7 +1060,8 @@ class ConfigNicActionModeller(BaseActionModeller):
     def _mainAction(self):
         if self.mParam['config_id'] == 'ip':
             self.mResult['ip'] = self.getNetIP()
-            return True
+            if self.mResult['ip'] is not None:
+                return True
         else:
             try:
                 # do ioctl to get/set NIC related information
