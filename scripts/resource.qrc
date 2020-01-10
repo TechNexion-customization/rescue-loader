@@ -34,6 +34,8 @@
     <file>images/os_rescue.svg</file>
     <file>images/os_boot2qt.svg</file>
     <file>images/did_you_know1.png</file>
+    <file>images/no_ip.svg</file>
+    <file>images/no_dns.svg</file>
     <file>images/no_cable.svg</file>
     <file>images/no_nic.svg</file>
     <file>images/no_server.svg</file>
