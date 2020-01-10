@@ -2194,26 +2194,36 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setMessage('NoDbus')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.critical('DBus session bus or installer dbus server not available!!! {}'.format('Retrying...' if self.mAsk is None else 'Restore Rescue System'))
-        if 'NoNIC' in self.mErrors:
+        if 'NoNIC' in self.mErrors and self.mErrors['NoNIC']:
             # add NoNic icon
             self.mMsgBox.setMessage('NoNIC')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('DBus session bus or installer dbus server not available!!! Retrying...')
-        if 'NoIface' in self.mErrors:
-            # add NoIface icon
-            self.mMsgBox.setMessage('NoIface')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('NIC I/F not available!!! Retrying...')
-        if 'NoCable' in self.mErrors:
-            # add NoCable icon
-            self.mMsgBox.setMessage('NoCable')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('Network cable not connected!!! Retrying...')
-        if 'NoServer' in self.mErrors:
+        if 'NoServer' in self.mErrors and self.mErrors['NoServer']:
             # add NoServer icon
             self.mMsgBox.setMessage('NoServer')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('Cannot connect to TechNexion Rescue Server!!! Retrying...')
+        if 'NoDNS' in self.mErrors and self.mErrors['NoDNS']:
+            # add NoCable icon
+            self.mMsgBox.setMessage('NoDNS')
+            self.mMsgBox.setCheckFlags(self.mErrors)
+            _logger.error('Cannot resolve domain name!!! Retrying...')
+        if 'NoIP' in self.mErrors and self.mErrors['NoIP']:
+            # add NoCable icon
+            self.mMsgBox.setMessage('NoIP')
+            self.mMsgBox.setCheckFlags(self.mErrors)
+            _logger.error('No IP address assigned!!! Retrying...')
+        if 'NoCable' in self.mErrors and self.mErrors['NoCable']:
+            # add NoCable icon
+            self.mMsgBox.setMessage('NoCable')
+            self.mMsgBox.setCheckFlags(self.mErrors)
+            _logger.error('Network cable not connected!!! Retrying...')
+        if 'NoIface' in self.mErrors and self.mErrors['NoIface']:
+            # add NoIface icon
+            self.mMsgBox.setMessage('NoIface')
+            self.mMsgBox.setCheckFlags(self.mErrors)
+            _logger.error('NIC I/F not available!!! Retrying...')
         if 'NoDLFile' in self.mErrors:
             self.mMsgBox.setMessage('NoDLFile')
             _logger.warning('No matching file from TechNexion Rescue Server.')
@@ -2415,6 +2425,7 @@ class QMessageDialog(QtGui.QDialog):
         self.mIcon = None
         self.mTitle = None
         self.mContent = None
+        self.mStatus = None
         self.mQRcode = None
         self.mWgtContent = None
         self.mWgtContentLayout = None
@@ -2554,6 +2565,27 @@ class QMessageDialog(QtGui.QDialog):
         if not self.mQRcode: self.mQRcode = self.window().findChild(QtGui.QWidget, 'msgQRcode')
         if self.mQRcode: self.mQRcode.clear()
 
+    def setStatus(self, status):
+        if not self.mStatus: self.mStatus = self.window().findChild(QtGui.QWidget, 'msgStatus')
+        if self.mStatus:
+            if isinstance(status, str):
+                self.mStatus.setText(status)
+            elif isinstance(status, QtGui.QIcon):
+                d = self.rect().height() / 8 if self.rect().height() < self.rect().width() else self.rect().width() / 8
+                iconsize = QtCore.QSize(d, d)
+                pix = status.pixmap(QtCore.QSize(iconsize.width() * 2, iconsize.height() * 2)).scaled(iconsize, QtCore.Qt.KeepAspectRatio)
+                self.mStatus.setPixmap(pix)
+                #self.mIcon.setMask(pix.mask())
+            elif isinstance(status, QtGui.QPixmap):
+                self.mStatus.setPixmap(status)
+            elif isinstance(status, QtGui.QMovie):
+                self.mStatus.setMovie(status)
+                status.start()
+
+    def clearStatus(self):
+        if not self.mStatus: self.mStatus = self.window().findChild(QtGui.QWidget, 'msgStatus')
+        if self.mStatus: self.mStatus.clear()
+
     def setBackgroundIcons(self, icons):
         if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
 
@@ -2628,12 +2660,22 @@ class QMessageDialog(QtGui.QDialog):
     def setMessage(self, msgtype):
         _logger.debug('setup message box with msgtype: {}'.format(msgtype))
 
-        if msgtype in ['NoCable', 'NoIface', 'NoServer']: # 'NoNic'
+        if msgtype in ['NoCable', 'NoIface', 'NoIP', 'NoDNS', 'NoServer']: # 'NoNic'
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoCable': ':res/images/no_cable.svg', \
                                      'NoIface': ':res/images/no_iface.svg', \
                                      'NoServer': ':res/images/no_server.svg'}) # {'NoNIC': ':res/images/no_nic.svg'}
+            if msgtype == 'NoServer':
+                self.setStatus('TechNexion server is temporary unavailable, try again later.')
+            elif msgtype == 'NoDNS':
+                self.setStatus('Cannot resolve domain name: rescue.technexion.net')
+            elif msgtype == 'NoIP':
+                self.setStatus('No IP address assigned')
+            elif msgtype == 'NoCable':
+                self.setStatus('Please connect a network cable.')
+            elif msgtype == 'NoIface':
+                self.setStatus('Ethernet interface is not available.')
         elif msgtype == 'NoCpuForm':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
@@ -2721,6 +2763,7 @@ class QMessageDialog(QtGui.QDialog):
         self.clearIcon()
         self.clearTitle()
         self.clearContent()
+        self.clearStatus()
         self.clearBackgroundIcons()
         self.clearButtons()
 
