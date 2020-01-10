@@ -1917,9 +1917,24 @@ class downloadImageSlot(QProcessSlot):
                             urls.append(f)
                 else:
                     urls.append(f)
+
         # if we have an unique filtered file list, get the file url and storage
         if len(urls):
             self.mFileUrl = urls[0]['url'][:]
+
+        # when there are OS images that run on different display panel sizes
+        # specifically edms, choose one that matches the board
+        if len(urls) > 1:
+            # match the display size from board name
+            brd = self._findChildWidget('lblBaseboard').text().lower()
+            for item in urls:
+                if '0700' in brd and '070' in item['url']:
+                    self.mFileUrl = item['url'][:]
+                    break
+                elif '1000' in brd and '101' in item['url']:
+                    self.mFileUrl = item['url'][:]
+                    break
+
         self.mTgtStorage = pick['storage'][:]
         _logger.warning('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
