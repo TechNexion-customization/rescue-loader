@@ -963,9 +963,11 @@ class ConfigNicActionModeller(BaseActionModeller):
             # doesn't even have to be reachable, so use DNS
             s.connect(('8.8.8.8', 53))
             with open('/etc/resolv.conf', 'a') as f:
-                f.write('nameserver 8.8.8.8')
+                f.write('nameserver 8.8.8.8\n')
             IP = s.getsockname()[0]
         except:
+            with open('/etc/hosts', 'a') as f:
+                f.write('203.75.190.59\trescue.technexion.net\n')
             IP = None
         finally:
             s.close()
