@@ -514,7 +514,7 @@ class detectDeviceSlot(QProcessSlot):
                     _logger.debug('parsed:{}'.format(lstWords))
                     for i, w in enumerate(lstWords):
                         _logger.debug('i:{} w:{}'.format(i, w))
-                        if '-' in w:
+                        if '-' in w and 'imx' in w.lower():
                             self.mCpu = w.split('-')[1]
                             self.mForm = w.split('-')[0]
                         if 'board' in w or 'Board' in w and 'baseboard' not in w:
