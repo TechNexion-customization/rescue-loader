@@ -53,6 +53,7 @@ import os
 import stat
 import fcntl
 import psutil
+import platform
 import array
 import pyudev
 import socket
@@ -1121,7 +1122,7 @@ class ConfigNicActionModeller(BaseActionModeller):
                 _logger.info('ifconfig: names:{} max_bytes:{} names_addr:{}'.format(self.mNames.tostring(), max_bytes_out, names_address_out))
                 namestr = self.mNames.tostring()
                 self.mResult['iflist'] = {}
-                for i in range(0, max_bytes_out, 32): # arm:32, arm64:40
+                for i in range(0, max_bytes_out, 40 if platform.machine() == 'aarch64' else 32): # arm:32, arm64:40
                     name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8') # ifr_name
                     ip = []
                     for netaddr in namestr[ i+20 : i+24 ]: # ifr_addr
