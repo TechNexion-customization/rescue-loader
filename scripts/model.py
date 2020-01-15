@@ -582,7 +582,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             for k, v in DecompCmd.items():
                 if k in self.mIOs[0].getFileType():
                     decompcmd = v
-            wgetcmd = 'wget -O - {}'.format(self.mIOs[0].mUrl)
+            wgetcmd = 'wget -t 3 -O - {}'.format(self.mIOs[0].mUrl)
             ddcmd = 'dd of={} bs=512k oflag=dsync status=progress'.format(self.mIOs[1].mFilename)
 
             # python lzma method
