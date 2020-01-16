@@ -408,7 +408,7 @@ class detectDeviceSlot(QProcessSlot):
         self.mNetMgr = QtNetwork.QNetworkAccessManager()
         # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
         self.mNetMgr.finished.connect(self._urlResponse)
-        self.mNicErr = {'NoNic': True, 'NoIface': True, 'NoCable': True}
+        self.mNicErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True}
         self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True}
         self.mSentFlag = False
         self.mHostName = None
@@ -457,25 +457,34 @@ class detectDeviceSlot(QProcessSlot):
                         else:
                             self.mNicErr.update({'NoNIC': True})
                         self.fail.emit(self.mNicErr)
+                        # get the list of nics and figure out NIC ifs
                         self.mLocalIPs.update(results['iflist'])
+                        self.mNICNames.clear()
                         for k, v in self.mLocalIPs.items():
                             if v not in ['unknown', '127.0.0.1']:
+                                self.mNICNames.append(k)
+                            elif k == 'eth0':
                                 self.mNICNames.append(k)
                         QtCore.QTimer.singleShot(1000, self.__checkNIC)
             elif 'config_id' in results.keys() and results['config_id'] == 'ip':
                 if 'status' in results and results['status'] == 'success':
                     # find the NIC Name
                     for k, v in self.mLocalIPs.items():
-                        if v == results['ip']:
-                            if k == self.mNIC:
+                        if k == self.mNIC:
+                            if v == results['ip']:
                                 _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False, 'NoError': True})
                                 self.fail.emit(self.mNetErr)
+                                QtCore.QTimer.singleShot(1000, self.__checkTNServer)
+                            elif v == 'unknown':
+                                _logger.warn('Found ip:{} on NIC iface: {}'.format(v, k))
+                                self.mNetErr.update({'NoIP': False, 'NoDNS': False, 'NoError': True})
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             else:
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': True})
                                 self.fail.emit(self.mNetErr)
                                 QtCore.QTimer.singleShot(1000, self.__checkDNS)
+
             elif 'config_id' in results.keys() and results['config_id'] == 'ifflags':
                 if 'state' in results.keys() and 'flags' in results.keys():
                     # a. Check whether NIC hardware available (do we have mac?)
@@ -2272,7 +2281,7 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('NIC I/F not available!!! Retrying...')
         if 'NoNIC' in self.mErrors and self.mErrors['NoNIC']:
-            # add NoNic icon
+            # add NoNIC icon
             self.mMsgBox.setMessage('NoNIC')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('DBus session bus or installer dbus server not available!!! Retrying...')
@@ -2698,7 +2707,7 @@ class QMessageDialog(QtGui.QDialog):
             for key, flag in self.mCheckFlags.items():
                 # setup which label to show
                 lbl = None
-                if key == 'NoNic':
+                if key == 'NoNIC':
                     lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL') # 'msgItem0'
                 elif key == 'NoIface':
                     lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1_OL') # 'msgItem1'
@@ -2739,13 +2748,13 @@ class QMessageDialog(QtGui.QDialog):
     def setMessage(self, msgtype):
         _logger.debug('setup message box with msgtype: {}'.format(msgtype))
 
-        if msgtype in ['NoNic', 'NoIface', 'NoCable']: 
+        if msgtype in ['NoNIC', 'NoIface', 'NoCable']:
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
-            self.setBackgroundIcons({'NoNic': ':res/images/no_nic.svg', \
+            self.setBackgroundIcons({'NoNIC': ':res/images/no_nic.svg', \
                                      'NoIface': ':res/images/no_iface.svg', \
                                      'NoCable': ':res/images/no_cable.svg'})
-            if msgtype == 'NoNic':
+            if msgtype == 'NoNIC':
                 self.setStatus('No network adeptor found.')
             elif msgtype == 'NoIface':
                 self.setStatus('Ethernet interface is not available.')
