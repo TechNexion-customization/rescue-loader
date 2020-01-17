@@ -534,6 +534,8 @@ class detectDeviceSlot(QProcessSlot):
                             for bd in ['TEP', 'TEK']:
                                 if bd in self.mForm:
                                     self.mBaseboard = bd
+                        if 'baseboard' in w:
+                            self.mBaseboard = lstWords[i-1]
                     if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
                         self.mBaseboard += '-{}'.format(panel)
 
