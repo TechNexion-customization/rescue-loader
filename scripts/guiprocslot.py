@@ -518,6 +518,7 @@ class detectDeviceSlot(QProcessSlot):
                 if self.mCpu.find('-') != -1: self.mCpu = self.mCpu.split('-',1)[0]
             else:
                 if 'file_content' in results:
+                    panel=None
                     # fall through to parse file content from /proc/device-tree/model returned from installerd
                     lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
                     _logger.debug('parsed:{}'.format(lstWords))
@@ -526,11 +527,16 @@ class detectDeviceSlot(QProcessSlot):
                         if '-' in w and 'imx' in w.lower():
                             self.mCpu = w.split('-')[1]
                             self.mForm = w.split('-')[0]
+                        if '-' in w and 'inch' in w.lower():
+                            panel = '{}'.format(w)
                         if 'board' in w or 'Board' in w and 'baseboard' not in w:
                             # for most edm system boards without baseboards
                             for bd in ['TEP', 'TEK']:
                                 if bd in self.mForm:
                                     self.mBaseboard = bd
+                    if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
+                        self.mBaseboard += '-{}'.format(panel)
+
                 if self.mCpu and self.mForm:
                     self.mResults.update({'found_match':'{},{},{}'.format(self.mForm, self.mCpu, self.mBaseboard)})
             _logger.debug('cpu:{} form:{} board:{}'.format(self.mCpu, self.mForm, self.mBaseboard))
@@ -1944,6 +1950,12 @@ class downloadImageSlot(QProcessSlot):
                     self.mFileUrl = item['url'][:]
                     break
                 elif '1000' in brd and '101' in item['url']:
+                    self.mFileUrl = item['url'][:]
+                    break
+                elif '10-inch' in brd and '101' in item['url']:
+                    self.mFileUrl = item['url'][:]
+                    break
+                elif '15-inch' in brd and '150' in item['url']:
                     self.mFileUrl = item['url'][:]
                     break
 
