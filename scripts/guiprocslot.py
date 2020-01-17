@@ -730,7 +730,10 @@ class crawlWebSlot(QProcessSlot):
         # step 2: find menu items that matches as cpu, form, but not baseboard
         if self.mCpu in filename.lower() and self.mForm in filename.lower():
             # exact match of cpu in the filename, including imx6ul, imx6ull
-            return True
+            if self.mCpu == 'imx6' and 'imx6ul' in filename.lower():
+                return False
+            else:
+                return True
         else:
             if self.mCpu.lower() == 'imx6ul' or self.mCpu.lower() == 'imx6ull' or self.mCpu[0:4].lower() == 'imx8':
                 return False
