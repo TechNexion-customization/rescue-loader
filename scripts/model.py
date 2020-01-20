@@ -582,7 +582,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             for k, v in DecompCmd.items():
                 if k in self.mIOs[0].getFileType():
                     decompcmd = v
-            wgetcmd = 'wget -t 3 -O - {}'.format(self.mIOs[0].mUrl)
+            wgetcmd = 'wget -O - {}'.format(self.mIOs[0].mUrl)
             ddcmd = 'dd of={} bs=512k oflag=dsync status=progress'.format(self.mIOs[1].mFilename)
 
             # python lzma method
@@ -671,6 +671,8 @@ class WebDownloadActionModeller(BaseActionModeller):
                     self.mResult['bytes_written'] += written
                 del data # hopefully this would clear the write data buffer
             else:
+                timeout_counter = 0
+                last_written =  0
                 fd = open('/tmp/progress.log', 'w+')
                 _logger.info('copyChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
                 pwget = subprocess.Popen(
@@ -703,9 +705,18 @@ class WebDownloadActionModeller(BaseActionModeller):
                     try:
                         out, err = ptee.communicate(timeout=1)
                         break
-                    except subprocess.TimeoutExpired:
-                        read_stream(fd)
-                        continue
+                    except subprocess.TimeoutExpired as ex:
+                        if timeout_counter > 180: # timed out after 3 minutes
+                            self.__kill_subproc([pwget, pxz, pdd, ptee])
+                            raise ex
+                        else:
+                            _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
+                            if read_stream(fd) and last_written != self.mResult['bytes_written']:
+                                last_written = self.mResult['bytes_written']
+                                timeout_counter = 0
+                            else:
+                                timeout_counter += 1
+                            continue
                     except:
                         read_stream(fd)
                         fd.close()
@@ -715,6 +726,12 @@ class WebDownloadActionModeller(BaseActionModeller):
 
         except Exception:
             raise
+
+    def __kill_subproc(self, procs):
+        for proc in procs:
+            for cproc in proc.children(recursive=True):
+                cproc.kill()
+            proc.kill()
 
 
 
