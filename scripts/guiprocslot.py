@@ -2825,7 +2825,8 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoDownload':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
-            self.setContent("Download and flash failed.\nClick continue to restore rescue system.")
+            self.setContent("Download and flash failed for unforeseeable reason. You could 1. retry later, 2. try alternative program method\n(https://www.technexion.com/support/\nknowledgebase/using-uuu-to-flash-emmc/).")
+            self.setStatus("Click continue to restore rescue system.")
         elif msgtype == 'NoFlash':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
