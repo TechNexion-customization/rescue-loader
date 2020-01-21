@@ -2817,7 +2817,8 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoResource':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
-            self.setContent("Chosen image is not suitable due to limited resource, please choose a different image file.")
+            self.setContent("Chosen image is not suitable due to limited resource, please contact TechNexion (sales@technexion.com) for advice.")
+            self.setStatus("Or choose a different image file.")
         elif msgtype == 'NoInterrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
