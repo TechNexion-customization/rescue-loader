@@ -1877,7 +1877,8 @@ class downloadImageSlot(QProcessSlot):
         self.request.emit(self.mCmds[-1])
 
     def __checkBeforeFlash(self):
-        if self.mPick['os'] == 'android' and self.mPick['ver'] == '9.0' and self.mTotalMem < 671088640: # 640MB
+        cpu = self._findChildWidget('lblCpu').text().lower()
+        if self.mPick['os'] == 'android' and 'imx7' in cpu:
             self.fail.emit({'NoResource': True, 'ask': 'continue'})
         else:
             _logger.info('download from {} and flash to {}'.format(self.mFileUrl, self.mTgtStorage))
