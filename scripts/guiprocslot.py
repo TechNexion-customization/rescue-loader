@@ -114,7 +114,10 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                         resName = ":/res/images/os_tux.svg"
                     else:
                         resName = ":/res/images/NoImage.svg"
-                    item.setToolTip(row['os'].lower())
+                    if 'ver' in row:
+                        item.setText(row['ver'].lower())
+                    else:
+                        item.setToolTip(row['os'].lower())
                 elif 'board' in row:
                     # could update the VERSION within the svg resource byte array, and draw the svg
                     if row['board'] is not None:
@@ -1226,13 +1229,20 @@ class chooseOSSlot(QChooseSlot):
                     self.mPick['os'] = self.mUserData['os'][:]
                 else:
                     self.mPick['os'] = None
+
                 # setup latest version
-                self.mPick['ver'] = self.__extractLatestVersion()
+                #self.mPick['ver'] = self.__extractLatestVersion()
+                if (int(inputs.flags()) & QtCore.Qt.ItemIsEnabled):
+                    self.mPick['ver'] = self.mUserData['ver'][:]
+                else:
+                    self.mPick['ver'] = None
+
                 # add to lstWgtSelection if not disabled
                 if not self.mUserData['disable']:
                     item = QtGui.QListWidgetItem(inputs)
                     self.mUserData['ver'] = self.mPick['ver']
                     item.setData(QtCore.Qt.UserRole, self.mUserData)
+                    item.setText("")
                     rowNum = self.mLstWgtSelection.count()
                     if rowNum:
                         for s in self.mLstWgtSelection.findItems('.*', QtCore.Qt.MatchRegExp):
@@ -1249,13 +1259,17 @@ class chooseOSSlot(QChooseSlot):
 
     def _extractUIList(self):
         # gets the unique set of available boards, OS, version, Display from the crawled list
-        self.mOSNames = list(set(dlfile['os'] for dlfile in self.mResults if ('os' in dlfile)))
+        #self.mOSNames = list(set(dlfile['os'] for dlfile in self.mResults if ('os' in dlfile)))
+        uilist = [{'os':dlfile['os'], 'ver':dlfile['ver']} for dlfile in self.mResults if ('os' in dlfile and 'ver' in dlfile)]
+        self.mOSNames = list({(v['os'], v['ver']):v for v in uilist}.values())
+        _logger.debug("extract os uilist: {} os names: {}".format(uilist, self.mOSNames))
         self.mVerList = []
         for d in [{'os':dlfile['os'], 'ver':dlfile['ver']} for dlfile in self.mResults if ('os' in dlfile and 'ver' in dlfile)]:
             if all(not (d == n) for n in self.mVerList):
                 self.mVerList.append(d)
         # come up with a new list to send to GUI container, i.e. QListWidget
-        self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
+        #self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
+        self.mOSUIList = list({'name': '{}-{}'.format(item['os'], item['ver']), 'os': item['os'], 'ver': item['ver'], 'disable': False} for item in self.mOSNames)
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
