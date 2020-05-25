@@ -612,7 +612,7 @@ class detectDeviceSlot(QProcessSlot):
         else:
             self.mNetErr.update({'NoServer': False, 'NoError': True})
             self.fail.emit(self.mNetErr)
-        self.mSentFlag = False
+        # network check finished
         self.finish.emit()
 
 
@@ -638,6 +638,8 @@ class crawlWebSlot(QProcessSlot):
         self.mHostName = None
         self.mRemoteDir = None
         self.mRescueChecked = False
+        self.mNetMgr = QtNetwork.QNetworkAccessManager()
+        self.mNetMgr.finished.connect(self._urlResponse)
 
     def process(self, inputs):
         """
@@ -779,11 +781,10 @@ class crawlWebSlot(QProcessSlot):
             # but check for rescue update first.
             if not self.mRescueChecked:
                 self.__checkForRescueUpdate()
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
                 self.success.emit(self.mResults)
             self.fail.emit({'NoError': True})
-        else:
-            # Did not find any suitable xz file
-            self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
 
     def __checkForRescueUpdate(self):
         if not self.mRescueChecked:
@@ -830,12 +831,29 @@ class crawlWebSlot(QProcessSlot):
     # If we do not get reponses from all the requests to each URL after 2 min, we should also issue an error
     def timerEvent(self, event):
         self.killTimer(self.mTimerId)
-        if self.mTotalReq == self.mTotalRemove:
-            _logger.info('crawlWeb receive all request/response')
-        else:
+        self.__checkTNServer()
+
+    def __checkTNServer(self):
+        # check connectivity to TechNexion server
+        _logger.debug('check whether we have connectivity to server... {}'.format(self.mHostName))
+        req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
+        self.mNetMgr.get(req)
+
+    def _urlResponse(self, reply):
+        # Check whether network connection is active and can connect to our rescue server
+        if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
+            # the system cannot connect to our rescue server
             self.fail.emit({'NoCrawl': False, 'ask': 'continue'})
-            _logger.info('crawlWeb receive some request/response')
-            self.mTimerId = self.startTimer(120000) # 2m
+            _logger.error('Connect to TechNexion rescue server failed...')
+            self.__crawlUrl(self.mInputs)
+            self.mTimerId = self.startTimer(120000)
+        else:
+            # Did not find any suitable xz file
+            if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
+                _logger.info('crawlWeb receive all request/response')
+                self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
+            else:
+                self.mTimerId = self.startTimer(120000)
 
 
 
@@ -2292,6 +2310,7 @@ class processErrorSlot(QProcessSlot):
 
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
+        self.mErrors.pop('ask', None)
         self.mDisplay = False if ('NoError' in inputs and inputs['NoError']) else True
         self.__handleError()
         self.mErrors.clear()
@@ -2345,7 +2364,6 @@ class processErrorSlot(QProcessSlot):
             _logger.warning('No matching file from TechNexion Rescue Server.')
         if 'NoCrawl' in self.mErrors:
             self.mMsgBox.setMessage('NoCrawl')
-            self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.warning('Not all crawling of the TechNexion Rescue Service succeeded.')
         if 'NoLocal' in self.mErrors:
             # not critical, ignore
@@ -2828,11 +2846,11 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoDLFile':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Server Check")
-            self.setContent("No matching file to download from TechNexion rescue server.")
+            self.setContent("Cannot find suitable image file to download from TechNexion Rescue Server.")
         elif msgtype == 'NoCrawl':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Server Check")
-            self.setContent("Not all files are explored from TechNexion rescue server.")
+            self.setContent("Exploring TechNexion rescue server failed. Check connectivity to TechNexion Rescue Server.")
         elif msgtype == 'NoSelection':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
