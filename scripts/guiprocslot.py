@@ -1831,6 +1831,7 @@ class downloadImageSlot(QProcessSlot):
         self.mRemaining = 0
         self.mTimerId = None
         self.mLblRemain = None
+        self.mLblDownloadFlash = None
         self.mLstWgtSelection = None
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
@@ -1900,6 +1901,8 @@ class downloadImageSlot(QProcessSlot):
         """
         if self.mLblRemain is None:
             self.mLblRemain = self._findChildWidget('lblRemaining')
+        if self.mLblDownloadFlash is None:
+            self.mLblDownloadFlash = self._findChildWidget('lblDownloadFlash')
         if self.mLstWgtSelection is None:
             self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
         if self.mProgressBar is None:
@@ -2005,11 +2008,13 @@ class downloadImageSlot(QProcessSlot):
             if self.mResults['status'] == 'success':
                 self.progress.emit(100)
                 self.mLblRemain.setText('Remaining Time: 00:00')
+                self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': True})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
                 self.success.emit(self.mPick)
                 self.fail.emit({'NoError': True})
             elif self.mResults['status'] == 'failure':
+                self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
                 self.fail.emit({'NoDownload': True, 'ask': 'continue'})
@@ -2021,6 +2026,9 @@ class downloadImageSlot(QProcessSlot):
         self._findChildWidget('btnFlash').hide()
         self._findChildWidget('progressBarStatus').show()
         self.mLblRemain.show()
+        self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
+        self.mLblDownloadFlash.setText('Please do not power off the device')
+        self.mLblDownloadFlash.show()
         self._findChildWidget('lblInstruction').setText('Downloading and flashing...')
 
     def timerEvent(self, event):

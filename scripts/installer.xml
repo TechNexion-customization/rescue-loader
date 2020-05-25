@@ -445,7 +445,7 @@
 													<item row="1" column="0" colspan="3">
 														<widget class="QLabel" name="lblDownloadFlash">
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignHCenter</set>
+																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter</set>
 															</property>
 														</widget>
 													</item>
@@ -2231,7 +2231,7 @@
 													<item row="1" column="0" colspan="3">
 														<widget class="QLabel" name="lblDownloadFlash">
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignHCenter</set>
+																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter</set>
 															</property>
 														</widget>
 													</item>
