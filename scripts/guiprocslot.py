@@ -1705,9 +1705,9 @@ class chooseSelectionSlot(QChooseSlot):
             # copy the first 69632 sectors(35,651,584 bytes) out first (mbr boot sector + SPL), 8704 because mmc blksize is 4096
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
                 if '{}p1'.format(self.mPick['storage']) in self.mTotalSectors.keys():
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '32768'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '{}'.format(int(self.mTotalSectors['{}p1'.format(self.mPick['storage'])]/4096)*512), 'chunk_size': '5242880'})
                 else:
-                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '32768'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': self.mPick['storage'], 'tgt_filename': '/tmp/rescue.img', 'src_total_sectors': '14336', 'chunk_size': '5242880'})
                 self.request.emit(self.mCmds[-1])
                 self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
 
@@ -2198,13 +2198,13 @@ class postDownloadSlot(QProcessSlot):
             if results['status'] == 'success':
                 if 'androidthings' in self.mPick['os']:
                     _logger.debug('issue command to flash androidthings emmc boot partition')
-                    self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': 'u-boot.imx', 'tgt_filename': self.mPick['storage'] + 'boot0', 'chunk_size': '524288'})
                     self.request.emit(self.mCmds[-1])
                 else:
                     # 2. clear the mmc boot partition
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
                     _logger.debug('issue command to clear {} boot partition'.format(self.mPick['storage']))
-                    self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'})
+                    self._setCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0', 'chunk_size': '524288'})
                     self.request.emit(self.mCmds[-1])
             elif results['status'] == 'failure':
                 # failed to disable mmc write boot partition option
