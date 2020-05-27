@@ -185,33 +185,38 @@ class CopyBlockActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIOs = []
+        self.isSrcCharDev = False
 
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
-        # setup the input/output objects
-        # chunk_size in bytes default 1MB, i.e. 1048576
-        chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0) else 1048576 # 1MB
+        # setup the chunksize for input/output objects
+        self.isSrcCharDev = stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode)
+        if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0):
+            chunksize = self.mParam['chunk_size']
+        else:
+            # chunk_size in bytes default 1MB, i.e. 1048576
+            chunksize = 1048576 # 1MB
+            self.mParam['chunk_size'] = chunksize
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
             try:
-                if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode) and stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode):
+                # default mode is rb+
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename'], 'rb'))
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+                filesize = self.mIOs[-1].getFileSize()
+                if self.isSrcCharDev:
                     # special case where source is a char device and target is a block device, e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
-                    self.mParam['chunk_size'] = 4096 #  self.mIOs[-1].getBlockSize()
-                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
-                    self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
-                    self.mParam['src_total_sectors'] = int(self.mIOs[-1].getFileSize() / self.mParam['chunk_size'])
+                    # self.mIOs[-1].getBlockSize() => 4096
+                    blksize = chunksize
                     self.mParam['src_start_sector'] = 0
                     self.mParam['tgt_start_sector'] = 0
                 else:
-                    # default mode is rb+
-                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename']))
                     # setup different size params
-                    filesize = self.mIOs[-1].getFileSize()
                     blksize = self.mIOs[-1].getBlockSize()
-                    if (self.mParam['src_total_sectors'] == -1) or ('src_total_sectors' not in self.mParam):
-                        self.mParam['src_total_sectors'] = int(filesize/blksize) + 0 if (filesize % blksize) else 1
-                    self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+                if ('src_total_sectors' not in self.mParam) or (self.mParam['src_total_sectors'] == -1):
+                    chunks, remainder = divmod(filesize, blksize)
+                    self.mParam['src_total_sectors'] = chunks + (0 if remainder == 0 else 1)
             except Exception as ex:
                 raise IOError('Cannot create block inputoutput: {}'.format(ex))
         else:
@@ -226,7 +231,10 @@ class CopyBlockActionModeller(BaseActionModeller):
         try:
             if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
                 chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576 # 1MB
-                blksize = self.mIOs[0].getBlockSize()
+                if self.isSrcCharDev:
+                    blksize = chunksize
+                else:
+                    blksize = self.mIOs[0].getBlockSize()
                 srcstart = self.mParam['src_start_sector'] * blksize
                 tgtstart = self.mParam['tgt_start_sector'] * blksize
                 totalbytes = self.mParam['src_total_sectors'] * blksize
@@ -269,8 +277,12 @@ class CopyBlockActionModeller(BaseActionModeller):
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
-        parts = int(totalbytes / chunksize) + (1 if (totalbytes % chunksize) else 0)
-        return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
+        chunks, remainder = divmod(totalbytes, chunksize)
+        parts = chunks + (0 if remainder == 0 else 1)
+        if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode):
+            return [(0, tgtstart + i*chunksize) for i in range(parts)]
+        else:
+            return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
 
 
 
@@ -1243,6 +1255,12 @@ if __name__ == "__main__":
             model = CopyBlockActionModeller()
             actparam = {'src_filename': './ubuntu-16.04.xz', 'src_start_sector': 0, 'src_total_sectors': -1, \
                         'tgt_filename': './ubuntu.img', 'tgt_start_sector': 0}
+            model.setActionParam(actparam)
+            model.performAction()
+        elif sys.argv[1] == 'erase':
+            model = CopyBlockActionModeller()
+            actparam = {'src_filename': '/dev/zero', \
+                        'tgt_filename': '/dev/mmcblk2boot0'}
             model.setActionParam(actparam)
             model.performAction()
         elif sys.argv[1] == 'qmodel':
