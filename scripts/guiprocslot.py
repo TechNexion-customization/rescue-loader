@@ -665,7 +665,8 @@ class crawlWebSlot(QProcessSlot):
 
             _logger.debug('start the crawl process: {}'.format(self.mInputs))
             # start the crawl process
-            self.mTimerId = self.startTimer(120000) # 2m
+            if self.mTimerId is None:
+                self.mTimerId = self.startTimer(120000) # 2m
             self._findChildWidget('waitingIndicator').show()
             self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
 
@@ -830,7 +831,6 @@ class crawlWebSlot(QProcessSlot):
 
     # If we do not get reponses from all the requests to each URL after 2 min, we should also issue an error
     def timerEvent(self, event):
-        self.killTimer(self.mTimerId)
         self.__checkTNServer()
 
     def __checkTNServer(self):
@@ -840,20 +840,25 @@ class crawlWebSlot(QProcessSlot):
         self.mNetMgr.get(req)
 
     def _urlResponse(self, reply):
+        if self.mTimerId:
+            self.killTimer(self.mTimerId)
+            self.mTimerId = None
         # Check whether network connection is active and can connect to our rescue server
         if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
             # the system cannot connect to our rescue server
             self.fail.emit({'NoCrawl': False, 'ask': 'continue'})
             _logger.error('Connect to TechNexion rescue server failed...')
             self.__crawlUrl(self.mInputs)
-            self.mTimerId = self.startTimer(120000)
+            if self.mTimerId is None:
+                self.mTimerId = self.startTimer(120000)
         else:
             # Did not find any suitable xz file
             if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
                 _logger.info('crawlWeb receive all request/response')
                 self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
             else:
-                self.mTimerId = self.startTimer(120000)
+                if self.mTimerId is None:
+                    self.mTimerId = self.startTimer(120000)
 
 
 
@@ -954,7 +959,6 @@ class scanStorageSlot(QProcessSlot):
         super().__init__(parent)
         self.mControllers = []
         self.mResults = []
-        self.mTimerId = None
         self.mFlag = False
 
     def process(self, inputs = None):
@@ -1855,7 +1859,7 @@ class downloadImageSlot(QProcessSlot):
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
         self.mTotalMem = None
 
-    def _queryResult(self):
+    def _queryResult(self, percent = 0):
         """
         A callback function acting as a slot for timer's timeout signal.
         Here we calculate the remaining time for the download and flash and update UI accordingly.
@@ -1867,7 +1871,8 @@ class downloadImageSlot(QProcessSlot):
                 _logger.warning('query result from DBus Server Failed... Recover Rescue System...')
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
-                self.killTimer(self.mTimerId)
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
                 # use subprocess to restor the rescue system
                 # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
                 try:
@@ -1878,18 +1883,21 @@ class downloadImageSlot(QProcessSlot):
                 self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
             else:
-                if 'total_uncompressed' in res and 'bytes_written' in res:
-                    smoothing = 0.005
-                    lastSpeed = int(res['bytes_written']) - self.mLastWritten
-                    # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
-                    self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
-                    self.mRemaining = float((int(res['total_uncompressed']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
-                    self.mLastWritten = int(res['bytes_written'])
-                    _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_uncompressed']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
-                    self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
-                    pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
-                    self.progress.emit(pcent)
-
+                if res == {}:
+                    _logger.debug('query returns nothing, set to percent passed in.')
+                    self.progress.emit(percent)
+                else:
+                    if 'total_uncompressed' in res and 'bytes_written' in res:
+                        smoothing = 0.005
+                        lastSpeed = int(res['bytes_written']) - self.mLastWritten
+                        # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
+                        self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
+                        self.mRemaining = float((int(res['total_uncompressed']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
+                        self.mLastWritten = int(res['bytes_written'])
+                        _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_uncompressed']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
+                        self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
+                        pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
+                        self.progress.emit(pcent)
 
     def __checkMemory(self):
         self._setCommand({'cmd': 'info', 'target': 'mem', 'location': 'total'})
@@ -2001,17 +2009,15 @@ class downloadImageSlot(QProcessSlot):
         _logger.warning('found URL: {}, STORAGE: {}'.format(self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
-        # step 7: parse the result in a loop until result['status'] != 'processing'
         # Start a timer to query results every 1 second
         self.mResults.update(results)
         if results['cmd'] == 'info' and results['target'] == 'mem' and results['status'] == 'success':
             self.mTotalMem = int(results['total'])
         elif results['cmd'] == 'download' and results['status'] == 'processing':
-            self.mTimerId = self.startTimer(1000) # 1000 ms
+            if self.mTimerId is None:
+                self.mTimerId = self.startTimer(1000) # 1000 ms
             self.mFlashFlag = True
         else:
-            # do one last query result before killing the timer
-            self._queryResult()
             # flash job either success or failure
             if self.mTimerId:
                 self.killTimer(self.mTimerId)
@@ -2080,7 +2086,7 @@ class postDownloadSlot(QProcessSlot):
         self.mQRIcon = None
         self.mTotalSectors = {}
 
-    def _queryResult(self):
+    def _queryResult(self, percent = 0):
         """
         A callback function acting as a slot for timer's timeout signal.
         Here we calculate the remaining time for the download and flash and update UI accordingly.
@@ -2091,7 +2097,8 @@ class postDownloadSlot(QProcessSlot):
             except:
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
-                self.killTimer(self.mTimerId)
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
                 # use subprocess to restor the rescue system
                 # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
                 try:
@@ -2101,18 +2108,22 @@ class postDownloadSlot(QProcessSlot):
                     raise
                 self.fail.emit({'NoDbus': True, 'ask': 'reboot'})
                 return
-
-            if 'total_size' in res and 'bytes_written' in res:
-                smoothing = 0.005
-                lastSpeed = int(res['bytes_written']) - self.mLastWritten
-                # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
-                self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
-                self.mRemaining = float((int(res['total_size']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
-                self.mLastWritten = int(res['bytes_written'])
-                _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_size']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
-                self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
-                pcent = int(round(float(res['bytes_written']) / float(res['total_size']) * 100))
-                self.progress.emit(pcent)
+            else:
+                if res == {}:
+                    _logger.debug('query returns nothing, set to percent passed in.')
+                    self.progress.emit(percent)
+                else:
+                    if 'total_size' in res and 'bytes_written' in res:
+                        smoothing = 0.005
+                        lastSpeed = int(res['bytes_written']) - self.mLastWritten
+                        # averageSpeed = SMOOTHING_FACTOR * lastSpeed + (1-SMOOTHING_FACTOR) * averageSpeed;
+                        self.mAvSpeed = smoothing * lastSpeed + (1 - smoothing) * self.mAvSpeed
+                        self.mRemaining = float((int(res['total_size']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
+                        self.mLastWritten = int(res['bytes_written'])
+                        _logger.debug('total: {} written:{} av:{} remain: {}'.format(int(res['total_size']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
+                        self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
+                        pcent = int(round(float(res['bytes_written']) / float(res['total_size']) * 100))
+                        self.progress.emit(pcent)
 
     def process(self, inputs):
         """
@@ -2210,26 +2221,25 @@ class postDownloadSlot(QProcessSlot):
                 # failed to disable mmc write boot partition option
                 self.fail.emit({'NoEmmcWrite': True, 'ask': 'interrupt'})
 
-        # target emmc boot option disabled
-        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
-            if self.mResults['status'] == 'success':
-                # Final notification, all successful, reboot
-                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
-            elif self.mResults['status'] == 'failure':
-                # failed to set emmc boot option, still reboot
-                self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
-
         if results['cmd'] == 'flash':
             if results['status'] == 'processing':
                 _logger.debug('start timer to update progressbar for clearing emmc {} boot partition'.format(self.mPick['storage']))
-                self.mTimerId = self.startTimer(1000) # 1000 ms
+                if self.mTimerId is None:
+                    self.mTimerId = self.startTimer(1000) # 1000 ms
                 self.mFlashFlag = True
             elif (results['status'] == 'success' or results['status'] == 'failure'):
-                # do one last query result before killing the timer
-                self._queryResult()
                 # flash job either success or failure, stop the timer
-                self.killTimer(self.mTimerId)
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
+                # do one last query result before killing the timer
+                if results['status'] == 'success':
+                    self._queryResult(100)
+                    self.mLblRemain.setText('Remaining Time: 00:00')
+                elif results['status'] == 'failure':
+                    self._queryResult(0)
+                    self.mLblRemain.setText('Remaining Time: --:--')
                 self.mFlashFlag = False
+                # handling various image flashing in postDownloads.
                 if results['src_filename'] == '/tmp/rescue.img':
                     # recover rescue system success or failure
                     if results['status'] == 'success':
@@ -2238,14 +2248,25 @@ class postDownloadSlot(QProcessSlot):
                         # critical error, cannot recover the boot image and also failed to download and flash
                         self.fail.emit({'NoFlash': True, 'ask': 'halt'})
                 else:
+                    # results['src_filename'] == '/dev/zero' or results['src_filename'] == 'u-boot.imx'
+                    self.mLblRemain.setText('Remaining Time: 00:00')
                     # target emmc has been flashed with zeros or failed, so anyway
-                    # 3. set the mmc boot partition option
+                    # disable the mmc boot partition option after our normal flash
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', 'config_action': 'enable/disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mTgtStorage}
                     _logger.debug('issue command to {} emmc boot partition'.format('enable' if 'androidthings' in self.mPick['os'] else 'disable'))
                     self._setCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'bootpart', \
                                       'config_action': 'enable' if 'androidthings' in self.mPick['os'] else 'disable', \
                                       'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
                     self.request.emit(self.mCmds[-1])
+
+        # target emmc boot option disabled
+        if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
+            if self.mResults['status'] == 'success':
+                # Final notification, all successful, reboot
+                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
+            elif self.mResults['status'] == 'failure':
+                # failed to set emmc boot option, still reboot
+                self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
 
     def _isTargetEMMC(self, result):
         def parse_target_controller(res):
@@ -2274,10 +2295,8 @@ class postDownloadSlot(QProcessSlot):
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
+        # but when click on reboot button, the flow doesn't reach here.
         _logger.debug('validateResult: {}'.format(self.mResults))
-        if self.mResults['cmd'] == 'flash' and self.mResults['status'] == 'success':
-            self.progress.emit(100)
-            self.mLblRemain.setText('Remaining Time: 00:00')
 
     def timerEvent(self, event):
         self._queryResult()
