@@ -568,19 +568,12 @@ class GuiViewer(QObject, BaseViewer):
     def checkDbusConn(self):
         return self.mMsger.hasValidDbusConn()
 
-    def getRemoteHostUrl(self):
+    def getRemoteHostUrls(self):
         if self.mDefConfig:
-            prot = self.mDefConfig.getSettings('host_protocol')
-            host = self.mDefConfig.getSettings('host_name')
-            if prot and host:
-                return '{}://{}'.format(prot['host_protocol'], host['host_name'])
+            conf = self.mDefConfig.getSettings('rescue')
+            if isinstance(conf['rescue'], dict) and 'host' in conf['rescue'].keys():
+                return conf['rescue']['host'] if isinstance(conf['rescue']['host'], list) else [(conf['rescue']['host'])]
         return None
-
-    def getRemoteHostDir(self):
-        hostdir = None
-        if self.mDefConfig:
-            hostdir = self.mDefConfig.getSettings('host_dir')
-        return '/{}/'.format(hostdir['host_dir']) if hostdir else None
 
     ###########################################################################
     # PyQt GUI related

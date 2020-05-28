@@ -312,6 +312,8 @@ class InfoOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
         self.mOptions = ['target', 'location']
+        self.mConf = self.mUserRequestHandler('setting') if callable(self.mUserRequestHandler) else {}
+        self.mHosts = []
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
@@ -339,10 +341,13 @@ class InfoOperationHandler(BaseOperationHandler):
     def _parseParam(self, OpParams):
         _logger.debug('{}: __parseParam: OpParams: {}'.format(self, OpParams))
         self.mActionParam.clear()
-        conf = self.mUserRequestHandler('setting')
-#         # default values for type and for all locations
-#         self.mActionParam['tgt_type'] = 'mmc'
-#         self.mActionParam['dst_pos'] = -1
+        if self.mHosts == [] and self.mConf:
+            # gets rescue hosts from installer.xml config
+            if isinstance(self.mConf.getSettings('rescue')['rescue']['host'], list):
+                self.mHosts = self.mConf.getSettings('rescue')['rescue']['host']
+            else:
+                self.mHosts = [self.mConf.getSettings('rescue')['rescue']['host']]
+
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             for i in self.mOptions:
@@ -372,10 +377,14 @@ class InfoOperationHandler(BaseOperationHandler):
                         self.mActionParam['dst_pos'] = 'p' # partition
                     elif k=='location' and v.startswith('/') and v.endswith('/'):
                         self.mActionParam['src_directory'] = v # directory/folder
-                        self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
+                        for host in self.mHosts:
+                            if host['name'] in OpParams['target']:
+                                self.mActionParam['host_dir'] = host['path']
                     elif k=='location' and v.startswith('/') and v.endswith('xz'):
                         self.mActionParam['src_directory'] = v # directory/folder
-                        self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
+                        for host in self.mHosts:
+                            if host['name'] in OpParams['target']:
+                                self.mActionParam['host_dir'] = host['path']
                     elif k==i and v=='mem':
                         self.mActionParam['tgt_type'] = 'mem'
                     elif k=='location' and v is not None:
@@ -532,8 +541,12 @@ class ConfigOperationHandler(BaseOperationHandler):
 
 
 if __name__ == "__main__":
-    def opcb(Status, Hdl):
-        print ('called back:\n{}'.format(Status))
+    def opcb(req):
+        conf = DefConfig()
+        conf.loadConfig("/etc/installer.xml")
+        if req == 'setting':
+            print ('called back req:{} conf:{}'.format(req, conf))
+            return conf
 
     import sys
 

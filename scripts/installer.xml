@@ -2,9 +2,12 @@
 <tn-config>
 	<installer>
 		<rescue>
-			<host_protocol>http</host_protocol>
-			<host_name>rescue.technexion.net</host_name>
-			<host_dir>images</host_dir>
+			<host>
+				<name>rescue.technexion.net</name>
+				<protocol>http</protocol>
+				<port>80</port>
+				<path>images</path>
+			</host>
 		</rescue>
 		<dbus>
 			<busname>com.technexion.rescue</busname>

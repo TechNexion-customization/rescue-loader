@@ -397,6 +397,7 @@ class detectDeviceSlot(QProcessSlot):
     request = pyqtSignal(dict)
     success = pyqtSignal(str)
     fail = pyqtSignal(dict)
+    probed = pyqtSignal(list)
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -404,34 +405,32 @@ class detectDeviceSlot(QProcessSlot):
         self.mCpu = None
         self.mForm = None
         self.mBaseboard = None
-        # use QtNetwork NAMger to send a request to technexion's rescue server
-        # when the request is finished, NAMger will signal its "finish" signal
-        # which calls back to self._urlResponse() with reply
-        # for checking network connectivity
-        self.mNetMgr = QtNetwork.QNetworkAccessManager()
-        # setup callback slot to self._networkResponse() for QtNetwork's NAMgr finish signal
-        self.mNetMgr.finished.connect(self._urlResponse)
         self.mNicErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True}
         self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True}
         self.mSentFlag = False
-        self.mHostName = None
+        self.mHosts = []
         self.mLocalIPs = {}
         self.mNICNames = []
         self.mNIC = None
+        self.mSockets = {}
 
     def process(self, inputs = None):
         """
         Handle detect device callback slot
         """
+        # setup the probed signal to connect to crawlWeb;s processSlot to pass hosts from configs
+        self.probed.connect(getattr(self._findChildWidget('crawlWeb'), 'processSlot'))
+        self.probed.connect(getattr(self._findChildWidget('downloadImage'), 'processSlot'))
         # get the default remote http server host_name from defconfig in self.mViewer
-        if self.mHostName is None:
-            remotehost = self.mViewer.getRemoteHostUrl() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostUrl") else None
-            url = urlparse(remotehost)
+        remotehosts = self.mViewer.getRemoteHostUrls() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostUrls") else None
+        for host in remotehosts:
+            _logger.debug('remote hosts: {}'.format(remotehosts))
+            url = urlparse('{}://{}'.format(host['protocol'], host['name']))
             if all([url.scheme, url.netloc]):
-                self.mHostName = url.geturl()
-            else:
-                self.mHostName = 'http://rescue.technexion.net'
-
+                self.mHosts.append({'protocol': '{}'.format(host['protocol'].lower()), 'name': '{}'.format(host['name']), 'port': int(host['port']), 'path': '{}'.format(host['path'])})
+        if self.mHosts == {}:
+            self.mHosts.append({'protocol': 'http', 'name': 'http://rescue.technexion.net', 'port': 80, 'path': 'images'})
+        # check 1: the DMessage Bus
         QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def __checkCpuForm(self):
@@ -441,9 +440,11 @@ class detectDeviceSlot(QProcessSlot):
     def __checkDbus(self):
         if self.mViewer and hasattr(self.mViewer, 'checkDbusConn'):
             if self.mViewer.checkDbusConn():
+                # check 2: the SOM info
                 self.__checkCpuForm()
             else:
                 self.fail.emit({'NoDbus': True})
+                # retry to check DBus
                 QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
     def parseResult(self, results):
@@ -452,7 +453,9 @@ class detectDeviceSlot(QProcessSlot):
         """
         if 'subcmd' in results.keys() and results['subcmd'] == 'nic':
             _logger.info('subcmd: nic, parse result: {}'.format(results))
+
             if 'config_id' in results.keys() and results['config_id'] == 'ifconf':
+                # 3a-1. getting the ifconfig names,
                 if 'status' in results and results['status'] == 'success':
                     if 'iflist' in results.keys() and isinstance(results['iflist'], dict):
                         if len(results['iflist']) > 0:
@@ -468,47 +471,53 @@ class detectDeviceSlot(QProcessSlot):
                                 self.mNICNames.append(k)
                             elif k == 'eth0':
                                 self.mNICNames.append(k)
+                        # redo the check NIC, to continue to 3b.
                         QtCore.QTimer.singleShot(1000, self.__checkNIC)
+
             elif 'config_id' in results.keys() and results['config_id'] == 'ip':
                 if 'status' in results and results['status'] == 'success':
-                    # find the NIC Name
+                    # check 5: find matching IP for the NIC Name
                     for k, v in self.mLocalIPs.items():
                         if k == self.mNIC:
                             if v == results['ip']:
                                 _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                                 self.fail.emit(self.mNetErr)
+                                # check 6. connectivity to TN server
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             elif v == 'unknown':
                                 _logger.warn('Found ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
+                                self.fail.emit(self.mNetErr)
+                                # check 6. connectivity to TN server
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             else:
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': True})
                                 self.fail.emit(self.mNetErr)
+                                # no ip from socket connecting to DNS server, retry from check DNS step
                                 QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
             elif 'config_id' in results.keys() and results['config_id'] == 'ifflags':
                 if 'state' in results.keys() and 'flags' in results.keys():
-                    # a. Check whether NIC hardware available (do we have mac?)
+                    # 3b-1. Check whether NIC hardware available (do we have mac?)
                     #if 'LOWER_UP' in results['state']:
-                    # b. Check NIC connection is up (flag says IFF_UP?)
+                    # 3b-2. Check NIC connection is up (flag says IFF_UP?)
                     if 'UP' in results['state']:
                         self.mNicErr.update({'NoIface': False})
-                        # c. Check NIC connection is running (flag says IFF_RUNNING?)
+                        # 3b-3. Check NIC connection is running (flag says IFF_RUNNING?)
                         if 'RUNNING' in results['state']:
-                            # d. when all is running, check to see if we can connect to our rescue server.
+                            # 3b-4. when all is running, check to see if we can connect to our rescue server.
                             self.mNicErr.update({'NoCable': False, 'NoShow': True})
                             self.fail.emit(self.mNicErr)
                             self.mNIC = results['target'][:]
+                            # check 4: the DNS server
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
                             return
                         else:
                             self.mNicErr.update({'NoCable': True})
                     else:
                         self.mNicErr.update({'NoIface': True})
-                    #else:
-                    #    self.mErr.update({'NoNIC': True})
+                    # retry check 3. for NIC if failed
                     self.fail.emit(self.mNicErr)
                     QtCore.QTimer.singleShot(1000, self.__checkNIC)
             return
@@ -551,6 +560,7 @@ class detectDeviceSlot(QProcessSlot):
             # start the timer to check for network connection every 1 second,
             # and show the message dialog box during the nic check
             self.fail.emit(self.mNicErr)
+            # check 3: the NIC
             self.__checkNIC()
 
         self.mResults.update(results)
@@ -563,11 +573,14 @@ class detectDeviceSlot(QProcessSlot):
            'status' in self.mResults and self.mResults['status'] == 'failure':
             self.fail.emit({'NoCpuForm': True, 'ask': 'reboot'})
 
+        # when info cmd found matching CPU form and Board, emit success when
+        # any remote host can be connected, this reduces time waiting for
+        # other server checks
         if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and \
            'NoShow' in self.mNetErr and self.mNetErr['NoShow']:
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
-                _logger.warning('Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
+                _logger.warning('detectDevice: Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
                 self.success.emit('{} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
                 self.fail.emit({'NoShow': True})
                 self.mSentFlag = True
@@ -575,12 +588,12 @@ class detectDeviceSlot(QProcessSlot):
     def __checkNIC(self):
         # send request to installerd.service to request for network status.
         if self.mNICNames == []:
-            # 1. didn't get nic iface name, so query ifconfig first,
+            # 3a. didn't get nic iface name, so query ifconfig first,
             _logger.debug('check ifconfig for all local nic interfaces...')
             self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
             self.request.emit(self.mCmds[-1])
         else:
-            # 2. check ifflags on local nic interfaces
+            # 3b. check ifflags on local nic interfaces
             if self.mNICNames != []:
                 for name in self.mNICNames:
                     _logger.debug('check ifflags on found local nic interface: {}...'.format(name))
@@ -590,29 +603,55 @@ class detectDeviceSlot(QProcessSlot):
     def __checkDNS(self):
         self.fail.emit(self.mNetErr)
         _logger.debug('check whether we have IP and connectable to 8.8.8.8...')
-        # 3. finally get IP from iface to get for DNS
+        # check 4a. get IP from socket connected to DNS
         self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': self.mNIC})
         self.request.emit(self.mCmds[-1])
 
     def __checkTNServer(self):
-        # 4. check connectivity to TechNexion server
-        _logger.debug('check whether we have connectivity to server... {}'.format(self.mHostName))
-        req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
-        self.mNetMgr.get(req)
+        self.mSockets.clear()
+        # check connectivity to TechNexion server
+        _logger.debug('check whether we have connectivity to server...')
+        for host in self.mHosts:
+            self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
+            # setup callback slot for connected and error signals
+            self.mSockets[host['name']].connected.connect(self._socketConnected)
+            self.mSockets[host['name']].error.connect(self._socketError)
+            self.mSockets[host['name']].connectToHost(host['name'], host['port'])
 
-    def _urlResponse(self, reply):
-        # Check whether network connection is active and can connect to our rescue server
-        if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
-            _logger.error("Network Access Manager Error occured: {}, {}".format(reply.error(), reply.errorString()))
-            # the system cannot connect to our rescue server
+    def _socketError(self):
+        _logger.warn("QTcpSocket Error on {}: {}".format(self.sender().peerName(), self.sender().errorString()))
+        for host in self.mHosts:
+            # flag false as not reachable for probed host url
+            if self.sender().peerName() in host['name']:
+                host.update({'alive': False})
+        self.sender().abort()
+        self.sender().close()
+        self.__checkAliveHosts()
+
+    def _socketConnected(self):
+        _logger.debug("QTcpSocket Connected to: {}".format(self.sender().peerName()))
+        for host in self.mHosts:
+            # flag true as connectable for probed host url
+            if self.sender().peerName() in host['name']:
+                host.update({'alive': True})
+        self.sender().close()
+        self.__checkAliveHosts()
+
+    def __checkAliveHosts(self):
+        # sent updated hosts list to crawlWeb
+        _logger.debug("Send probed hosts list to crawlWeb: {}".format(self.mHosts))
+        self.probed.emit(self.mHosts)
+        if any(('alive' in host.keys() and host['alive']) for host in self.mHosts):
+            if not self.mSentFlag:
+                self.mNetErr.update({'NoServer': False, 'NoShow': True})
+                self.fail.emit(self.mNetErr)
+        elif all(('alive' in host.keys() and not host['alive']) for host in self.mHosts):
+            # the system cannot connect to all our rescue servers, retry in 1s
             self.mNetErr.update({'NoServer': True})
             self.fail.emit(self.mNetErr)
-            _logger.error('TechNexion rescue server not available!!! Retrying...')
+            _logger.error('All TechNexion rescue servers are not available!!! Retrying...')
             QtCore.QTimer.singleShot(1000, self.__checkTNServer)
-        else:
-            self.mNetErr.update({'NoServer': False, 'NoShow': True})
-            self.fail.emit(self.mNetErr)
-        # network check finished
+        # emit finish signal to do validateResult check
         self.finish.emit()
 
 
@@ -635,36 +674,57 @@ class crawlWebSlot(QProcessSlot):
         self.mForm = None
         self.mBoard = None
         self.mTimerId = None
+        self.mHosts = []
         self.mHostName = None
         self.mRemoteDir = None
         self.mRescueChecked = False
+
         self.mNetMgr = QtNetwork.QNetworkAccessManager()
         self.mNetMgr.finished.connect(self._urlResponse)
+        self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
 
     def process(self, inputs):
         """
         Handle crawlWeb process slot (signalled by initialized signal)
         """
         # get the default remote http server host_name from defconfig in self.mViewer
-        if self.mHostName is None:
-            remotehost = self.mViewer.getRemoteHostUrl() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostUrl") else None
-            url = self.__checkUrl(remotehost)
-            if url is not None:
-                self.mHostName = url.geturl()
-            else:
-                self.mHostName = 'http://rescue.technexion.net'
-        if self.mRemoteDir is None:
-            self.mRemoteDir = self.mViewer.getRemoteHostDir() if self.mViewer is not None and hasattr(self.mViewer, "getRemoteHostDir") else None
+        if self.sender().objectName() == 'detectDevice':
+            hasServer = False
+            if isinstance(inputs, list):
+                self.mHosts.clear()
+                self.mHosts.extend(inputs)
+                # get the first alive TechNexion server host
+                for host in self.mHosts:
+                    if self.mHostName is None and self.mRemoteDir is None and 'alive' in host.keys() and host['alive']:
+                        remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
+                            '' if (host['protocol'] in self.mDefaultPorts.keys() and \
+                                   self.mDefaultPorts[host['protocol']] == host['port']) \
+                               else ':{}'.format(host['port']))
+                        url = self.__checkUrl(remoteurl)
+                        if url is not None:
+                            self.mHostName = url.geturl()
 
+                        self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
+                        _logger.debug('crawlWeb: first connectable hostname: {} dir:{}'.format(self.mHostName, self.mRemoteDir))
+                        hasServer = True
+                        break
+            if hasServer:
+                self.__checkInputs()
+
+        # scanStorage may be done before a valid host is found.
         if self.sender().objectName() == 'scanStorage':
-            # setup rescue server and location if there isn't any
-            if 'location' not in inputs:
-                self.mInputs.update({'location': self.mRemoteDir if self.mRemoteDir else '/'})
-            if 'target' not in inputs:
-                self.mInputs.update({'target': self.mHostName})
+            self.__checkInputs()
 
-            _logger.debug('start the crawl process: {}'.format(self.mInputs))
+    def __checkInputs(self):
+        # setup rescue server and location if there isn't any
+        self.mInputs.update({'location': self.mRemoteDir if self.mRemoteDir else '/'})
+        if self.mHostName is not None:
+            self.mInputs.update({'target': self.mHostName})
+
+        if 'location' in self.mInputs and len(self.mInputs['location']) > 0 and \
+           'target' in self.mInputs and len(self.mInputs['target']) > 0:
             # start the crawl process
+            _logger.debug('start the crawl process: {}'.format(self.mInputs))
             if self.mTimerId is None:
                 self.mTimerId = self.startTimer(120000) # 2m
             self._findChildWidget('waitingIndicator').show()
@@ -831,9 +891,9 @@ class crawlWebSlot(QProcessSlot):
 
     # If we do not get reponses from all the requests to each URL after 2 min, we should also issue an error
     def timerEvent(self, event):
-        self.__checkTNServer()
+        self.__checkServerAlive()
 
-    def __checkTNServer(self):
+    def __checkServerAlive(self):
         # check connectivity to TechNexion server
         _logger.debug('check whether we have connectivity to server... {}'.format(self.mHostName))
         req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
@@ -1660,7 +1720,7 @@ class chooseStorageSlot(QChooseSlot):
             self.success.emit(self.mPick)
             self._updateDisplay()
         else:
-            self.fail.emit('failed to choose a valid storage to program')
+            _logger.info('failed to choose a valid storage to program')
 
 
 
@@ -1858,6 +1918,9 @@ class downloadImageSlot(QProcessSlot):
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
         self.mTotalMem = None
+        self.mHosts = []
+        self.mRetryFlag = False
+        self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
 
     def _queryResult(self, percent = 0):
         """
@@ -1915,6 +1978,17 @@ class downloadImageSlot(QProcessSlot):
             # show/hide GUI components
             self._updateDisplay()
 
+    def __retryAlternativeServer(self):
+        if self.mRetryFlag:
+            if self.__setAlternativeServer():
+                # reset the progress bar
+                self.progress.emit(0)
+                self.__checkBeforeFlash()
+            else:
+                # prompt error message for no alternative servers
+                self.fail.emit({'NoAlternative': True, 'ask': 'continue'})
+                self.success.emit(self.mPick)
+
     def process(self, inputs):
         """
         get the system memory first
@@ -1937,6 +2011,19 @@ class downloadImageSlot(QProcessSlot):
                 self.progress.connect(self.mProgressBar.setValue)
 
         _logger.warning('downloadImage: signal sender: {}, inputs: {}'.format(self.sender().objectName(), inputs))
+
+        # get the default remote http server host_name from defconfig in self.mViewer
+        if self.sender().objectName() == 'detectDevice':
+            if isinstance(inputs, list):
+                self.mHosts.clear()
+                self.mHosts.extend(inputs)
+
+        if self.sender().objectName() == 'processError':
+            if isinstance(inputs, dict) and 'retry' in inputs.keys():
+                _logger.debug('retry signal from processError: {}'.format(inputs['retry']))
+                self.mRetryFlag = inputs['retry']
+                # Queue the retry on alternative server in 1s
+                QtCore.QTimer.singleShot(1000, self.__retryAlternativeServer)
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
@@ -2021,6 +2108,7 @@ class downloadImageSlot(QProcessSlot):
             # flash job either success or failure
             if self.mTimerId:
                 self.killTimer(self.mTimerId)
+                self.mTimerId = None
             self.mFlashFlag = False
 
     def validateResult(self):
@@ -2029,20 +2117,25 @@ class downloadImageSlot(QProcessSlot):
 
         # if download and flash is successful, emit success signal to go to next stage
         if isinstance(self.mResults, dict) and self.mResults['cmd'] == 'download' and 'status' in self.mResults:
-            if self.mResults['status'] == 'success':
+            if self.mResults['status'] == 'success' and self.mResults['total_uncompressed'] == self.mResults['bytes_written']:
+                # succeed programming the eMMC
                 self.progress.emit(100)
                 self.mLblRemain.setText('Remaining Time: 00:00')
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': True})
-                _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
+                _logger.debug('{} successfully flashed to emmc and emit signal: {}'.format(self.objectName(), self.mPick))
                 self.success.emit(self.mPick)
                 self.fail.emit({'NoShow': True})
-            elif self.mResults['status'] == 'failure':
+            else:
+                # succeed but not all bytes written, something wrong with network connection
+                # or failed programming the eMMC
+                self.mLblRemain.setText('Remaining Time: --:--')
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
-                self.fail.emit({'NoDownload': True, 'ask': 'continue'})
-                self.success.emit(self.mPick)
+                self.fail.emit({'NoDownload': True, 'ask': 'alternative'})
+                if not self.mRetryFlag:
+                    self.success.emit(self.mPick)
 
     def _updateDisplay(self):
         # show and hide some Gui elements
@@ -2058,6 +2151,35 @@ class downloadImageSlot(QProcessSlot):
     def timerEvent(self, event):
         # query the processing result from server
         self._queryResult()
+
+    def __setAlternativeServer(self):
+        _logger.debug('original Url: {}'.format(self.mFileUrl))
+        alives = [host for host in self.mHosts if ('alive' in host and host['alive'])]
+        for (idx, host) in enumerate(alives, start=0):
+            if host['name'] in self.mFileUrl:
+                orghost = alives.pop(idx)
+        _logger.debug('remaining alive-hosts {}'.format(alives))
+        if len(alives) > 0:
+            if (alives[0]['protocol'] in self.mDefaultPorts.keys() and self.mDefaultPorts[alives[0]['protocol']] == alives[0]['port']):
+                # alternative host using protocol's standard port
+                if (orghost['protocol'] in self.mDefaultPorts.keys() and self.mDefaultPorts[orghost['protocol']] == orghost['port']):
+                    # original host using protocol's standard port
+                    self.mFileUrl = self.mFileUrl.replace('{}'.format(orghost['name']), '{}'.format(alives[0]['name']))
+                else:
+                    # original using non standard port
+                    self.mFileUrl = self.mFileUrl.replace('{}:{}'.format(orghost['name'], orghost['port']), '{}'.format(alives[0]['name']))
+            else:
+                # alternative host using non standard port
+                if (orghost['protocol'] in self.mDefaultPorts.keys() and self.mDefaultPorts[orghost['protocol']] == orghost['port']):
+                    # original host using protocol's standard port
+                    self.mFileUrl = self.mFileUrl.replace('{}'.format(orghost['name']), '{}:{}'.format(alives[0]['name'], alives[0]['port']))
+                else:
+                    # original using non standard port
+                    self.mFileUrl = self.mFileUrl.replace('{}:{}'.format(orghost['name'], orghost['port']), '{}:{}'.format(alives[0]['name'], alives[0]['port']))
+            _logger.debug('replaced Url: {}'.format(self.mFileUrl))
+            return True
+
+        return False
 
 
 
@@ -2263,7 +2385,7 @@ class postDownloadSlot(QProcessSlot):
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
             if self.mResults['status'] == 'success':
                 # Final notification, all successful, reboot
-                self.fail.emit({'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
+                self.fail.emit({'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'poweroff'})
             elif self.mResults['status'] == 'failure':
                 # failed to set emmc boot option, still reboot
                 self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
@@ -2413,7 +2535,10 @@ class processErrorSlot(QProcessSlot):
         if 'NoDownload' in self.mErrors:
             # critical, but continue
             self.mMsgBox.setMessage('NoDownload')
-            _logger.warning('Flashing failed!!! Restore Bootable Rescue System...')
+            _logger.warning('Downloading and Flashing failed!!! Retry with another server or Continue to restore Bootable Rescue System...')
+        if 'NoAlternative' in self.mErrors:
+            self.mMsgBox.setMessage('NoAlternative')
+            _logger.warning('No other connectable servers for download and flash...')
         if 'NoFlash' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoFlash')
@@ -2452,7 +2577,6 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setMessage('QRCode')
             _logger.warning('Set QRCode for the download files')
 
-
         if self.mAsk:
             self.mMsgBox.setModal(True) # modal dialog
             if self.mAsk == 'reboot':
@@ -2462,6 +2586,15 @@ class processErrorSlot(QProcessSlot):
                     try:
                         # reset/reboot the system
                         subprocess.check_call(['reboot'])
+                    except:
+                        raise
+            elif self.mAsk == 'poweroff':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
+                if ret:
+                    try:
+                        # power off the system
+                        subprocess.check_call(['poweroff'])
                     except:
                         raise
             elif self.mAsk == 'retry':
@@ -2482,12 +2615,30 @@ class processErrorSlot(QProcessSlot):
                         subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
                     except:
                         raise
+            elif self.mAsk == 'alternative':
+                self.mMsgBox.setAskButtons(self.mAsk)
+                ret = self.mMsgBox.display(True)
+                if ret == QtGui.QDialog.Rejected:
+                    # signal with retry response to the sender process
+                    self.__returnResponse({'retry': True})
+
             elif self.mAsk == 'continue':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
         else:
             self.mMsgBox.setModal(False)
             self.mMsgBox.display(self.mDisplay) # non modal dialog
+
+    def __returnResponse(self, response):
+        try:
+            self.success.disconnect()
+            # disconnect response signal first
+        except:
+            _logger.debug("disconnect processError's success signal first")
+            if isinstance(self.sender(), QProcessSlot) and isinstance(response, dict):
+                self.success.connect(getattr(self.sender(), 'processSlot'))
+                self.success.emit(response)
+                self.success.disconnect()
 
 
 
@@ -2886,7 +3037,12 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoDownload':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
-            self.setContent("Download and flash failed for unforeseeable reason. You could 1. retry later, 2. try alternative program method\n(https://www.technexion.com/support/\nknowledgebase/using-uuu-to-flash-emmc/).")
+            self.setContent("Download and flash failed. You could\n1. retry with another server,\n2. continue to restore rescue,\n3. program with uuu method.")
+            self.setStatus("uuu info: https://www.technexion.com/support/\nknowledgebase/using-uuu-to-flash-emmc/")
+        elif msgtype == 'NoAlternative':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("Warning")
+            self.setContent("No alternative rescue servers available for download and flash.")
             self.setStatus("Click continue to restore rescue system.")
         elif msgtype == 'NoFlash':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
@@ -2907,14 +3063,14 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
-            self.setContent('Please power off and on your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent('Please reset your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
-            self.setContent('Please power off and on your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent('Please power off and restart your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
         elif msgtype == 'Interrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
@@ -2925,14 +3081,19 @@ class QMessageDialog(QtGui.QDialog):
             self.setQrCode(qrIcon)
 
     def setAskButtons(self, asktype):
+        self.clearButtons()
         if asktype == 'reboot':
             self.setButtons({'accept': 'REBOOT'})
+        elif asktype == 'poweroff':
+            self.setButtons({'accept': 'POWEROFF'})
         elif asktype == 'retry':
             self.setButtons({'accept': 'RETRY'})
         elif asktype == 'continue':
             self.setButtons({'accept': 'CONTINUE'})
         elif asktype == 'interrupt':
             self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
+        elif asktype == 'alternative':
+            self.setButtons({'accept': 'CONTINUE', 'reject': 'RETRY'})
 
     def clearMessage(self):
         self.clearIcon()
