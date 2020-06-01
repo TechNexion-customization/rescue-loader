@@ -476,12 +476,12 @@ class detectDeviceSlot(QProcessSlot):
                         if k == self.mNIC:
                             if v == results['ip']:
                                 _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
-                                self.mNetErr.update({'NoIP': False, 'NoDNS': False, 'NoError': True})
+                                self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                                 self.fail.emit(self.mNetErr)
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             elif v == 'unknown':
                                 _logger.warn('Found ip:{} on NIC iface: {}'.format(v, k))
-                                self.mNetErr.update({'NoIP': False, 'NoDNS': False, 'NoError': True})
+                                self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             else:
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': True})
@@ -498,7 +498,7 @@ class detectDeviceSlot(QProcessSlot):
                         # c. Check NIC connection is running (flag says IFF_RUNNING?)
                         if 'RUNNING' in results['state']:
                             # d. when all is running, check to see if we can connect to our rescue server.
-                            self.mNicErr.update({'NoCable': False, 'NoError': True})
+                            self.mNicErr.update({'NoCable': False, 'NoShow': True})
                             self.fail.emit(self.mNicErr)
                             self.mNIC = results['target'][:]
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
@@ -564,12 +564,12 @@ class detectDeviceSlot(QProcessSlot):
             self.fail.emit({'NoCpuForm': True, 'ask': 'reboot'})
 
         if 'found_match' in self.mResults and 'status' in self.mResults and self.mResults['status'] == 'success' and \
-           'NoError' in self.mNetErr and self.mNetErr['NoError']:
+           'NoShow' in self.mNetErr and self.mNetErr['NoShow']:
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
                 _logger.warning('Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
                 self.success.emit('{} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
-                self.fail.emit({'NoError': True})
+                self.fail.emit({'NoShow': True})
                 self.mSentFlag = True
 
     def __checkNIC(self):
@@ -610,7 +610,7 @@ class detectDeviceSlot(QProcessSlot):
             _logger.error('TechNexion rescue server not available!!! Retrying...')
             QtCore.QTimer.singleShot(1000, self.__checkTNServer)
         else:
-            self.mNetErr.update({'NoServer': False, 'NoError': True})
+            self.mNetErr.update({'NoServer': False, 'NoShow': True})
             self.fail.emit(self.mNetErr)
         # network check finished
         self.finish.emit()
@@ -785,7 +785,7 @@ class crawlWebSlot(QProcessSlot):
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
                 self.success.emit(self.mResults)
-            self.fail.emit({'NoError': True})
+            self.fail.emit({'NoShow': True})
 
     def __checkForRescueUpdate(self):
         if not self.mRescueChecked:
@@ -931,7 +931,7 @@ class crawlLocalfsSlot(QProcessSlot):
             _logger.debug('validateResult: crawlLocalfs result: {}\n'.format(self.mResults))
             # if found suitable xz files, send them on to the next process slot
             self.success.emit(self.mResults)
-            self.fail.emit({'NoError': True})
+            self.fail.emit({'NoShow': True})
             return
         else:
             # Did not find any suitable xz file on mounted partitions
@@ -1036,7 +1036,7 @@ class scanStorageSlot(QProcessSlot):
         if isinstance(self.mResults, list) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
             self.success.emit(self.mResults)
-            self.fail.emit({'NoError': True})
+            self.fail.emit({'NoShow': True})
         else:
             # no suitable storage found
             _logger.error('Cannot find available storage!!! Insert a sdcard...')
@@ -1093,7 +1093,7 @@ class scanPartitionSlot(QProcessSlot):
         if isinstance(self.mResults, dict) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. crawlLocalfs
             self.success.emit(self.mResults)
-            self.fail.emit({'NoError': True})
+            self.fail.emit({'NoShow': True})
         else:
             self.fail.emit({'NoPartition': True})
             # No need to scan for mounted partition again
@@ -2036,7 +2036,7 @@ class downloadImageSlot(QProcessSlot):
                 self.mPick.update({'url': self.mFileUrl, 'flashed': True})
                 _logger.debug('{} emit signal: {}'.format(self.objectName(), self.mPick))
                 self.success.emit(self.mPick)
-                self.fail.emit({'NoError': True})
+                self.fail.emit({'NoShow': True})
             elif self.mResults['status'] == 'failure':
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False})
@@ -2199,10 +2199,10 @@ class postDownloadSlot(QProcessSlot):
                     self.request.emit(self.mCmds[-1])
                 else:
                     # if not emmc, don't do anything, but emit complete and reboot
-                    self.fail.emit({'NoError': True, 'NoTgtEmmc': True, 'ask': 'reboot'})
+                    self.fail.emit({'NoTgtEmmc': True, 'ask': 'reboot'})
             elif results['status'] == 'failure':
                 # even if cmd 'info' to query target storage failed, still emit complete and reboot
-                self.fail.emit({'NoError': True, 'NoTgtEmmcCheck': True, 'ask': 'reboot'})
+                self.fail.emit({'NoTgtEmmcCheck': True, 'ask': 'reboot'})
 
         # target emmc has been set to writable
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'readonly':
@@ -2263,7 +2263,7 @@ class postDownloadSlot(QProcessSlot):
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
             if self.mResults['status'] == 'success':
                 # Final notification, all successful, reboot
-                self.fail.emit({'NoError': True, 'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
+                self.fail.emit({'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'reboot'})
             elif self.mResults['status'] == 'failure':
                 # failed to set emmc boot option, still reboot
                 self.fail.emit({'NoEmmcBoot': True, 'ask': 'reboot'})
@@ -2330,7 +2330,7 @@ class processErrorSlot(QProcessSlot):
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
         self.mErrors.pop('ask', None)
-        self.mDisplay = False if ('NoError' in inputs and inputs['NoError']) else True
+        self.mDisplay = False if ('NoShow' in inputs and inputs['NoShow']) else True
         self.__handleError()
         self.mErrors.clear()
 
