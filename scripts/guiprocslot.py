@@ -413,6 +413,13 @@ class detectDeviceSlot(QProcessSlot):
         self.mNICNames = []
         self.mNIC = None
         self.mSockets = {}
+        self.mProbeCounts = 0
+
+    def __sendError(self, err):
+        if not self.mSentFlag:
+            self.fail.emit(err)
+        else:
+            self.probed.emit(list(err.items()))
 
     def process(self, inputs = None):
         """
@@ -443,7 +450,7 @@ class detectDeviceSlot(QProcessSlot):
                 # check 2: the SOM info
                 self.__checkCpuForm()
             else:
-                self.fail.emit({'NoDbus': True})
+                self.__sendError({'NoDbus': True})
                 # retry to check DBus
                 QtCore.QTimer.singleShot(1000, self.__checkDbus)
 
@@ -462,7 +469,7 @@ class detectDeviceSlot(QProcessSlot):
                             self.mNicErr.update({'NoNIC': False})
                         else:
                             self.mNicErr.update({'NoNIC': True})
-                        self.fail.emit(self.mNicErr)
+                        self.__sendError(self.mNicErr)
                         # get the list of nics and figure out NIC ifs
                         self.mLocalIPs.update(results['iflist'])
                         self.mNICNames.clear()
@@ -482,18 +489,18 @@ class detectDeviceSlot(QProcessSlot):
                             if v == results['ip']:
                                 _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
-                                self.fail.emit(self.mNetErr)
+                                self.__sendError(self.mNetErr)
                                 # check 6. connectivity to TN server
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             elif v == 'unknown':
                                 _logger.warn('Found ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
-                                self.fail.emit(self.mNetErr)
+                                self.__sendError(self.mNetErr)
                                 # check 6. connectivity to TN server
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             else:
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': True})
-                                self.fail.emit(self.mNetErr)
+                                self.__sendError(self.mNetErr)
                                 # no ip from socket connecting to DNS server, retry from check DNS step
                                 QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
@@ -508,7 +515,7 @@ class detectDeviceSlot(QProcessSlot):
                         if 'RUNNING' in results['state']:
                             # 3b-4. when all is running, check to see if we can connect to our rescue server.
                             self.mNicErr.update({'NoCable': False, 'NoShow': True})
-                            self.fail.emit(self.mNicErr)
+                            self.__sendError(self.mNicErr)
                             self.mNIC = results['target'][:]
                             # check 4: the DNS server
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
@@ -518,7 +525,7 @@ class detectDeviceSlot(QProcessSlot):
                     else:
                         self.mNicErr.update({'NoIface': True})
                     # retry check 3. for NIC if failed
-                    self.fail.emit(self.mNicErr)
+                    self.__sendError(self.mNicErr)
                     QtCore.QTimer.singleShot(1000, self.__checkNIC)
             return
 
@@ -559,7 +566,7 @@ class detectDeviceSlot(QProcessSlot):
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
             # start the timer to check for network connection every 1 second,
             # and show the message dialog box during the nic check
-            self.fail.emit(self.mNicErr)
+            self.__sendError(self.mNicErr)
             # check 3: the NIC
             self.__checkNIC()
 
@@ -571,7 +578,7 @@ class detectDeviceSlot(QProcessSlot):
         if 'cmd' in self.mResults and self.mResults['cmd'] == 'info' and \
            'found_match' not in self.mResults and \
            'status' in self.mResults and self.mResults['status'] == 'failure':
-            self.fail.emit({'NoCpuForm': True, 'ask': 'reboot'})
+            self.__sendError({'NoCpuForm': True, 'ask': 'reboot'})
 
         # when info cmd found matching CPU form and Board, emit success when
         # any remote host can be connected, this reduces time waiting for
@@ -582,8 +589,12 @@ class detectDeviceSlot(QProcessSlot):
             if not self.mSentFlag:
                 _logger.warning('detectDevice: Success and emit: {} {} ({})'.format(self.mCpu, self.mForm, self.mBaseboard))
                 self.success.emit('{} {}\n'.format(self.mCpu, self.mForm, self.mBaseboard))
-                self.fail.emit({'NoShow': True})
+                self.__sendError({'NoShow': True})
                 self.mSentFlag = True
+                # successfully detect a technexion rescue server, but keep
+                # checking nic/net every 3 minutes to update the alive list
+                # (only do this once because of self.mSentFlag)
+                QtCore.QTimer.singleShot(180000, self.__checkNIC)
 
     def __checkNIC(self):
         # send request to installerd.service to request for network status.
@@ -601,13 +612,14 @@ class detectDeviceSlot(QProcessSlot):
                     self.request.emit(self.mCmds[-1])
 
     def __checkDNS(self):
-        self.fail.emit(self.mNetErr)
+        self.__sendError(self.mNetErr)
         _logger.debug('check whether we have IP and connectable to 8.8.8.8...')
         # check 4a. get IP from socket connected to DNS
         self._setCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': self.mNIC})
         self.request.emit(self.mCmds[-1])
 
     def __checkTNServer(self):
+        self.mProbeCounts = 0
         self.mSockets.clear()
         # check connectivity to TechNexion server
         _logger.debug('check whether we have connectivity to server...')
@@ -619,6 +631,7 @@ class detectDeviceSlot(QProcessSlot):
             self.mSockets[host['name']].connectToHost(host['name'], host['port'])
 
     def _socketError(self):
+        self.mProbeCounts = self.mProbeCounts + 1
         _logger.warn("QTcpSocket Error on {}: {}".format(self.sender().peerName(), self.sender().errorString()))
         for host in self.mHosts:
             # flag false as not reachable for probed host url
@@ -629,6 +642,7 @@ class detectDeviceSlot(QProcessSlot):
         self.__checkAliveHosts()
 
     def _socketConnected(self):
+        self.mProbeCounts = self.mProbeCounts + 1
         _logger.debug("QTcpSocket Connected to: {}".format(self.sender().peerName()))
         for host in self.mHosts:
             # flag true as connectable for probed host url
@@ -642,15 +656,21 @@ class detectDeviceSlot(QProcessSlot):
         _logger.debug("Send probed hosts list to crawlWeb: {}".format(self.mHosts))
         self.probed.emit(self.mHosts)
         if any(('alive' in host.keys() and host['alive']) for host in self.mHosts):
-            if not self.mSentFlag:
-                self.mNetErr.update({'NoServer': False, 'NoShow': True})
-                self.fail.emit(self.mNetErr)
-        elif all(('alive' in host.keys() and not host['alive']) for host in self.mHosts):
+            # update dialogbox no matter SentFlag already set or not
+            self.mNetErr.update({'NoServer': False, 'NoShow': True})
+            self.__sendError(self.mNetErr)
+        if all(('alive' in host.keys() and not host['alive']) for host in self.mHosts):
             # the system cannot connect to all our rescue servers, retry in 1s
             self.mNetErr.update({'NoServer': True})
-            self.fail.emit(self.mNetErr)
+            self.__sendError(self.mNetErr)
             _logger.error('All TechNexion rescue servers are not available!!! Retrying...')
             QtCore.QTimer.singleShot(1000, self.__checkTNServer)
+        if all(('alive') in host.keys() for host in self.mHosts):
+            if self.mSentFlag and self.mProbeCounts == len(self.mSockets):
+                # SentFlag already set and had successfully move on to next stage
+                # so keep checking nic/net every 3 minutes to update the alive list
+                QtCore.QTimer.singleShot(180000, self.__checkNIC)
+
         # emit finish signal to do validateResult check
         self.finish.emit()
 
@@ -669,6 +689,7 @@ class crawlWebSlot(QProcessSlot):
     def __init__(self, parent = None):
         super().__init__(parent)
         self.mInputs = {}
+        self.mDetects = {}
         self.mResults = []
         self.mCpu = None
         self.mForm = None
@@ -687,27 +708,35 @@ class crawlWebSlot(QProcessSlot):
         """
         Handle crawlWeb process slot (signalled by initialized signal)
         """
+        _logger.debug('{}: sender: {} inputs:{}'.format(self.objectName(), self.sender().objectName(), inputs))
+
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'detectDevice':
             hasServer = False
             if isinstance(inputs, list):
-                self.mHosts.clear()
-                self.mHosts.extend(inputs)
-                # get the first alive TechNexion server host
-                for host in self.mHosts:
-                    if self.mHostName is None and self.mRemoteDir is None and 'alive' in host.keys() and host['alive']:
-                        remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
-                            '' if (host['protocol'] in self.mDefaultPorts.keys() and \
-                                   self.mDefaultPorts[host['protocol']] == host['port']) \
-                               else ':{}'.format(host['port']))
-                        url = self.__checkUrl(remoteurl)
-                        if url is not None:
-                            self.mHostName = url.geturl()
+                if all(isinstance(item, dict) for item in inputs):
+                    self.mHosts.clear()
+                    self.mHosts.extend(inputs)
+                    # get the first alive TechNexion server host
+                    for host in self.mHosts:
+                        if self.mHostName is None and self.mRemoteDir is None and 'alive' in host.keys() and host['alive']:
+                            remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
+                                '' if (host['protocol'] in self.mDefaultPorts.keys() and \
+                                       self.mDefaultPorts[host['protocol']] == host['port']) \
+                                   else ':{}'.format(host['port']))
+                            url = self.__checkUrl(remoteurl)
+                            if url is not None:
+                                self.mHostName = url.geturl()
 
-                        self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
-                        _logger.debug('crawlWeb: first connectable hostname: {} dir:{}'.format(self.mHostName, self.mRemoteDir))
-                        hasServer = True
-                        break
+                            self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
+                            _logger.debug('crawlWeb: first connectable hostname: {} dir:{}'.format(self.mHostName, self.mRemoteDir))
+                            hasServer = True
+                            break
+                elif all(isinstance(item, tuple) for item in inputs):
+                    # detectDevice errors
+                    self.mDetects.update(dict(inputs))
+                    self.mDetects.pop('NoShow', None)
+
             if hasServer:
                 self.__checkInputs()
 
@@ -1904,6 +1933,7 @@ class downloadImageSlot(QProcessSlot):
     def __init__(self, parent = None):
         super().__init__(parent)
         self.mFileList = []
+        self.mDetects = {}
         self.mResults = {}
         self.mFileUrl = None
         self.mTgtStorage = None
@@ -2014,9 +2044,14 @@ class downloadImageSlot(QProcessSlot):
 
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'detectDevice':
-            if isinstance(inputs, list):
+            if all(isinstance(item, dict) for item in inputs):
+                # detectDevice hosts
                 self.mHosts.clear()
                 self.mHosts.extend(inputs)
+            elif all(isinstance(item, tuple) for item in inputs):
+                # detectDevice errors, but we don't do anything about it.
+                self.mDetects.update(dict(inputs))
+                self.mDetects.pop('NoShow', None)
 
         if self.sender().objectName() == 'processError':
             if isinstance(inputs, dict) and 'retry' in inputs.keys():
