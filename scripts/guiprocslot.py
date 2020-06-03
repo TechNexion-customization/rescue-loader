@@ -694,14 +694,11 @@ class crawlWebSlot(QProcessSlot):
         self.mCpu = None
         self.mForm = None
         self.mBoard = None
-        self.mTimerId = None
+        self.mErrorFlag = False
         self.mHosts = []
         self.mHostName = None
         self.mRemoteDir = None
         self.mRescueChecked = False
-
-        self.mNetMgr = QtNetwork.QNetworkAccessManager()
-        self.mNetMgr.finished.connect(self._urlResponse)
         self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
 
     def process(self, inputs):
@@ -727,7 +724,6 @@ class crawlWebSlot(QProcessSlot):
                             url = self.__checkUrl(remoteurl)
                             if url is not None:
                                 self.mHostName = url.geturl()
-
                             self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
                             _logger.debug('crawlWeb: first connectable hostname: {} dir:{}'.format(self.mHostName, self.mRemoteDir))
                             hasServer = True
@@ -736,6 +732,9 @@ class crawlWebSlot(QProcessSlot):
                     # detectDevice errors
                     self.mDetects.update(dict(inputs))
                     self.mDetects.pop('NoShow', None)
+                    if not self.mErrorFlag:
+                        QtCore.QTimer.singleShot(1000, self.__checkNetworkError)
+                        self.mErrorFlag = True
 
             if hasServer:
                 self.__checkInputs()
@@ -754,8 +753,6 @@ class crawlWebSlot(QProcessSlot):
            'target' in self.mInputs and len(self.mInputs['target']) > 0:
             # start the crawl process
             _logger.debug('start the crawl process: {}'.format(self.mInputs))
-            if self.mTimerId is None:
-                self.mTimerId = self.startTimer(120000) # 2m
             self._findChildWidget('waitingIndicator').show()
             self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
 
@@ -871,8 +868,6 @@ class crawlWebSlot(QProcessSlot):
             # but check for rescue update first.
             if not self.mRescueChecked:
                 self.__checkForRescueUpdate()
-                if self.mTimerId:
-                    self.killTimer(self.mTimerId)
                 self.success.emit(self.mResults)
             self.fail.emit({'NoShow': True})
 
@@ -918,36 +913,20 @@ class crawlWebSlot(QProcessSlot):
                     self.mResults.remove(item)
             self.mRescueChecked = True
 
-    # If we do not get reponses from all the requests to each URL after 2 min, we should also issue an error
-    def timerEvent(self, event):
-        self.__checkServerAlive()
-
-    def __checkServerAlive(self):
-        # check connectivity to TechNexion server
-        _logger.debug('check whether we have connectivity to server... {}'.format(self.mHostName))
-        req = QtNetwork.QNetworkRequest(QtCore.QUrl(self.mHostName))
-        self.mNetMgr.get(req)
-
-    def _urlResponse(self, reply):
-        if self.mTimerId:
-            self.killTimer(self.mTimerId)
-            self.mTimerId = None
-        # Check whether network connection is active and can connect to our rescue server
-        if hasattr(reply, 'error') and reply.error() != QtNetwork.QNetworkReply.NoError:
+    def __checkNetworkError(self):
+        # mDetects are errors passed in from detectDevice
+        if any(v is True for v in self.mDetects.values()):
             # the system cannot connect to our rescue server
             self.fail.emit({'NoCrawl': False, 'ask': 'continue'})
             _logger.error('Connect to TechNexion rescue server failed...')
+            self.mErrorFlag = False
             self.__crawlUrl(self.mInputs)
-            if self.mTimerId is None:
-                self.mTimerId = self.startTimer(120000)
         else:
             # Did not find any suitable xz file
             if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
                 _logger.info('crawlWeb receive all request/response')
                 self.fail.emit({'NoDLFile': False, 'ask': 'retry'})
-            else:
-                if self.mTimerId is None:
-                    self.mTimerId = self.startTimer(120000)
+                self.mErrorFlag = False
 
 
 
