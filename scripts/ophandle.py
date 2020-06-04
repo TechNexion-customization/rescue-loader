@@ -362,6 +362,8 @@ class InfoOperationHandler(BaseOperationHandler):
     def __init__(self, UserRequestCB):
         super().__init__(UserRequestCB)
         self.mArgs = ['target', 'location']
+        self.mConf = self.mUserRequestHandler('setting') if callable(self.mUserRequestHandler) else {}
+        self.mHosts = []
 
     def isOpSupported(self, OpParams):
         # Check if cmd is supported
@@ -389,10 +391,14 @@ class InfoOperationHandler(BaseOperationHandler):
     def _parseParam(self, OpParams):
         _logger.debug('{}: __parseParam: OpParams: {}'.format(type(self).__name__, OpParams))
         self.mActionParam.clear()
-        conf = self.mUserRequestHandler('setting')
-#         # default values for type and for all locations
-#         self.mActionParam['tgt_type'] = 'mmc'
-#         self.mActionParam['dst_pos'] = -1
+
+        if self.mHosts == [] and self.mConf:
+            # gets rescue hosts from installer.xml config
+            if isinstance(self.mConf.getSettings('rescue')['rescue']['host'], list):
+                self.mHosts = self.mConf.getSettings('rescue')['rescue']['host']
+            else:
+                self.mHosts = [self.mConf.getSettings('rescue')['rescue']['host']]
+
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             for k, v in OpParams.items():
@@ -406,10 +412,8 @@ class InfoOperationHandler(BaseOperationHandler):
                 elif k==self.mArgs[0] and v=='hd':
                     # check for the correct /dev/sd[x] path and set it
                     self.mActionParam['tgt_type'] = 'sd'
-                elif k==i and v=='mem':
+                elif k==self.mArgs[0] and v=='mem':
                     self.mActionParam['tgt_type'] = 'mem'
-                elif k=='location' and v is not None:
-                    self.mActionParam['mem_type'] = v
                 elif k==self.mArgs[0] and v=='som':
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
                     self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
@@ -429,6 +433,8 @@ class InfoOperationHandler(BaseOperationHandler):
                     # check for local_fs, which client will send as hostname()
                     self.mActionParam['local_fs'] = v # local file system
                 # location options
+                elif k==self.mArgs[1] and v is not None:
+                    self.mActionParam['mem_type'] = v
                 elif k==self.mArgs[1] and v=='spl':
                     self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
                 elif k==self.mArgs[1] and v=='bootloader':
@@ -444,10 +450,14 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['get_stat'] = True;
                 elif k==self.mArgs[1] and v.startswith('/') and v.endswith('/'):
                     self.mActionParam['src_directory'] = v # directory/folder
-                    self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
+                    for host in self.mHosts:
+                        if host['name'] in OpParams['target']:
+                            self.mActionParam['host_dir'] = host['path']
                 elif k==self.mArgs[1] and v.startswith('/') and v.endswith('xz'):
                     self.mActionParam['src_directory'] = v # directory/folder
-                    self.mActionParam['host_dir'] = conf.getSettings('host_dir')['host_dir']
+                    for host in self.mHosts:
+                        if host['name'] in OpParams['target']:
+                            self.mActionParam['host_dir'] = host['path']
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1
@@ -462,7 +472,10 @@ class InfoOperationHandler(BaseOperationHandler):
         elif all(s in self.mActionParam for s in ['local_fs', 'src_directory']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
-        elif all(s in self.mActionParam for s in ['src_filename']):
+        elif all(s in self.mActionParam for s in ['src_filename', 'get_stat']):
+            _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
+            return True
+        elif all(s in self.mActionParam for s in ['src_filename', 're_pattern']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(type(self).__name__, self.mActionParam))
             return True
         else:
@@ -689,8 +702,12 @@ class CheckOperationHandler(BaseOperationHandler):
 
 
 if __name__ == "__main__":
-    def opcb(Status, Hdl):
-        print ('called back:\n{}'.format(Status))
+    def opcb(req):
+        conf = DefConfig()
+        conf.loadConfig("/etc/installer.xml")
+        if req == 'setting':
+            print ('called back req:{} conf:{}'.format(req, conf))
+            return conf
 
     import sys
 

@@ -675,6 +675,13 @@ class GuiViewer(QObject, BaseViewer):
             hostdir = self.mDefConfig.getSettings('host_dir')
         return '/{}/'.format(hostdir['host_dir']) if hostdir else None
 
+    def getRemoteHostUrls(self):
+        if self.mDefConfig:
+            conf = self.mDefConfig.getSettings('rescue')
+            if isinstance(conf['rescue'], dict) and 'host' in conf['rescue'].keys():
+                return conf['rescue']['host'] if isinstance(conf['rescue']['host'], list) else [(conf['rescue']['host'])]
+        return None
+
     ###########################################################################
     # PyQt GUI related
     ###########################################################################

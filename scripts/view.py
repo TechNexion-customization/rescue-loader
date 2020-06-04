@@ -354,10 +354,9 @@ if __name__ == "__main__":
 
     def QueryLocationType(locstr):
         supported_locs = ['all', 'spl', 'bootloader', \
-                          'controller', 'disk', 'partition', 'file', \
-        # 'bus', 'device', 'sensor', 'connection', \
-        # 'kernel', 'dtb', 'rootfs', 'os', \
-                          'cpu', 'form', 'baseboard', \
+                          'controller', 'disk', 'partition', \
+                          'bus', 'device', 'sensor', 'connection', \
+                          'kernel', 'dtb', 'rootfs', 'os', 'cpu', 'form', 'baseboard', \
                           'total', 'available', 'percent', 'used', 'free', 'active', 'inactive', 'buffers', 'cached', 'shared']
         if any(s == locstr for s in supported_locs):
             return locstr
@@ -402,6 +401,7 @@ if __name__ == "__main__":
                              help='''Information of target storage media, choices are: \
                                  for emmc [all, spl, bootloader, controller, disk, partition, file, or a valid local directory/folder], \
                                  for memory: [all, total, available, percent, used, free, active, inactive, buffers, cached, shared]''')
+
     # kernel, dtb, rootfs, os, bus, device, sensor, connection)
 
     ############################################################################
@@ -445,6 +445,7 @@ if __name__ == "__main__":
                               action='store', choices=('no', 'rle'), \
                               help='Specify the coding of the written data')
     ############################################################################
+
     # flash commands
     # 'src_filename', 'tgt_filename', src_start_sector, tgt_start_sector, src_total_sectors
     ############################################################################

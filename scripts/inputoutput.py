@@ -616,15 +616,24 @@ class WebInputOutput(BaseInputOutput):
         """
         Overrides _read() => Download from host and uncompress
         """
-        try:
-            if self.mHandle:
-                # download from urllib.response
-                return self.mHandle.read(size) if (size > 0) else self.mHandle.read()
-        except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
-        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} download exception: {}'.format(type(self).__name__, err))
-            raise
+        retry = 3
+        while retry:
+            try:
+                if self.mHandle:
+                    # download from urllib.response
+                    return self.mHandle.read(size) if (size > 0) else self.mHandle.read()
+            except TypeError as err:
+                _logger.error('{} _open ignore type error: {}'.format(self.__class__, err))
+                break
+            except (urllib.error.URLError, urllib.error.HTTPError):
+                _logger.error('{} download exception: {}'.format(self.__class__, err))
+                raise
+            except (socket.timeout) as err:
+                _logger.error('{} download time out exception: {}'.format(self.__class__, err))
+                if retry > 1:
+                    retry -= 1
+                else:
+                    raise
         return 0
 
     def _open(self):

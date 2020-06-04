@@ -57,6 +57,7 @@ import array
 import binascii
 import base64
 import hashlib
+import platform
 import pyudev
 import socket
 import struct
@@ -65,6 +66,7 @@ import logging
 import pyqrcode
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+from defconfig import IsATargetBoard
 from inputoutput import BlockInputOutput, FileInputOutput, BaseInputOutput, WebInputOutput
 
 _logger = logging.getLogger(__name__)
@@ -306,37 +308,40 @@ class CopyBlockActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIOs = []
+        self.isSrcCharDev = False
 
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
-        # setup the input/output objects
-        # # if no chunksize specified, reset chunk_size to default 1MB, i.e. 1048576 bytes
-        if 'chunk_size' not in self.mParam or int(self.mParam['chunk_size']) < 0:
-            self.mParam['chunk_size'] = 1048576 # 1MB
+        # setup the chunksize for input/output objects
+        self.isSrcCharDev = stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode)
+        if ('chunk_size' in self.mParam and self.mParam['chunk_size'] > 0):
+            chunksize = self.mParam['chunk_size']
+        else:
+            # chunk_size in bytes default 1MB, i.e. 1048576
+            chunksize = 1048576 # 1MB
+            self.mParam['chunk_size'] = chunksize
 
         if all(s in self.mParam for s in ['src_filename', 'tgt_filename']):
-            if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode) and \
-                stat.S_ISBLK(os.stat(self.mParam['tgt_filename']).st_mode):
-                # special case where source is a char device and target is a block device,
-                # char dev don't have a total sector size, and is read only
-                # e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
-                self.mParam['chunk_size'] = 4096 #  self.mIOs[-1].getBlockSize()
-                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename'], 'rb'))
-                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
-                # so get src total sector from target device
-                self.mParam['src_total_sectors'] = -(-self.mIOs[-1].getFileSize() // int(self.mParam['chunk_size']))
-                self.mParam['src_start_sector'] = 0
-                self.mParam['tgt_start_sector'] = 0
-            else:
+            try:
                 # default mode is rb+
-                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['src_filename']))
-                # setup different size params
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename'], 'rb'))
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
                 filesize = self.mIOs[-1].getFileSize()
-                blksize = self.mIOs[-1].getBlockSize()
-                if (int(self.mParam['src_total_sectors']) == -1) or ('src_total_sectors' not in self.mParam):
-                    self.mParam['src_total_sectors'] = -(-filesize // blksize)
-                self.mIOs.append(BlockInputOutput(self.mParam['chunk_size'], self.mParam['tgt_filename'], 'wb+'))
+                if self.isSrcCharDev:
+                    # special case where source is a char device and target is a block device, e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
+                    # self.mIOs[-1].getBlockSize() => 4096
+                    blksize = chunksize
+                    self.mParam['src_start_sector'] = 0
+                    self.mParam['tgt_start_sector'] = 0
+                else:
+                    # setup different size params
+                    blksize = self.mIOs[-1].getBlockSize()
+                if ('src_total_sectors' not in self.mParam) or (self.mParam['src_total_sectors'] == -1):
+                    chunks, remainder = divmod(filesize, blksize)
+                    self.mParam['src_total_sectors'] = chunks + (0 if remainder == 0 else 1)
+            except Exception as ex:
+                raise IOError('Cannot create block inputoutput: {}'.format(ex))
         else:
             raise ValueError('preAction: Neither src nor tgt file specified')
 
@@ -346,21 +351,27 @@ class CopyBlockActionModeller(BaseActionModeller):
 
     def _mainAction(self):
         # copy specified address range from src file to target file
-        ret = False
-        if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
-            chunksize = int(self.mParam['chunk_size'])
-            blksize = self.mIOs[0].getBlockSize() # get block size from src dev
-            srcstart = int(self.mParam['src_start_sector']) * blksize
-            tgtstart = int(self.mParam['tgt_start_sector']) * blksize
-            totalbytes = int(self.mParam['src_total_sectors']) * blksize
-            self.mResult['total_size'] = totalbytes
-            # sector addresses of a very large file for looping
-            address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-            _logger.debug('{} total_size: {} block_size: {} list of addresses ({}) to copy: {}'.format(type(self).__name__, totalbytes, blksize, len(address), [addr for addr in address]))
-            if len(address) > 1:
-                for (srcaddr, tgtaddr) in address:
-                    self.checkInterruptAndExit()
-                    self.__copyChunk(srcaddr, tgtaddr, 1)
+        try:
+            if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576 # 1MB
+                if self.isSrcCharDev:
+                    blksize = chunksize
+                else:
+                    blksize = self.mIOs[0].getBlockSize()
+                srcstart = self.mParam['src_start_sector'] * blksize
+                tgtstart = self.mParam['tgt_start_sector'] * blksize
+                totalbytes = self.mParam['src_total_sectors'] * blksize
+                self.mResult['total_size'] = totalbytes
+                # sector addresses of a very large file for looping
+                address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
+                _logger.debug('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
+                if len(address) > 1:
+                    for (srcaddr, tgtaddr) in address:
+                        self.checkInterruptAndExit()
+                        self.__copyChunk(srcaddr, tgtaddr, 1)
+                else:
+                    self.__copyChunk(srcstart, tgtstart, totalbytes)
+                return True
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             ret = True
@@ -386,8 +397,55 @@ class CopyBlockActionModeller(BaseActionModeller):
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
-        parts = -(-totalbytes // chunksize) # int ceiling division
-        return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
+        chunks, remainder = divmod(totalbytes, chunksize)
+        parts = chunks + (0 if remainder == 0 else 1)
+        if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode):
+            return [(0, tgtstart + i*chunksize) for i in range(parts)]
+        else:
+            return [(srcstart+i*chunksize, tgtstart + i*chunksize) for i in range(parts)]
+
+
+
+class QueryMemActionModeller(BaseActionModeller):
+    """
+    Query Memory Action Model to query system information
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.mIO = None
+
+    def _preAction(self):
+        # setup the input output
+        if all(s in self.mParam for s in ['tgt_type', 'mem_type']) and \
+            self.mParam['tgt_type'] == 'mem' and \
+            self.mParam['mem_type'] in ['total', 'available', 'percent', 'used', \
+                                         'free', 'active', 'inactive', 'buffers', \
+                                         'cached', 'shared', 'all']:
+            return True
+        else:
+            raise ReferenceError('No Valid Params')
+        return False
+
+    def _mainAction(self):
+        # read the file, and return read lines
+        # TODO: should implement writing files in the future
+        try:
+            self.mIO = dict(psutil.virtual_memory()._asdict())
+            if self.mIO:
+                if self.mParam['mem_type'] == 'all':
+                    self.mResult.update(self.mIO)
+                    return True
+                else:
+                    if self.mParam['mem_type'] in self.mIO.keys():
+                        self.mResult[self.mParam['mem_type']] = self.mIO[self.mParam['mem_type']]
+                        return True
+                    else:
+                        raise IOError('Cannot get spefic system memory info: {}'.format(self.mParam['mem_type']))
+            raise IOError('Cannot get system memory info')
+        except Exception:
+            raise
+        return False
 
 
 
@@ -673,7 +731,7 @@ class WebDownloadActionModeller(BaseActionModeller):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
         # get memory information from the system
-        self.__meminfo = psutil.virtual_memory()
+        #self.__meminfo = psutil.virtual_memory()
 
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
@@ -724,31 +782,22 @@ class WebDownloadActionModeller(BaseActionModeller):
             else:
                 raise IOError('There is 0 Total Bytes to download')
 
-            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
-                # if available memory > 640MB, use python lzma module
+            # if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
                 _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
                 if len(address) > 1:
                     for count, (srcaddr, tgtaddr) in enumerate(address):
                         self.checkInterruptAndExit()
                         self.__copyChunk(srcaddr, tgtaddr, 1, wgetcmd, decompcmd, ddcmd)
-                        ret = True
                 else:
                     self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
-                    return True
             else:
                 # otherwise use subprocess's Popen
                 self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
-                return True
-
+            return True
         except Exception as ex:
             _logger.error('WebDownload main-action exception: {}'.format(ex))
             raise
-
-        # close the block device
-        for ioobj in self.mIOs:
-            ioobj._close()
-        del self.mIOs
-        return ret
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
@@ -790,7 +839,8 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
 
         try:
-            if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+            # if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
+            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
                 # read src and write to the target
                 data = self.mIOs[0].Read(srcaddr, numChunks)
                 self.mResult['bytes_read'] += len(data)
@@ -801,6 +851,8 @@ class WebDownloadActionModeller(BaseActionModeller):
                     self.mResult['bytes_written'] += written
                 del data # hopefully this would clear the write data buffer
             else:
+                timeout_counter = 0
+                last_written =  0
                 fd = open('/tmp/progress.log', 'w+')
                 _logger.info('copyChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
                 pwget = subprocess.Popen(
@@ -833,9 +885,18 @@ class WebDownloadActionModeller(BaseActionModeller):
                     try:
                         out, err = ptee.communicate(timeout=1)
                         break
-                    except subprocess.TimeoutExpired:
-                        read_stream(fd)
-                        continue
+                    except subprocess.TimeoutExpired as ex:
+                        if timeout_counter > 180: # timed out after 3 minutes
+                            self.__kill_subproc([pwget, pxz, pdd, ptee])
+                            raise ex
+                        else:
+                            _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
+                            if read_stream(fd) and last_written != self.mResult['bytes_written']:
+                                last_written = self.mResult['bytes_written']
+                                timeout_counter = 0
+                            else:
+                                timeout_counter += 1
+                            continue
                     except:
                         read_stream(fd)
                         fd.close()
@@ -845,6 +906,12 @@ class WebDownloadActionModeller(BaseActionModeller):
 
         except Exception:
             raise
+
+    def __kill_subproc(self, procs):
+        for proc in procs:
+            for cproc in proc.children(recursive=True):
+                cproc.kill()
+            proc.kill()
 
 
 
@@ -861,7 +928,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
         self.mResult['lines_written'] = 0
         if all(s in self.mParam for s in ['host_name', 'src_directory']):
             # parse host name
-            if 'host_name' in self.mParam and self.mParam['host_name'].lower().startswith('http'):
+            if ('host_name' in self.mParam) and self.mParam['host_name'].lower().startswith('http'):
                 self.mWebHost = self.mParam['host_name']
             else:
                 self.mWebHost = 'http://rescue.technexion.net'
@@ -1082,9 +1149,13 @@ class ConfigNicActionModeller(BaseActionModeller):
         try:
             # doesn't even have to be reachable, so use DNS
             s.connect(('8.8.8.8', 53))
+            with open('/etc/resolv.conf', 'a') as f:
+                f.write('nameserver 8.8.8.8\n')
             IP = s.getsockname()[0]
         except:
-            IP = '127.0.0.1'
+            with open('/etc/hosts', 'a') as f:
+                f.write('203.75.190.59\trescue.technexion.net\n')
+            IP = None
         finally:
             s.close()
         return IP
@@ -1171,14 +1242,15 @@ class ConfigNicActionModeller(BaseActionModeller):
             else:
                 return False
 
-            _logger.info('{} preAction: ioctl cmd: {:#x} arg: {}'.format(type(self).__name__, self.mIoctlCmd, self.mIoctlArg))
+            _logger.info('{} _preAction: ioctl cmd: {:#x} arg: {}'.format(type(self).__name__, self.mIoctlCmd, self.mIoctlArg))
             return True
         return False
 
     def _mainAction(self):
         if self.mParam['config_id'] == 'ip':
             self.mResult['ip'] = self.getNetIP()
-            return True
+            if self.mResult['ip'] is not None:
+                return True
         else:
             try:
                 # do ioctl to get/set NIC related information
@@ -1187,7 +1259,8 @@ class ConfigNicActionModeller(BaseActionModeller):
                 _logger.info('{} fcntl.ioctl() returned: {}'.format(type(self).__name__, self.mResult['retcode']))
                 return True
             except Exception as ex:
-                raise ConnectionError('mainAction error: {}'.format(ex))
+                _logger.error('ConfigNic Exception: {}'.format(ex))
+                raise
         return False
 
     def _postAction(self):
@@ -1232,9 +1305,10 @@ class ConfigNicActionModeller(BaseActionModeller):
                 return True
             elif self.mParam['config_id'] == 'ifconf':
                 max_bytes_out, names_address_out = struct.unpack('iL', self.mResult['retcode'])
+                _logger.info('{}: ifconfig: names:{} max_bytes:{} names_addr:{}'.format(type(self).__name__, self.mNames.tostring(), max_bytes_out, names_address_out))
                 namestr = self.mNames.tostring()
                 self.mResult['iflist'] = {}
-                for i in range(0, max_bytes_out, 40):
+                for i in range(0, max_bytes_out, 40 if platform.machine() == 'aarch64' else 32): # arm:32, arm64:40
                     name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8') # ifr_name
                     ip = []
                     for netaddr in namestr[ i+20 : i+24 ]: # ifr_addr
@@ -1293,7 +1367,7 @@ class DriverActionModeller(BaseActionModeller):
                         self.mSubProcCmd.extend(['g_multi', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
                 elif self.mParam['cmd'] == 'disconnect':
                     self.mSubProcCmd.extend(['g_multi'])
-            _logger.info('_preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
+            _logger.info('preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
             return True
         return False
 
@@ -1491,6 +1565,12 @@ if __name__ == "__main__":
             model = CopyBlockActionModeller()
             actparam = {'src_filename': './ubuntu-16.04.xz', 'src_start_sector': 0, 'src_total_sectors': -1, \
                         'tgt_filename': './ubuntu.img', 'tgt_start_sector': 0}
+            model.setActionParam(actparam)
+            model.performAction()
+        elif sys.argv[1] == 'erase':
+            model = CopyBlockActionModeller()
+            actparam = {'src_filename': '/dev/zero', \
+                        'tgt_filename': '/dev/mmcblk2boot0'}
             model.setActionParam(actparam)
             model.performAction()
         elif sys.argv[1] == 'qmodel':
