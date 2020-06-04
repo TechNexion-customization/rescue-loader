@@ -433,8 +433,6 @@ class InfoOperationHandler(BaseOperationHandler):
                     # check for local_fs, which client will send as hostname()
                     self.mActionParam['local_fs'] = v # local file system
                 # location options
-                elif k==self.mArgs[1] and v is not None:
-                    self.mActionParam['mem_type'] = v
                 elif k==self.mArgs[1] and v=='spl':
                     self.mActionModellers['dst_pos'] = 2 # sector 2 for spl
                 elif k==self.mArgs[1] and v=='bootloader':
@@ -458,6 +456,12 @@ class InfoOperationHandler(BaseOperationHandler):
                     for host in self.mHosts:
                         if host['name'] in OpParams['target']:
                             self.mActionParam['host_dir'] = host['path']
+                elif k==self.mArgs[1] and v.endswith('/'):
+                    self.mActionParam['src_directory'] = v # local directory
+                elif k==self.mArgs[1] and v in ['total', 'available', 'percent', 'used', \
+                                         'free', 'active', 'inactive', 'buffers', \
+                                         'cached', 'shared', 'all']:
+                    self.mActionParam['mem_type'] = v
 
             if 'tgt_type' in self.mActionParam and 'dst_pos' not in self.mActionParam:
                 self.mActionParam['dst_pos'] = -1

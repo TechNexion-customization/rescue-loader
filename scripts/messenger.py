@@ -158,7 +158,6 @@ class DbusMessenger(BaseMessenger, DBusSrvObject):
         # gobject.threads_init() # Must Do this first if use gobject.MainLoop()
         # GLib_threads_init() # Must Do this first if use GLib.MainLoop()
         DBusMainLoop(set_as_default=True)
-
         self.mCbExecHandler = cbExecHdl
         self.mCbStatusHandler = cbStatusHdl
         self.mCbResultHandler = cbResultHdl

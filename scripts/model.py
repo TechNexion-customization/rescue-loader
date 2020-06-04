@@ -375,7 +375,7 @@ class CopyBlockActionModeller(BaseActionModeller):
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             ret = True
-        else:
+        except:
             raise ValueError('mainAction: No specified src/tgt start sector, nor total sectors')
 
         # close the block device
@@ -543,7 +543,7 @@ class QueryFileActionModeller(BaseActionModeller):
                 data = self.mIO.Read(0)
                 self.mResult['lines_read'] = len(data)
         _logger.debug('{} read data: {}'.format(type(self).__name__, data))
-        self.mResult.update({'content': data})
+        self.mResult.update({'file_content': data})
         return True if self.mResult['lines_read'] != 0 else False
 
     def _postAction(self):
@@ -552,7 +552,7 @@ class QueryFileActionModeller(BaseActionModeller):
             # if there is a regular express pattern passed in, return the
             # found regular express pattern
             p = re.compile(self.mParam['re_pattern'], re.IGNORECASE)
-            for line in self.mResult['content']:
+            for line in self.mResult['file_content']:
                 m = p.match(line)
                 if m:
                     _logger.debug('{} from pattern {} found_match: {}'.format(type(self).__name__, self.mParam['re_pattern'], m.groups()))

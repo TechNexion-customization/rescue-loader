@@ -56,7 +56,6 @@
 #
 # ============================================================
 
-import resource
 import logging
 import time
 import queue
@@ -156,7 +155,7 @@ class OpController(object):
         super().__init__()
         # initialize a DbusMessenger for sending and receiving messages
         self.mMsger = []
-        self.mSetting = conf 
+        self.mSetting = conf
         setting = conf.getSettings(flatten=True)
         setting.update({'IS_SERVER': True})
 
@@ -354,33 +353,14 @@ class OpController(object):
                     ret[k if len(key) == 0 else key+'|'+k] = str(v)
         return ret
 
-
-
 def opcontrol():
     conf = DefConfig()
     conf.loadConfig("/etc/installer.xml")
     srv = OpController(conf)
     exit(srv.run())
 
-def memory_limit():
-    soft, hard = resource.getrlimit(resource.RLIMIT_DATA)
-    resource.setrlimit(resource.RLIMIT_DATA, (get_memory() * 1024 / 2, hard))
-    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 2, hard))
-
-def get_memory():
-    with open('/proc/meminfo', 'r') as mem:
-        free_memory = 0
-        for i in mem:
-            sline = i.split()
-            if str(sline[0]) in ('MemFree:', 'Buffers:', 'Cached:'):
-                free_memory += int(sline[1])
-    return free_memory
-
 if __name__ == "__main__":
-    memory_limit() # limits the maximum memory usage
     try:
         opcontrol()
-    except MemoryError:
-        _logger.error('\n\n\ERROR: Memory Exception\n')
+    except:
         exit(1)

@@ -661,20 +661,6 @@ class GuiViewer(QObject, BaseViewer):
             return "serial"
         return None
 
-    def getRemoteHostUrl(self):
-        if self.mDefConfig:
-            prot = self.mDefConfig.getSettings('host_protocol')
-            host = self.mDefConfig.getSettings('host_name')
-            if prot and host:
-                return '{}://{}'.format(prot['host_protocol'], host['host_name'])
-        return None
-
-    def getRemoteHostDir(self):
-        hostdir = None
-        if self.mDefConfig:
-            hostdir = self.mDefConfig.getSettings('host_dir')
-        return '/{}/'.format(hostdir['host_dir']) if hostdir else None
-
     def getRemoteHostUrls(self):
         if self.mDefConfig:
             conf = self.mDefConfig.getSettings('rescue')
@@ -920,6 +906,24 @@ class GuiViewer(QObject, BaseViewer):
     ###########################################################################
     # GuiViewer flow control related
     ###########################################################################
+    def setResponseSlot(self, senderSlot):
+        """
+        setup responseSignal to connect back to sender's resultSlot() allowing
+        results to go back to sender when response comes back from QtDBus
+        called by QProcessSlot's processSlot() slot
+        """
+        try:
+            # try to disconnect first, then connect
+            self.responseSignal.disconnect(senderSlot)
+        except:
+            pass
+        try:
+            self.responseSignal.connect(senderSlot)
+            _logger.info("connect responseSignal to {}.resultSlot.".format(senderSlot))
+        except:
+            _logger.warning("connect responseSignal to {}.resultSlot failed".format(senderSlot))
+            raise
+
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
@@ -1046,7 +1050,7 @@ class GuiViewer(QObject, BaseViewer):
         # if the new self.mCmd match previously send command, don't append to dispatch queue
         for q in self.mDispatchQ:
             if dict(q.mMsgCmd, **self.mCmd) == q.mMsgCmd:
-                _logger.warn("cmd already exist in queue: {}".format(self.mCmd))
+                _logger.warn("cmd already exist in queue: {}, old sender: {}, new sender: {}".format(self.mCmd, q.mSender.objectName(), self.sender().objectName()))
                 return False
         _logger.warn("send and append cmd to queue: {}".format(self.mCmd))
         self.mDispatchQ.append(MsgDispatcher(self, mgr, self.sender(), self.mCmd))
