@@ -2593,7 +2593,7 @@ class processErrorSlot(QProcessSlot):
     """
     Handles all errors
     """
-    userinputs = pyqtSignal(dict)
+    user_response = pyqtSignal(dict)
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -2609,19 +2609,12 @@ class processErrorSlot(QProcessSlot):
         """
         if not self.mMsgBox:
             self.mMsgBox = self._findChildWidget('msgbox')
-        if hasattr(self.sender(), 'processSlot'):
-            # connect signal to sender's processSlot
-            self.userinputs.connect(self.sender().processSlot)
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
         self.mErrors.pop('ask', None)
         self.mDisplay = False if ('NoShow' in inputs and inputs['NoShow']) else True
         self.__handleError()
         self.mErrors.clear()
-        try:
-            self.userinputs.disconnect()
-        except:
-            pass
 
     def __handleError(self):
         # Display appropriate messagebox
@@ -2797,17 +2790,11 @@ class processErrorSlot(QProcessSlot):
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
                 if ret == QtGui.QDialog.Accepted:
-                    try:
-                        self.mErrors.update({'reject': False, 'accept': True})
-                        self.userinputs.emit(self.mErrors)
-                    except:
-                        raise
+                    self.mErrors.update({'reject': False, 'accept': True})
+                    self.__returnResponse(self.mErrors)
                 elif ret == QtGui.QDialog.Rejected:
-                    try:
-                        self.mErrors.update({'reject': True, 'accept': False})
-                        self.userinputs.emit(self.mErrors)
-                    except:
-                        raise
+                    self.mErrors.update({'reject': True, 'accept': False})
+                    self.__returnResponse(self.mErrors)
             elif self.mAsk == 'quit':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
@@ -2829,14 +2816,16 @@ class processErrorSlot(QProcessSlot):
 
     def __returnResponse(self, response):
         try:
-            self.success.disconnect()
+            self.user_response.disconnect()
             # disconnect response signal first
         except:
             _logger.debug('{}: disconnect processError success signal first'.format(self.objectName()))
-            if isinstance(self.sender(), QProcessSlot) and isinstance(response, dict):
-                self.success.connect(getattr(self.sender(), 'processSlot'))
-                self.success.emit(response)
-                self.success.disconnect()
+
+        if hasattr(self.sender(), 'processSlot') and isinstance(response, dict):
+            # connect signal to sender's processSlot
+            self.user_response.connect(self.sender().processSlot)
+            self.user_response.emit(response)
+            self.user_response.disconnect()
 
 
 
