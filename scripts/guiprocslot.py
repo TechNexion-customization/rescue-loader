@@ -778,6 +778,7 @@ class crawlWebSlot(QProcessSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
+        self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
         self.mInputs = {}
         self.mDetects = {}
         self.mResults = []
@@ -789,7 +790,9 @@ class crawlWebSlot(QProcessSlot):
         self.mHostName = None
         self.mRemoteDir = None
         self.mRescueChecked = False
-        self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
+        self.mHasServer = False
+        self.mHasStorage = False
+        self.mHasFoundUrls = False
 
     def process(self, inputs):
         """
@@ -799,7 +802,6 @@ class crawlWebSlot(QProcessSlot):
 
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'detectDevice':
-            hasServer = False
             if isinstance(inputs, list):
                 if all(isinstance(item, dict) for item in inputs):
                     self.mHosts.clear()
@@ -816,7 +818,8 @@ class crawlWebSlot(QProcessSlot):
                                 self.mHostName = url.geturl()
                             self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
                             _logger.info('{}: first connectable hostname: {} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
-                            hasServer = True
+                            self.mHasServer = True
+                            self.__checkInputs()
                             break
 
                 elif all(isinstance(item, tuple) for item in inputs):
@@ -827,11 +830,9 @@ class crawlWebSlot(QProcessSlot):
                         QtCore.QTimer.singleShot(1000, self.__checkNetworkError)
                         self.mErrorFlag = True
 
-            if hasServer:
-                self.__checkInputs()
-
         # scanStorage may be done before a valid host is found.
         if self.sender().objectName() == 'scanStorage':
+            self.mHasStorage = True
             self.__checkInputs()
 
     def __checkInputs(self):
@@ -843,9 +844,10 @@ class crawlWebSlot(QProcessSlot):
         if 'location' in self.mInputs and len(self.mInputs['location']) > 0 and \
            'target' in self.mInputs and len(self.mInputs['target']) > 0:
             # start the crawl process
-            _logger.info('{}: start the crawl process: {}'.format(self.objectName(), self.mInputs))
-            self._findChildWidget('waitingIndicator').show()
-            self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
+            if self.mHasStorage and self.mHasServer and not self.mHasFoundUrls:
+                _logger.info('{}: start the crawl process: {}'.format(self.objectName(), self.mInputs))
+                self._findChildWidget('waitingIndicator').show()
+                self.__crawlUrl(self.mInputs) # e.g. /pico-imx7/pi-070/
 
     def __crawlUrl(self, inputs):
         params = {}
@@ -959,6 +961,7 @@ class crawlWebSlot(QProcessSlot):
             # if found suitable xz files, send them on to the next process slot
             # but check for rescue update first.
             if not self.mRescueChecked:
+                self.mHasFoundUrls = True
                 self.__checkForRescueUpdate()
                 self.success.emit(self.mResults)
             self.fail.emit({'NoShow': True})
