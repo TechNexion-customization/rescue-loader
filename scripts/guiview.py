@@ -913,11 +913,6 @@ class GuiViewer(QObject, BaseViewer):
         called by QProcessSlot's processSlot() slot
         """
         try:
-            # try to disconnect first, then connect
-            self.responseSignal.disconnect(senderSlot)
-        except:
-            pass
-        try:
             self.responseSignal.connect(senderSlot)
             _logger.info("connect responseSignal to {}.resultSlot.".format(senderSlot))
         except:

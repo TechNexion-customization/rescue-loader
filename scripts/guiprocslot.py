@@ -311,6 +311,12 @@ class QProcessSlot(QtGui.QWidget):
         _logger.info('{}: queue cmd request: {} remaining cmds: {}'.format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
         self.request.emit(cmd)
 
+    def _setupUserInputResponse(self):
+        if self.mViewer and hasattr(self.mViewer, "setResponseSlot"):
+            # call the viewer's setResponseSlot API to setup the callback to self.resultSlot()
+            self.mViewer.setResponseSlot(self.resultSlot)
+            _logger.debug('{}: setup GuiViewer.responseSignal() to connect to {}\n'.format(self.objectName(), self.resultSlot))
+
     @pyqtSlot()
     @pyqtSlot(bool)
     @pyqtSlot(int)
@@ -336,9 +342,6 @@ class QProcessSlot(QtGui.QWidget):
                 _logger.debug('{}: disconnect request signal first'.format(self.objectName()))
 
             self.mViewer = inputs['viewer']
-            # call the viewer's setResponseSlot API to setup the callback to self.resultSlot()
-            self.mViewer.setResponseSlot(self.resultSlot)
-            _logger.debug('{}: initialised: Setup GuiViewer.responseSignal() to connect to {}'.format(self.objectName(), self.resultSlot))
             self.request.connect(self.mViewer.request)
             _logger.debug('{}: initialised: Setup {}.request signal to GuiViewer.request()'.format(self.objectName(), self.sender().objectName()))
         self.process(inputs)
