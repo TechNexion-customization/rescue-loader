@@ -1046,7 +1046,7 @@
   <connection>
    <sender>scanStorage</sender>
    <signal>success()</signal>
-   <receiver>chooseStorage</receiver>
+   <receiver>detectDevice</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1062,7 +1062,7 @@
   <connection>
    <sender>scanStorage</sender>
    <signal>success()</signal>
-   <receiver>crawlWeb</receiver>
+   <receiver>chooseStorage</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1122,6 +1122,22 @@
      <y>14</y>
     </hint>
    </hints>
+  </connection>
+  <connection>
+    <sender>scanPartition</sender>
+    <signal>success()</signal>
+    <receiver>postDownload</receiver>
+    <slot>processSlot()</slot>
+    <hints>
+      <hint type="sourcelabel">
+        <x>49</x>
+        <y>14</y>
+      </hint>
+      <hint type="destinationlabel">
+        <x>49</x>
+        <y>14</y>
+      </hint>
+    </hints>
   </connection>
   <connection>
    <sender>scanPartition</sender>
