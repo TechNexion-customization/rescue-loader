@@ -442,8 +442,8 @@ class detectDeviceSlot(QProcessSlot):
         self.mCpu = None
         self.mForm = None
         self.mBaseboard = None
-        self.mNicErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True}
-        self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True}
+        self.mNicErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True, 'Show': True}
+        self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True, 'Show': True}
         self.mSentFlag = False
         self.mIP = None
         self.mTgtIP = None
@@ -608,7 +608,7 @@ class detectDeviceSlot(QProcessSlot):
                                 # 3b-3. Check NIC connection is running (flag says IFF_RUNNING?)
                                 if 'RUNNING' in results['state']:
                                     # 3b-4. when all is running, check to see if we can connect to our rescue server.
-                                    self.mNicErr.update({'NoCable': False, 'NoShow': True})
+                                    self.mNicErr.update({'NoCable': False, 'Show': False})
                                     self.__sendError(self.mNicErr)
                                     self.mNIC = results['target'][:]
                                     # check 4: the DNS server
@@ -685,7 +685,7 @@ class detectDeviceSlot(QProcessSlot):
             if not self.mSentFlag:
                 _logger.warn('{}: Success and emit: {} {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mTgtMac))
                 self.success.emit({'cpu': self.mCpu, 'form': self.mForm, 'board':self.mBaseboard, 'mac': self.mTgtMac if self.mTgtMac else ''})
-                self.__sendError({'NoShow': True})
+                self.__sendError({'Show': False})
                 self.mSentFlag = True
                 # successfully detect a technexion rescue server, but keep
                 # checking nic/net every 3 minutes to update the alive list
@@ -751,7 +751,7 @@ class detectDeviceSlot(QProcessSlot):
         self.probed.emit(self.mHosts)
         if any(('alive' in host.keys() and host['alive']) for host in self.mHosts):
             # update dialogbox no matter SentFlag already set or not
-            self.mNetErr.update({'NoServer': False, 'NoShow': True})
+            self.mNetErr.update({'NoServer': False, 'Show': False})
             self.__sendError(self.mNetErr)
         elif all(('alive' in host.keys() and not host['alive']) for host in self.mHosts):
             # the system cannot connect to all our rescue servers, retry in 1s
@@ -967,7 +967,7 @@ class crawlWebSlot(QProcessSlot):
                 self.mHasFoundUrls = True
                 self.__checkForRescueUpdate()
                 self.success.emit(self.mResults)
-            self.fail.emit({'NoShow': True})
+            self.fail.emit({'Show': False})
 
     def __checkForRescueUpdate(self):
         if not self.mRescueChecked:
@@ -1097,7 +1097,7 @@ class crawlLocalfsSlot(QProcessSlot):
             _logger.debug('{}: validate result: {}'.format(self.objectName(), self.mResults))
             # if found suitable xz files, send them on to the next process slot
             self.success.emit(self.mResults)
-            self.fail.emit({'NoShow': True})
+            self.fail.emit({'Show': False})
             return
         else:
             # Did not find any suitable xz file on mounted partitions
@@ -1211,7 +1211,7 @@ class scanStorageSlot(QProcessSlot):
             self._determineTargetDisk()
             # emit results to the next QProcessSlot, i.e. chooseStorage, and crawlLocalfs
             self.success.emit(self.mResults)
-            self.fail.emit({'NoShow': True})
+            self.fail.emit({'Show': False})
         else:
             # no suitable storage found
             _logger.error('{}: Cannot find available storage!!! Insert a sdcard...'.format(self.objectName()))
@@ -1285,7 +1285,7 @@ class scanPartitionSlot(QProcessSlot):
         if isinstance(self.mResults, dict) and len(self.mResults):
             # emit results to the next QProcessSlot, i.e. crawlLocalfs
             self.success.emit(self.mResults)
-            self.fail.emit({'NoShow': True})
+            self.fail.emit({'Show': False})
         else:
             self.fail.emit({'NoPartition': True})
             # No need to scan for mounted partition again
@@ -2160,7 +2160,7 @@ class downloadImageSlot(QProcessSlot):
             elif all(isinstance(item, tuple) for item in inputs):
                 # detectDevice errors, but we don't do anything about it.
                 self.mDetects.update(dict(inputs))
-                self.mDetects.pop('NoShow', None)
+                self.mDetects.pop('Show', None)
 
         if self.sender().objectName() == 'processError':
             if isinstance(inputs, dict) and 'retry' in inputs.keys():
@@ -2273,7 +2273,7 @@ class downloadImageSlot(QProcessSlot):
                 self.mPick.update({'url': self.mFileUrl, 'flashed': True, 'bytes_written': int(self.mResults['bytes_written'])})
                 _logger.debug('{}: successfully flashed to emmc and emit signal: {}'.format(self.objectName(), self.mPick))
                 self.success.emit(self.mPick)
-                self.fail.emit({'NoShow': True})
+                self.fail.emit({'Show': False})
             else:
                 # succeed but not all bytes written, something wrong with network connection
                 # or failed programming the eMMC
@@ -2612,7 +2612,7 @@ class processErrorSlot(QProcessSlot):
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
         self.mErrors.pop('ask', None)
-        self.mDisplay = False if ('NoShow' in inputs and inputs['NoShow']) else True
+        self.mDisplay = inputs['Show'] if 'Show' in inputs else True
         self.__handleError()
         self.mErrors.clear()
 
