@@ -640,12 +640,21 @@ class ConnectOperationHandler(BaseOperationHandler):
             if 'src_filename' in OpParams and OpParams['src_filename'] != '':
                 self.mActionParam.update({'src_filename': OpParams['src_filename']})
 
+            if OpParams['type'] in ['serial', 'serialstorage', 'multi'] and \
+                'mac_addr' in OpParams and len(OpParams['mac_addr'].split(':')) == 6:
+                self.mActionParam.update({'mac_addr': OpParams['mac_addr']})
+
         # verify the ActionParam to pass to modeller
-        if all(s in self.mActionParam.keys() for s in ['cmd', 'type']):
+        if all(s in self.mActionParam for s in ['cmd', 'type']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
-            return True
-        else:
-            return False
+            if 'src_filename' in self.mActionParam:
+                if 'mac_addr' in self.mActionParam:
+                    if self.mActionParam['type'] in ['serial', 'serialstorage', 'multi']:
+                        return True
+                    else:
+                        return False
+                return True
+        return False
 
     def performOperation(self, OpParams):
         """

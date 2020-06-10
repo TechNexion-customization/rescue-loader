@@ -1340,6 +1340,7 @@ class DriverActionModeller(BaseActionModeller):
         super().__init__()
         self.mResult['retcode'] = 0
         self.mSubProcCmd = []
+        self.mMacAddr = '00:00:00:00:00:00' # '00:1F:7B:B6:AB:BA'
 
     def _preAction(self):
         if all(s in self.mParam for s in ['cmd', 'type']):
@@ -1352,19 +1353,32 @@ class DriverActionModeller(BaseActionModeller):
             elif self.mParam['type'] == 'storage':
                 if self.mParam['cmd'] == 'connect':
                     if 'src_filename' in self.mParam:
-                        self.mSubProcCmd.extend(['g_mass_storage', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                        self.mSubProcCmd.extend(['g_mass_storage', \
+                                'file={}'.format(self.mParam['src_filename']), \
+                                'stall=0', 'removable=1'])
                 elif self.mParam['cmd'] == 'disconnect':
                     self.mSubProcCmd.extend(['g_mass_storage'])
             elif self.mParam['type'] == 'serialstorage':
                 if self.mParam['cmd'] == 'connect':
                     if 'src_filename' in self.mParam:
-                        self.mSubProcCmd.extend(['g_acm_ms', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                        self.mSubProcCmd.extend(['g_acm_ms', \
+                                'file={}'.format(self.mParam['src_filename']), \
+                                'stall=0', \
+                                'removable=1', \
+                                'iSerialNumber={}'.format(self.mParam['mac_addr'] if 'mac_addr' in self.mParam else self.mMacAddr), \
+                                'iManufacturer=TechNexion'])
                 elif self.mParam['cmd'] == 'disconnect':
                     self.mSubProcCmd.extend(['g_acm_ms'])
             elif self.mParam['type'] == 'multi':
                 if self.mParam['cmd'] == 'connect':
                     if 'src_filename' in self.mParam:
-                        self.mSubProcCmd.extend(['g_multi', 'file={}'.format(self.mParam['src_filename']), 'stall=0', 'removable=1'])
+                        self.mSubProcCmd.extend(['g_multi', \
+                                'file={}'.format(self.mParam['src_filename']), \
+                                'stall=0', \
+                                'removable=1', \
+                                'iSerialNumber={}'.format(self.mParam['mac_addr'] if 'mac_addr' in self.mParam else self.mMacAddr), \
+                                'iManufacturer=TechNexion', \
+                                'dev_addr={}'.format(self.mParam['mac_addr'] if 'mac_addr' in self.mParam else self.mMacAddr)])
                 elif self.mParam['cmd'] == 'disconnect':
                     self.mSubProcCmd.extend(['g_multi'])
             _logger.info('preAction: subprocess cmd: {}'.format(self.mSubProcCmd))
