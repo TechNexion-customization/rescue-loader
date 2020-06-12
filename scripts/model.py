@@ -1147,6 +1147,13 @@ class ConfigNicActionModeller(BaseActionModeller):
         self.mIoctlArg = struct.pack('256s', b'\0')
         self.mNames = array.array('B', b'\0' * 4096)
 
+    def getHostIPByName(self):
+        try:
+            IP = socket.gethostbyname(self.mParam['target'])
+        except:
+            IP = None
+        return IP
+
     def getNetIP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -1242,6 +1249,8 @@ class ConfigNicActionModeller(BaseActionModeller):
                 self.mIoctlCmd = 0x8934 # SIOCSIFPFLAGS
             elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'ip':
                 return True
+            elif self.mParam['config_action'] == 'get' and self.mParam['config_id'] == 'dns':
+                return True
             else:
                 return False
 
@@ -1250,7 +1259,11 @@ class ConfigNicActionModeller(BaseActionModeller):
         return False
 
     def _mainAction(self):
-        if self.mParam['config_id'] == 'ip':
+        if self.mParam['config_id'] == 'dns' and len(self.mParam['target']) > 0:
+            self.mResult['host_ip'] = self.getHostIPByName()
+            if self.mResult['host_ip'] is not None:
+                return True
+        elif self.mParam['config_id'] == 'ip':
             self.mResult['ip'] = self.getNetIP()
             if self.mResult['ip'] is not None:
                 return True
@@ -1328,6 +1341,8 @@ class ConfigNicActionModeller(BaseActionModeller):
                 self.mResult['ifname'], macaddr = struct.unpack('16s8s232x', self.mResult['retcode'])
                 self.mResult['hwaddr'] = "".join(["%02x:" % ch for ch in macaddr[2:]])[:-1]
                 _logger.info('ifname: {} mac: {}'.format(self.mResult['ifname'], self.mResult['hwaddr']))
+                return True
+            elif self.mParam['config_id'] == 'dns':
                 return True
             elif self.mParam['config_id'] == 'ip':
                 return True

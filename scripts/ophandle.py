@@ -432,6 +432,9 @@ class InfoOperationHandler(BaseOperationHandler):
                 elif k==self.mArgs[0] and v == socket.gethostname():
                     # check for local_fs, which client will send as hostname()
                     self.mActionParam['local_fs'] = v # local file system
+                elif k==self.mArgs[0] and v != socket.gethostname() and \
+                     'msger_type' in OpParams and OpParams['msger_type'] == 'serial':
+                    self.mActionParam['local_fs'] = v
                 # location options
                 elif k==self.mArgs[1] and v=='spl':
                     self.mActionModellers['dst_pos'] = 2 # sector 2 for spl

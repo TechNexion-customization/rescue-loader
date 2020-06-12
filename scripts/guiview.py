@@ -564,7 +564,7 @@ class MsgDispatcher(QObject):
     def matchAndSend(self, respMsg):
         #if (set(respMsg.items()) & set(self.mMsgCmd.items())) == set(respMsg.items()):
         if dict(respMsg, **self.mMsgCmd) == respMsg:
-            _logger.warn('signal response to GUI {}: {}'.format(self.mSender.Name(), respMsg))
+            _logger.info('signal response to {}: {}'.format(self.mSender.Name(), respMsg))
             # dict of cmd and results is the same as results, means cmd is already in results
             self.respSignal.emit(respMsg)
 
@@ -621,7 +621,7 @@ class GuiViewer(QObject, BaseViewer):
             self.__parseConf(self.mConfDict['gui_viewer'][orient])
 
         # setup DBus Messenger after all GUI components are setup
-        self.__setupMsger()
+        self.setupMsger('dbus')
         # emit initialize signal to UI components which are setup to receive them
         self.__emitInitSignal()
         # used to sequentialize QProcessSlot's request
@@ -632,25 +632,33 @@ class GuiViewer(QObject, BaseViewer):
             mgr.stop()
             QtCore.QCoreApplication.instance().quit()
 
-    def __setupMsger(self):
+    def setupMsger(self, type='dbus'):
         """
         get the DefConfig, and create mMsger as the dbus client with the root widget
         and self.response callback function
         """
         conf = self.mDefConfig.getSettings(flatten=True)
-        try:
-            if not IsATargetBoard():
-                _logger.info('add SerialMessager')
-                self.mMsger.append(SerialMessenger(conf, self.response))
-                self.mMsger[-1].run()
-        except Exception as ex:
-            _logger.error('Cannot start a serial messenger. Error:{}'.format(ex))
-        _logger.info('add QtDbusMessenger')
-        self.mMsger.append(QtDbusMessenger(conf, self.mGuiRootWidget, self.response))
+        if type == 'serial':
+            try:
+                if not IsATargetBoard():
+                    _logger.warn('add SerialMessager')
+                    self.mMsger.append(SerialMessenger(conf, self.response))
+                    self.mMsger[-1].run()
+            except Exception as ex:
+                _logger.error('Cannot start a serial messenger. Error:{}'.format(ex))
+        elif type == 'dbus':
+            _logger.warn('add QtDbusMessenger')
+            self.mMsger.append(QtDbusMessenger(conf, self.mGuiRootWidget, self.response))
 
     def checkDbusConn(self):
         for mgr in self.mMsger:
             if isinstance(mgr, QtDbusMessenger):
+                return mgr.hasValidConn()
+        return False
+
+    def checkSerialConn(self):
+        for mgr in self.mMsger:
+            if isinstance(mgr, SerialMessenger):
                 return mgr.hasValidConn()
         return False
 
@@ -1045,9 +1053,9 @@ class GuiViewer(QObject, BaseViewer):
         # if the new self.mCmd match previously send command, don't append to dispatch queue
         for q in self.mDispatchQ:
             if dict(q.mMsgCmd, **self.mCmd) == q.mMsgCmd:
-                _logger.warn("cmd already exist in queue: {}, old sender: {}, new sender: {}".format(self.mCmd, q.mSender.objectName(), self.sender().objectName()))
+                _logger.debug("cmd already exist in queue: {}, old sender: {}, new sender: {}".format(self.mCmd, q.mSender.objectName(), self.sender().objectName()))
                 return False
-        _logger.warn("send and append cmd to queue: {}".format(self.mCmd))
+        _logger.debug("send and append cmd to queue: {}".format(self.mCmd))
         self.mDispatchQ.append(MsgDispatcher(self, mgr, self.sender(), self.mCmd))
         return True
 

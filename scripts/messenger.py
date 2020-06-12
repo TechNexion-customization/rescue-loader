@@ -533,6 +533,11 @@ class SerialMessenger(BaseMessenger):
             self.mReaderThread.close()
             self.mReaderThread.join()
 
+    def hasValidConn(self):
+        if self.mSerial:
+            return True
+        return False
+
     def sendMsg(self, msg):
         """
         override sendMsg()
