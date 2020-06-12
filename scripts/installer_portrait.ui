@@ -708,7 +708,27 @@
     </rect>
    </property>
   </widget>
+  <widget class="QProcessSlot" name="scanNetwork" native="true">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>100</width>
+     <height>30</height>
+    </rect>
+   </property>
+  </widget>
   <widget class="QProcessSlot" name="scanPartition" native="true">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>100</width>
+     <height>30</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QProcessSlot" name="mountStorage" native="true">
    <property name="geometry">
     <rect>
      <x>0</x>
@@ -902,7 +922,7 @@
   <connection>
    <sender>diaWidget</sender>
    <signal>initialised()</signal>
-   <receiver>crawlWeb</receiver>
+   <receiver>scanNetwork</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -934,7 +954,7 @@
   <connection>
    <sender>diaWidget</sender>
    <signal>initialised()</signal>
-   <receiver>crawlLocalfs</receiver>
+   <receiver>mountStorage</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -950,7 +970,7 @@
   <connection>
    <sender>diaWidget</sender>
    <signal>initialised()</signal>
-   <receiver>chooseSelection</receiver>
+   <receiver>crawlWeb</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -959,7 +979,23 @@
     </hint>
     <hint type="destinationlabel">
      <x>29</x>
-     <y>38</y>
+     <y>97</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>crawlLocalfs</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>496</x>
+     <y>338</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>29</x>
+     <y>97</y>
     </hint>
    </hints>
   </connection>
@@ -1013,22 +1049,6 @@
   </connection>
   <connection>
    <sender>detectDevice</sender>
-   <signal>success()</signal>
-   <receiver>scanPartition</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>125</x>
-     <y>97</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>46</x>
-     <y>200</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>detectDevice</sender>
    <signal>fail()</signal>
    <receiver>processError</receiver>
    <slot>processSlot()</slot>
@@ -1046,7 +1066,7 @@
   <connection>
    <sender>scanStorage</sender>
    <signal>success()</signal>
-   <receiver>detectDevice</receiver>
+   <receiver>mountStorage</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1077,6 +1097,54 @@
   </connection>
   <connection>
    <sender>scanStorage</sender>
+   <signal>success()</signal>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scanStorage</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>48</x>
+     <y>239</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>mountStorage</sender>
+   <signal>success()</signal>
+   <receiver>scanPartition</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>46</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>mountStorage</sender>
    <signal>fail()</signal>
    <receiver>processError</receiver>
    <slot>processSlot()</slot>
@@ -1124,23 +1192,151 @@
    </hints>
   </connection>
   <connection>
-    <sender>scanPartition</sender>
-    <signal>success()</signal>
-    <receiver>postDownload</receiver>
-    <slot>processSlot()</slot>
-    <hints>
-      <hint type="sourcelabel">
-        <x>49</x>
-        <y>14</y>
-      </hint>
-      <hint type="destinationlabel">
-        <x>49</x>
-        <y>14</y>
-      </hint>
-    </hints>
+   <sender>scanPartition</sender>
+   <signal>success()</signal>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
   </connection>
   <connection>
    <sender>scanPartition</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>48</x>
+     <y>239</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>scanNetwork</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>crawlLocalfs</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>125</x>
+     <y>97</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>46</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scanNetwork</sender>
+   <signal>success()</signal>
+   <receiver>crawlWeb</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scanNetwork</sender>
    <signal>fail()</signal>
    <receiver>processError</receiver>
    <slot>processSlot()</slot>
@@ -1221,86 +1417,6 @@
   </connection>
   <connection>
    <sender>crawlWeb</sender>
-   <signal>fail()</signal>
-   <receiver>processError</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>125</x>
-     <y>97</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>46</x>
-     <y>200</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlLocalfs</sender>
-   <signal>success()</signal>
-   <receiver>chooseOS</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlLocalfs</sender>
-   <signal>success()</signal>
-   <receiver>chooseBoard</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlLocalfs</sender>
-   <signal>success()</signal>
-   <receiver>chooseDisplay</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlLocalfs</sender>
-   <signal>success()</signal>
-   <receiver>downloadImage</receiver>
-   <slot>processSlot()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>49</x>
-     <y>14</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>crawlLocalfs</sender>
    <signal>fail()</signal>
    <receiver>processError</receiver>
    <slot>processSlot()</slot>
@@ -1751,6 +1867,22 @@
    <sender>chooseSelection</sender>
    <signal>success()</signal>
    <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>chooseSelection</sender>
+   <signal>chosen()</signal>
+   <receiver>downloadImage</receiver>
    <slot>processSlot()</slot>
    <hints>
     <hint type="sourcelabel">
