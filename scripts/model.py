@@ -745,12 +745,15 @@ class WebDownloadActionModeller(BaseActionModeller):
             dlhost = '{}://{}'.format(protocol.rstrip('://'), host.rstrip('/'))
         _logger.debug('chunksize: {}, srcPath: {}, host: {}'.format(chunksize, srcPath, dlhost))
 
-        # setup the input/output objects
-        if 'tgt_filename' in self.mParam:
-            self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
-            self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+        if os.path.exists(self.mParam['tgt_filename']):
+            # ensure target path exists, and then setup the input/output objects
+            if 'tgt_filename' in self.mParam:
+                self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
+                self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+            else:
+                raise ValueError('preAction: No tgt file specified')
         else:
-            raise ValueError('preAction: No tgt file specified')
+            raise IOError('preAction: {} does not existed'.format(self.mParam['tgt_filename']))
 
         if len(self.mIOs) == 2:
             return True
