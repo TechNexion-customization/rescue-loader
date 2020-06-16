@@ -1139,9 +1139,16 @@ class scanNetworkSlot(QProcessSlot):
                 for nicname in self.mNICNames:
                     self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': nicname})
             else:
-                self.mNetErr.update({'NoDNS': False})
-                self.sendError(self.mNetErr)
-                QtCore.QTimer.singleShot(1000, self.__checkTNServer)
+                if all(v['ip'] is 'unknown' for n, v in self.mNICNames.items() if n.startswith('e')):
+                    self.mNetErr.update({'NoIP': True})
+                    self.sendError(self.mNetErr)
+                    for n, v in self.mNICNames.items():
+                        if n.startswith('e'):
+                            self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': n})
+                else:
+                    self.mNetErr.update({'NoIP': False, 'NoDNS': False})
+                    self.sendError(self.mNetErr)
+                    QtCore.QTimer.singleShot(1000, self.__checkTNServer)
 
     def __checkTNServer(self):
         self.mSockets.clear()
