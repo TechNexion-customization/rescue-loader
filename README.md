@@ -2,7 +2,7 @@
 
 installer/ - TechNexion Installer Bash Scripts
 
-scripts/ - TechNexion Rescue Loader Python Scripts
+rescue_loader/ - TechNexion Rescue Loader Python Scripts
 
 NOTE:
 
