@@ -624,6 +624,10 @@ class mountStorageSlot(QProcessSlot):
                 self.mResults.update({'cmd': 'connect', 'status': 'continue', 'src_filename': '{}'.format(self.mDiskPath)})
                 self.finish.emit()
 
+        if self.sender().objectName() == 'crawlWeb' or self.sender().objectName() == 'downloadImage':
+            if IsATargetBoard():
+                self.__mountStorage()
+
     def __mountStorage(self):
         if IsATargetBoard():
             # for target board: modprobe g_acm_ms file=/dev/mmcblkX
@@ -893,6 +897,8 @@ class scanNetworkSlot(QProcessSlot):
         self.mNIC = None
         self.mSockets = {}
         self.mRepeatTimerId = None
+        self.mRepeatFlag = False
+        self.mConnectCounter = 0
 
     # overridden
     def sendError(self, err):
@@ -902,12 +908,15 @@ class scanNetworkSlot(QProcessSlot):
         else:
             # when mSentFlag already set, that means scanStorage and scanPartition has started
             # crawlWeb is not waiting for connectable server and then potentially any further eror
-            allerrors = {}
-            allerrors.update(self.mNicErr)
-            allerrors.update(self.mNetErr)
-            allerrors.pop('Show', None)
-            _logger.warn('{}: sendError: re-direct errors to crawlWeb: {}'.format(self.objectName(), allerrors))
-            self.success.emit(list(allerrors.items()))
+            if 'Repeat' in err and err['Repeat']:
+                self.mRepeatFlag = False
+                self.mNetErr.pop('Repeat', None)
+                allerrors = {}
+                allerrors.update(self.mNicErr)
+                allerrors.update(self.mNetErr)
+                allerrors.pop('Show', None)
+                _logger.warn('{}: sendError: re-direct errors to crawlWeb/downloadImage: {}'.format(self.objectName(), allerrors))
+                self.success.emit(list(allerrors.items()))
 
     def process(self, inputs = None):
         """
@@ -942,8 +951,9 @@ class scanNetworkSlot(QProcessSlot):
         if 'subcmd' in results and results['subcmd'] == 'nic' and 'status' in results and \
            'config_id' in results and 'msger_type' in results:
 
+            # results from dbus messenger
             if results['msger_type'] == 'dbus':
-                # for NIC Checks from __checkNIC (check 3.a)
+                # results from NIC check, i.e. ifconf
                 if results['config_id'] == 'ifconf' and results['status'] == 'success':
                     if 'iflist' in results and isinstance(results['iflist'], dict):
                         # 3a-1. getting the ifconfig names,
@@ -967,10 +977,10 @@ class scanNetworkSlot(QProcessSlot):
                         self.sendError(self.mNicErr)
                         # redo the check NIC, to continue to 3b.
                         if self.mNICNames != {}:
-                            # send another query to query for ifflags with proper NIC I/F name
+                            # i.e. send another query to query for ifflags with proper NIC I/F name
                             QtCore.QTimer.singleShot(1000, self.__checkNIC)
 
-                # for NIC Checks from __checkNIC (check 3.b)
+                # results from I/F check and Cable check, i.e. ifflags
                 elif results['config_id'] == 'ifflags' and results['status'] == 'success':
                     _logger.warn('{}: found ifname: {} state: {}'.format(self.objectName(), results['target'], results['state']))
                     if 'state' in results and 'flags' in results:
@@ -984,7 +994,7 @@ class scanNetworkSlot(QProcessSlot):
                         if all('state' in v for v in self.mNICNames.values()):
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
-                # for Network Checks from __checkDNS
+                # results from DNS Network Checks, i.e. from __checkDNS
                 elif results['config_id'] == 'dns' and (results['status'] == 'success' or results['status'] == 'failure'):
                     for host in self.mHosts:
                         if isinstance(host, dict):
@@ -993,7 +1003,7 @@ class scanNetworkSlot(QProcessSlot):
                     if all('host_ip' in host for host in self.mHosts):
                         QtCore.QTimer.singleShot(1000, self.__checkIP)
 
-                # for Network Checks from __checkIP
+                # results from IP Network Checks, i.e. from __checkIP
                 elif results['config_id'] == 'ip' and results['status'] == 'success':
                     # for both target device and host pc from installerd
                     # check 5: find matching IP for the NIC Name
@@ -1017,8 +1027,9 @@ class scanNetworkSlot(QProcessSlot):
                                 # no ip from socket connecting to DNS server, retry from check DNS step
                                 QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
+            # results from serial messenger (for Host PC version)
             elif results['msger_type'] == 'serial':
-                # for Serial Mode NIC Checks from host pc's at step 3a-1
+                # results from NIC Checks via serial messenger from host pc's at step 3a-1
                 if results['config_id'] == 'ifconf' and results['status'] == 'success':
                     if 'iflist' in results and isinstance(results['iflist'], dict):
                         # 3a-1. getting the ifconfig names,
@@ -1034,13 +1045,13 @@ class scanNetworkSlot(QProcessSlot):
                                     self.mTgtNICs.update({k: {'ip':v}})
 
                         if self.mTgtNICs != {}:
-                            for name, value in self.mTgtNICs.items():
+                            for name in self.mTgtNICs.keys():
                                 # query for mac with tgt board proper NIC I/F name
                                 self.sendCommand({'cmd': 'config', 'subcmd': 'nic', \
                                                     'config_id': 'ifhwaddr', \
                                                     'config_action': 'get', \
                                                     'target': name})
-
+                # results from ifhwaddr via serial messenger to get target board MacAddr
                 if results['config_id'] == 'ifhwaddr' and results['status'] == 'success':
                     # serial messenger returns target nic mac
                     if 'hwaddr' in results and len(results['hwaddr']) > 0:
@@ -1051,35 +1062,36 @@ class scanNetworkSlot(QProcessSlot):
         _logger.warn('{} validate results: mHosts:{}'.format(self.objectName(), self.mHosts))
         # flow comes here (gets called) after self.finish.emit()
         # tell the processError to display with no icons specified, i.e. hide
-        if any(('alive' in host and host['alive']) for host in self.mHosts):
-            # successfully detect any technexion rescue server
-            # update dialogbox no matter
-            self.mNetErr.update({'NoServer': False, 'Show': False})
-            self.sendError(self.mNetErr)
+        if all(('alive' in host) for host in self.mHosts):
+            if any(host['alive'] for host in self.mHosts):
+                # successfully detect any technexion rescue server update dialogbox
+                self.mNetErr.update({'NoServer': False, 'Show': False})
+            else:
+                # the system cannot connect to all our rescue servers, retry from user
+                self.mNetErr.update({'NoServer': True})
             # emit the hosts information gathered
             _logger.warn('{}: alive rescue servers: {}'.format(self.objectName(), self.mHosts))
             self.success.emit(self.mHosts)
-        elif all(('alive' in host and not host['alive']) for host in self.mHosts):
-            if self.mRepeatTimerId:
-                self.killTimer(self.mRepeatTimerId)
-                self.mRepeatTimerId = None
-            # the system cannot connect to all our rescue servers, retry in 1s
-            self.mNetErr.update({'NoServer': True})
             self.sendError(self.mNetErr)
-            _logger.error('{}: All TechNexion rescue servers are not available!!! Retrying...'.format(self.objectName()))
-            QtCore.QTimer.singleShot(1000, self.__checkTNServer)
-
-        if all('alive' in host for host in self.mHosts):
+            # finish all network checks, set repeat check flag for checking
+            # nic/net every 2 minutes to update the alive list
             if self.mRepeatTimerId is None:
-                _logger.warn('{}: start timer at 3m interval')
-                # finish all network checks, set repeat check flag for checking
-                # nic/net every 3 minutes to update the alive list
-                self.mRepeatTimerId = self.startTimer(180000)
+                _logger.warn('{}: start timer at 2m interval'.format(self.objectName()))
+                self.mRepeatTimerId = self.startTimer(120000)
+                # send/re-direct 1st set of list of errors to crawlWeb
+                self.mNetErr.update({'Repeat': True})
+                self.sendError(self.mNetErr)
 
     def timerEvent(self, event):
         # start checking network again
+        _logger.warn('{}: timed up, re-check network'.format(self.objectName()))
+        self.mConnectCounter = 0
+        self.mRepeatFlag = True
         self.mNICNames.clear()
-        QtCore.QTimer.singleShot(1000, self.__checkNIC)
+        for host in self.mHosts:
+            host.pop('alive', None)
+            host.pop('host_ip', None)
+        self.__checkNIC()
 
     def __checkNIC(self):
         # send request to installerd.service to request for network status.
@@ -1153,14 +1165,16 @@ class scanNetworkSlot(QProcessSlot):
                     QtCore.QTimer.singleShot(1000, self.__checkTNServer)
 
     def __checkTNServer(self):
-        self.mSockets.clear()
         # check connectivity to TechNexion server
-        _logger.warn('{}: check whether we have connectivity to server... {}'.format(self.objectName(), self.mHosts))
+        _logger.warn('{}: check whether we have connectivity to server... {} sockets: {}'.format(self.objectName(), self.mHosts, self.mSockets))
         for host in self.mHosts:
-            self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
-            # setup callback slot for connected and error signals
-            self.mSockets[host['name']].connected.connect(self._socketConnected)
-            self.mSockets[host['name']].error.connect(self._socketError)
+            if host['name'] not in self.mSockets:
+                self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
+                # setup callback slot for connected and error signals
+                self.mSockets[host['name']].disconnected.connect(self._socketDisconnected)
+                self.mSockets[host['name']].connected.connect(self._socketConnected)
+                self.mSockets[host['name']].error.connect(self._socketError)
+            self.mSockets[host['name']].abort()
             self.mSockets[host['name']].connectToHost(host['name'], host['port'])
 
     def _socketError(self):
@@ -1171,7 +1185,10 @@ class scanNetworkSlot(QProcessSlot):
                 host.update({'alive': False})
         self.sender().abort()
         self.sender().close()
-        self.finish.emit()
+        self.mNetErr.update({'Repeat': True} if self.mRepeatFlag else {})
+        self.mConnectCounter += 1
+        if self.mConnectCounter == len(self.mSockets):
+            self.finish.emit()
 
     def _socketConnected(self):
         _logger.warn('{}: QTcpSocket Connected to: {}'.format(self.objectName(), self.sender().peerName()))
@@ -1179,8 +1196,15 @@ class scanNetworkSlot(QProcessSlot):
             # flag true as connectable for probed host url
             if self.sender().peerName() in host['name']:
                 host.update({'alive': True})
+        self.sender().disconnectFromHost()
+
+    def _socketDisconnected(self):
+        _logger.warn('{}: QTcpSocket Disconnected from: {}'.format(self.objectName(), self.sender().peerName()))
         self.sender().close()
-        self.finish.emit()
+        self.mNetErr.update({'Repeat': True} if self.mRepeatFlag else {})
+        self.mConnectCounter += 1
+        if self.mConnectCounter == len(self.mSockets):
+            self.finish.emit()
 
 
 
@@ -1191,6 +1215,7 @@ class crawlWebSlot(QProcessSlot):
     If the long process is needed, it could possibly be done using QThread in Qt.
     """
     success = pyqtSignal(object) # QtGui.PyQt_PyObject)
+    mount = pyqtSignal()
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -1207,9 +1232,20 @@ class crawlWebSlot(QProcessSlot):
         self.mRescueChecked = False
         self.mStartCrawlFlag = False
 
+    def __mountStorage(self):
+        try:
+            self.mount.disconnect()
+        except:
+            pass
+        if hasattr(self._findChildWidget('mountStorage'), 'processSlot'):
+            self.mount.connect(self._findChildWidget('mountStorage').processSlot)
+            self.mount.emit()
+            self.mount.disconnect()
+
     def __parseURL(self, host):
+        # Need to check server alive and available
         if self.mHostName is None and self.mRemoteDir is None and \
-           'alive' in host and host['alive']:
+           'alive' in host and host['alive'] and not 'available' in host:
             remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
                 '' if (host['protocol'] in self.mDefaultPorts.keys() and \
                        self.mDefaultPorts[host['protocol']] == host['port']) \
@@ -1222,54 +1258,88 @@ class crawlWebSlot(QProcessSlot):
         return False
 
     def __parseHosts(self, hosts=None):
+        # all hosts must contain 'alive' and 'name'
         if hosts is not None and isinstance(hosts, list) and \
-           all(('alive' in host and 'name' in host) for host in hosts):
+           all(('alive' in h and 'name' in h) for h in hosts):
             if self.mHosts == []:
                 # get the first alive TechNexion server host
-                self.mHosts.extend(hosts)
-                for h in self.mHosts:
-                    if self.__parseURL(h):
-                        _logger.info('{}: first connectable hostname: {} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
-                        return True
+                for h in hosts:
+                    self.mHosts.append(dict(h))
             else:
+                # update locally kept hosts
                 for host in self.mHosts:
                     for h in hosts:
                         if host['name'] == h['name']:
-                            # if alive flag is different, then something is wrong
                             if host['alive'] != h['alive']:
-                                if host['alive'] is True and h['alive'] is False:
-                                    host['alive'] = h['alive']
-                                _logger.info('{} host:{} is {}.'.format(self.objectName(), host['name'], 'alive' if host['alive'] else 'un-connectable'))
-                                return False
-        return False
+                                host['alive'] = h['alive']
+            _logger.info('{}: hosts updated to {}'.format(self.objectName(), self.mHosts))
 
     def __checkNetworkError(self):
-        if self.mStartCrawlFlag:
-            # mDetects are errors passed in from scanNetwork after crawling has started
-            if any(v is True for v in self.mDetects.values()):
-                # the system cannot connect to our rescue server, try a different server
-                _logger.error('{}: Connect to TechNexion rescue server failed...'.format(self.objectName()))
-                self.sendError({'NoCrawl': False, 'ask': 'continue'})
-                self.mHostName = None
-                self.mRemoteDir = None
-                for h in self.mHosts:
-                    if self.__parseURL(h):
-                        self.mStartCrawlFlag = False
-                        self.__checkInputs()
-                        break
-            else:
-                # Did not find any suitable xz file
-                if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
-                    _logger.info('{}: crawlWeb receive all request/response'.format(self.objectName()))
-                    self.sendError({'NoDLFile': False, 'ask': 'retry' if IsATargetBoard() else 'quit'})
-        else:
-            if any(h['alive'] for h in self.mHosts):
-                # switch to another server if we didn't find any matching files
-                for h in self.mHosts:
-                    if self.__parseURL(h):
-                        self.sendError({'NoCrawl': True, 'ask': 'continue'})
-                        self.__checkInputs()
-                        break
+        # 0. no alives, so ask for serial connect mode (quit on host PC)
+        # First set of errors passed in: (indicate by NO StartCrawlFlag)
+        # 1. no NIC/NET error, has alive, so start Crawling
+        # 2. has NIC/NET error, has alive, so show error message
+        # Second+ set of errors passed in: (indicate by StartCrawlFlag)
+        # 3. no NIC/NET error, has alive, has available, so ignore
+        # 4. no NIC/NET error, has alive, has available but all false, so ask serial
+        # 5. no NIC/NET error, has alive, has some avilable, so NoCrawl, try next alive server
+        # 6. no NIC/NET error, has alive, has no avaiable, so NoDLFile, not found any file, ask retry.
+        # 7. NIC/NET error, has alive, has available, so serial connect mode
+        if any(h['alive'] for h in self.mHosts):
+            if not self.mStartCrawlFlag: # StartCrawlFlag not set, parse second+ set of errors
+                if all(v is False for v in self.mDetects.values()):
+                    # mDetects are errors passed in from scanNetwork, so start crawling if all NIC/NET valid
+                    _logger.warn('{}: Alive servers, Not started crawling, No NIC/NET errors, start crawling... mHosts:{}'.format(self.objectName(), self.mHosts))
+                    self.mHostName = None
+                    self.mRemoteDir = None
+                    for host in self.mHosts:
+                        if self.__parseURL(host):
+                            _logger.info('{}: first connectable hostname:{} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
+                            self.__checkInputs()
+                            break
+                else:
+                    _logger.error('{}: Alive servers, Not started crawling, But nic/net errors... mHosts:{}'.format(self.objectName(), self.mHosts))
+                    self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
+
+            else: # StartCrawlFlag set, parse second+ set of errors
+                if all(v is False for v in self.mDetects.values()):
+                    if any('available' in host for host in self.mHosts):
+                        if any(('available' in host and host['available']) for host in self.mHosts):
+                            # ignore any further error messages from scanNetwork
+                            # as we have available files on server.
+                            _logger.warn('{}: Alive and available servers, Started crawl, No NIC/NET errors, so ignore... mHosts:{}'.format(self.objectName(), self.mHosts))
+                            pass
+                        elif all(('available' in host and not host['available']) for host in self.mHosts):
+                            # Alive servers but NONE has available files
+                            _logger.error('{}: Alive rescue servers but NONE has available file to download... mHosts:{}'.format(self.objectName(), self.mHosts))
+                            self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
+                        else:
+                            # rescue server un-available, possible due to incorrect location or port,
+                            # time out comes here, and we switch to another server because we didn't find
+                            # any matching files
+                            _logger.error('{}: Alive rescue servers but some has un-available file to download, try another host... mHosts:{}'.format(self.objectName(), self.mHosts))
+                            self.sendError({'NoCrawl': True, 'ask': 'continue'})
+                            self.mStartCrawlFlag = False
+                            self.mHostName = None
+                            self.mRemoteDir = None
+                            for host in self.mHosts:
+                                if self.__parseURL(host):
+                                    _logger.info('{}: next connectable hostname:{} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
+                                    self.__checkInputs()
+                                    break
+                    else:
+                        # None of the servers are available and did not find any suitable xz file
+                        if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
+                            _logger.info('{}: crawlWeb receive all request/response, but no results... mHosts:{}'.format(self.objectName(), self.mHosts))
+                            self.sendError({'NoDLFile': True, 'ask': 'retry'})
+                else:
+                    # NIC/NET error after found URL successfully
+                    _logger.error('{}: Alive and available servers, Started crawl, But nic/net errors... mHosts:{}'.format(self.objectName(), self.mHosts))
+                    self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
+
+        else: # none of servers are alive
+            _logger.error('{}: Connect to TechNexion rescue server failed, and no-more rescue servers alive...'.format(self.objectName()))
+            self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
 
     def process(self, inputs):
         """
@@ -1277,15 +1347,39 @@ class crawlWebSlot(QProcessSlot):
         """
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'scanNetwork':
+            # 4 possible conditions coming from scanNetwork
+            # a) any of the connectable hosts list is alive (list of dict)
+            # b) none of the connectable hosts list are alive (list of dict)
+            # c) any of the network detection has error (list of tuples)
+            # d) none of the network detection has error (list of tuples)
             if isinstance(inputs, list):
                 if all(isinstance(item, dict) for item in inputs):
                     # parse alive/connectable rescue servers
-                    if self.__parseHosts(inputs):
-                        self.__checkInputs()
+                    self.__parseHosts(inputs)
                 elif all(isinstance(item, tuple) for item in inputs):
-                    # scanStorage errors
-                    self.mDetects.update(dict(inputs))
-                    self.__checkNetworkError()
+                    # scanStorage errors, only updates when network detects are
+                    # different or when no network errors
+                    if dict(self.mDetects, **dict(inputs)) != self.mDetects or \
+                       all(v is False for v in dict(inputs).values()):
+                        self.mDetects.update(dict(inputs))
+                        self.__checkNetworkError()
+
+        if self.sender().objectName() == 'processError':
+            if 'accept' in inputs and 'reject' in inputs:
+                if inputs['accept']:
+                    if 'NoNetwork' in inputs and inputs['NoNetwork']:
+                        # accept to run Serial Mode
+                        _logger.info('{}: accept to serial connect mode...'.format(self.objectName()))
+                        self.__mountStorage()
+                elif inputs['reject']:
+                    if 'NoNetwork' in inputs and inputs['NoNetwork']:
+                        # reject to continue, set all server to be alive and wait
+                        # for network rescan to fix the server alive status
+                        _logger.info('{}: reject to retry, so to clear everything and wait for time-out...'.format(self.objectName()))
+                        self.mStartCrawlFlag = False
+                        self.mHostName = None
+                        self.mRemoteDir = None
+                        self.mHosts.clear()
 
     def __checkInputs(self):
         # setup rescue server and location if there isn't any
@@ -1327,6 +1421,9 @@ class crawlWebSlot(QProcessSlot):
                 if os in ['rescue', 'android', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
                     _logger.debug('{}: append result: {} {} {} {} {} {} {} {} {}'.format(self.objectName(), cpu, form, board, display, os, ver, uncompsize, url, extra))
                     self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
+                    for host in self.mHosts:
+                        if host['name'] in results['target']:
+                            host.update({'available': True})
 
             elif 'file_list' in results:
                 # recursively request into the rescue server directories to find XZ files
@@ -1346,14 +1443,16 @@ class crawlWebSlot(QProcessSlot):
 
             if results['status'] == 'failure' and \
                results['target'] == self.mInputs['target'] and \
-               results['location'] == self.mInputs['location']:
-                # rescue server un-connectable, possible due to incorrect location or port, so flag it and wait for time out
+               self.mInputs['location'] in results['location']:
+                # rescue server with location directory un-available, possibly
+                # due to incorrect location or port or server failure, so flag
+                # false and wait for time out to check another alive server
+                _logger.warn('{} parse mHostName:{} and mRemoteDir:{} failed, set host un-available.'.format(self.objectName(), results['target'], results['location']))
                 for host in self.mHosts:
                     if host['name'] in results['target']:
-                        host['alive'] = False
+                        host.update({'available': False})
                         self.mHostName = None
                         self.mRemoteDir = None
-                        self.mStartCrawlFlag = False
 
     def __parseWebList(self, results):
         if 'file_list' in results and isinstance(results['file_list'], dict):
@@ -1377,7 +1476,7 @@ class crawlWebSlot(QProcessSlot):
         if self.mBoard is None:
             self.mBoard = self._findChildWidget('lblBaseboard').text().lower()
 
-        _logger.debug('{}: matched xzfile: {} cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
+        _logger.debug('{}: matching xzfile: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
 
         # step 2: find menu items that matches as cpu, form, but not baseboard
         if self.mCpu in filename.lower() and self.mForm in filename.lower():
@@ -2203,6 +2302,7 @@ class downloadImageSlot(QProcessSlot):
     """
     progress = pyqtSignal(int)
     success = pyqtSignal(dict)
+    mount = pyqtSignal()
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -2223,7 +2323,7 @@ class downloadImageSlot(QProcessSlot):
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
         self.mTotalMem = None
         self.mHosts = []
-        self.mRetryFlag = False
+        self.mAlternativeFlag = False
         self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
 
     def _queryResult(self, percent = 0):
@@ -2267,6 +2367,41 @@ class downloadImageSlot(QProcessSlot):
                         pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
                         self.progress.emit(pcent)
 
+    def __mountStorage(self):
+        try:
+            self.mount.disconnect()
+        except:
+            pass
+        if hasattr(self._findChildWidget('mountStorage'), 'processSlot'):
+            self.mount.connect(self._findChildWidget('mountStorage').processSlot)
+            self.mount.emit()
+            self.mount.disconnect()
+
+    def __parseHosts(self, hosts=None):
+        if hosts is not None and isinstance(hosts, list) and \
+           all(('alive' in host and 'name' in host) for host in hosts):
+            if self.mHosts == []:
+                # get the first alive TechNexion server host
+                for h in hosts:
+                    self.mHosts.append(dict(h))
+                return True
+            else:
+                for host in self.mHosts:
+                    for h in hosts:
+                        if host['name'] == h['name']:
+                            # if alive flag is different, then something is wrong
+                            if host['alive'] != h['alive']:
+                                host['alive'] = h['alive']
+                _logger.info('{} updated hosts:{}'.format(self.objectName(), self.mHosts))
+
+    def __checkNetworkError(self):
+        if self.mFlashFlag:
+            # mDetects are errors passed in from scanNetwork after crawling has started
+            if any(v is True for v in self.mDetects.values()):
+                # the system cannot connect to our rescue server, try a different server
+                _logger.error('{}: Connect to TechNexion rescue server failed, due to network error...'.format(self.objectName()))
+                self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
+
     def __checkMemory(self):
         self.sendCommand({'cmd': 'info', 'target': 'mem', 'location': 'total'})
 
@@ -2281,7 +2416,7 @@ class downloadImageSlot(QProcessSlot):
             self._updateDisplay()
 
     def __retryAlternativeServer(self):
-        if self.mRetryFlag:
+        if self.mAlternativeFlag:
             if self.__setAlternativeServer():
                 # reset the progress bar
                 self.progress.emit(0)
@@ -2310,19 +2445,28 @@ class downloadImageSlot(QProcessSlot):
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'scanNetwork':
             if all(isinstance(item, dict) for item in inputs):
-                # detectDevice hosts
-                self.mHosts.clear()
-                self.mHosts.extend(inputs)
+                # found hosts, parse alive/connectable rescue servers
+                self.__parseHosts(inputs)
             elif all(isinstance(item, tuple) for item in inputs):
-                # detectDevice errors, but we don't do anything about it.
-                self.mDetects.update(dict(inputs))
+                # scanNetwork errors
+                if dict(self.mDetects, **dict(inputs)) != self.mDetects:
+                    self.mDetects.update(dict(inputs))
+                    self.__checkNetworkError()
 
         if self.sender().objectName() == 'processError':
-            if isinstance(inputs, dict) and 'retry' in inputs.keys():
-                _logger.debug('{}: retry signal from processError: {}'.format(self.objectName(), inputs['retry']))
-                self.mRetryFlag = inputs['retry']
+            if isinstance(inputs, dict) and 'alternative' in inputs.keys():
+                _logger.debug('{}: ask:alternative signal from processError: alternative:{}'.format(self.objectName(), inputs['alternative']))
+                self.mAlternativeFlag = inputs['alternative']
                 # Queue the retry on alternative server in 1s
-                QtCore.QTimer.singleShot(1000, self.__retryAlternativeServer)
+                self.__retryAlternativeServer()
+
+            if isinstance(inputs, dict) and 'accept' in inputs.keys() and 'reject' in inputs.keys():
+                _logger.debug('{}: ask:serial signal from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
+                if self.inputs('accept'):
+                    self.__mountStorage()
+                else:
+                    # Queue the retry on alternative server in 1s
+                    self.__retryAlternativeServer()
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
@@ -2437,7 +2581,7 @@ class downloadImageSlot(QProcessSlot):
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False, 'total_uncompressed': int(self.mResults['total_uncompressed']), 'bytes_written': int(self.mResults['bytes_written'])})
                 _logger.debug('{}: emit signal: {}'.format(self.objectName(), self.mPick))
                 self.sendError({'NoDownload': True, 'ask': 'alternative'})
-                if not self.mRetryFlag:
+                if not self.mAlternativeFlag:
                     self.success.emit(self.mPick)
 
     def _updateDisplay(self):
@@ -2803,6 +2947,9 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setMessage('NoIP')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.error('{}: No IP address assigned!!! Retrying...'.format(self.objectName()))
+        if 'NoNetwork' in self.mErrors:
+            self.mMsgBox.setMessage('NoNetwork')
+            _logger.warn('{}: No Network connection or No Servers available...'.format(self.objectName()))
         if 'NoSerial' in self.mErrors:
             self.mMsgBox.setMessage('NoSerial')
             _logger.warn('{}: No serial connection available...'.format(self.objectName()))
@@ -2954,7 +3101,7 @@ class processErrorSlot(QProcessSlot):
                 ret = self.mMsgBox.display(True)
                 if ret == QtGui.QDialog.Rejected:
                     # signal with retry response to the sender process
-                    self.__returnResponse({'retry': True})
+                    self.__returnResponse({'alternative': True})
             elif self.mAsk == 'continue':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
@@ -3339,6 +3486,12 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoStorage': ':res/images/no_storage.svg'})
+        elif msgtype == 'NoNetwork':
+            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setTitle("System Check")
+            self.setContent("Could not connect to any servers or networks.")
+            if IsATargetBoard():
+                self.setStatus("SERIALMODE to start, CONTINUE to skip")
         elif msgtype == 'NoSerial':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("System Check")
