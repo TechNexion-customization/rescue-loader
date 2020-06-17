@@ -1207,29 +1207,44 @@ class crawlWebSlot(QProcessSlot):
         self.mRescueChecked = False
         self.mStartCrawlFlag = False
 
-    def __parseHosts(self):
-        if self.mHosts != []:
-            # get the first alive TechNexion server host
-            for host in self.mHosts:
-                if self.mHostName is None and self.mRemoteDir is None and \
-                   'alive' in host.keys() and host['alive']:
-                    remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
-                        '' if (host['protocol'] in self.mDefaultPorts.keys() and \
-                               self.mDefaultPorts[host['protocol']] == host['port']) \
-                           else ':{}'.format(host['port']))
-                    url = self.__checkUrl(remoteurl)
-                    if url is not None:
-                        self.mHostName = url.geturl()
-                    self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
-                    _logger.info('{}: first connectable hostname: {} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
-                    return True
+    def __parseURL(self, host):
+        if self.mHostName is None and self.mRemoteDir is None and \
+           'alive' in host and host['alive']:
+            remoteurl = '{}://{}{}'.format(host['protocol'], host['name'], \
+                '' if (host['protocol'] in self.mDefaultPorts.keys() and \
+                       self.mDefaultPorts[host['protocol']] == host['port']) \
+                   else ':{}'.format(host['port']))
+            url = self.__checkUrl(remoteurl)
+            if url is not None:
+                self.mHostName = url.geturl()
+            self.mRemoteDir = '/{}/'.format(host['path'].strip('/'))
+            return True
+        return False
+
+    def __parseHosts(self, hosts=None):
+        if hosts is not None and isinstance(hosts, list) and \
+           all(('alive' in host and 'name' in host) for host in hosts):
+            if self.mHosts == []:
+                # get the first alive TechNexion server host
+                self.mHosts.extend(hosts)
+                for h in self.mHosts:
+                    if self.__parseURL(h):
+                        _logger.info('{}: first connectable hostname: {} dir:{}'.format(self.objectName(), self.mHostName, self.mRemoteDir))
+                        return True
+            else:
+                for host in self.mHosts:
+                    for h in hosts:
+                        if host['name'] == h['name']:
+                            # if alive flag is different, then something is wrong
+                            if host['alive'] != h['alive']:
+                                if host['alive'] is True and h['alive'] is False:
+                                    host['alive'] = h['alive']
+                                _logger.info('{} host:{} is {}.'.format(self.objectName(), host['name'], 'alive' if host['alive'] else 'un-connectable'))
+                                return False
         return False
 
     def __checkNetworkError(self):
-        if not self.mStartCrawlFlag:
-            if all(v is False for v in self.mDetects.values()) and self.mResults == []:
-                self.__checkInputs()
-        else:
+        if self.mStartCrawlFlag:
             # mDetects are errors passed in from scanNetwork after crawling has started
             if any(v is True for v in self.mDetects.values()):
                 # the system cannot connect to our rescue server, try a different server
@@ -1237,14 +1252,24 @@ class crawlWebSlot(QProcessSlot):
                 self.sendError({'NoCrawl': False, 'ask': 'continue'})
                 self.mHostName = None
                 self.mRemoteDir = None
-                if self.__parseHosts():
-                    self.mStartCrawlFlag = False
-                    self.__checkInputs()
+                for h in self.mHosts:
+                    if self.__parseURL(h):
+                        self.mStartCrawlFlag = False
+                        self.__checkInputs()
+                        break
             else:
                 # Did not find any suitable xz file
                 if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
                     _logger.info('{}: crawlWeb receive all request/response'.format(self.objectName()))
                     self.sendError({'NoDLFile': False, 'ask': 'retry' if IsATargetBoard() else 'quit'})
+        else:
+            if any(h['alive'] for h in self.mHosts):
+                # switch to another server if we didn't find any matching files
+                for h in self.mHosts:
+                    if self.__parseURL(h):
+                        self.sendError({'NoCrawl': True, 'ask': 'continue'})
+                        self.__checkInputs()
+                        break
 
     def process(self, inputs):
         """
@@ -1255,9 +1280,7 @@ class crawlWebSlot(QProcessSlot):
             if isinstance(inputs, list):
                 if all(isinstance(item, dict) for item in inputs):
                     # parse alive/connectable rescue servers
-                    self.mHosts.clear()
-                    self.mHosts.extend(inputs)
-                    if self.__parseHosts():
+                    if self.__parseHosts(inputs):
                         self.__checkInputs()
                 elif all(isinstance(item, tuple) for item in inputs):
                     # scanStorage errors
@@ -1320,6 +1343,17 @@ class crawlWebSlot(QProcessSlot):
                             _logger.debug('internet xzfile {} path: {}'.format(item[1], item[2]))
                             if self.__matchDevice(item[2].split(self.mHostName, 1)[1]):
                                 self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '{}'.format(item[2].split(self.mHostName, 1)[1])})
+
+            if results['status'] == 'failure' and \
+               results['target'] == self.mInputs['target'] and \
+               results['location'] == self.mInputs['location']:
+                # rescue server un-connectable, possible due to incorrect location or port, so flag it and wait for time out
+                for host in self.mHosts:
+                    if host['name'] in results['target']:
+                        host['alive'] = False
+                        self.mHostName = None
+                        self.mRemoteDir = None
+                        self.mStartCrawlFlag = False
 
     def __parseWebList(self, results):
         if 'file_list' in results and isinstance(results['file_list'], dict):
@@ -3329,6 +3363,7 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Server Check")
             self.setContent("Exploring TechNexion rescue server failed. Check connectivity to TechNexion Rescue Server.")
+            self.setStatus("CONTINUE to try alternative server.")
         elif msgtype == 'NoSelection':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
