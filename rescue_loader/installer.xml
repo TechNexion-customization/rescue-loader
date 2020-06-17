@@ -516,7 +516,7 @@
 										<item>
 											<widget class="QLabel" name="lblVersion">
 												<property name="text">
-													<string>Ver 2020.06.01.1</string>
+													<string>Ver 2020.06.30.1</string>
 												</property>
 												<property name="alignment">
 													<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2459,7 +2459,7 @@
 													<item>
 														<widget class="QLabel" name="lblVersion">
 															<property name="text">
-																<string>Ver 2020.06.01.1</string>
+																<string>Ver 2020.06.30.1</string>
 															</property>
 															<property name="alignment">
 																<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
