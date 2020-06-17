@@ -990,7 +990,8 @@ class scanNetworkSlot(QProcessSlot):
                         if isinstance(host, dict):
                             if host['name'] == results['target']:
                                 host.update({'host_ip': results['host_ip']})
-                    QtCore.QTimer.singleShot(1000, self.__checkIP)
+                    if all('host_ip' in host for host in self.mHosts):
+                        QtCore.QTimer.singleShot(1000, self.__checkIP)
 
                 # for Network Checks from __checkIP
                 elif results['config_id'] == 'ip' and results['status'] == 'success':
@@ -1068,8 +1069,9 @@ class scanNetworkSlot(QProcessSlot):
             _logger.error('{}: All TechNexion rescue servers are not available!!! Retrying...'.format(self.objectName()))
             QtCore.QTimer.singleShot(1000, self.__checkTNServer)
 
-        if self.mRepeatTimerId is None:
-            if all(('alive') in host for host in self.mHosts):
+        if all('alive' in host for host in self.mHosts):
+            if self.mRepeatTimerId is None:
+                _logger.warn('{}: start timer at 3m interval')
                 # finish all network checks, set repeat check flag for checking
                 # nic/net every 3 minutes to update the alive list
                 self.mRepeatTimerId = self.startTimer(180000)
@@ -1153,7 +1155,7 @@ class scanNetworkSlot(QProcessSlot):
     def __checkTNServer(self):
         self.mSockets.clear()
         # check connectivity to TechNexion server
-        _logger.warn('{}: check whether we have connectivity to server...'.format(self.objectName()))
+        _logger.warn('{}: check whether we have connectivity to server... {}'.format(self.objectName(), self.mHosts))
         for host in self.mHosts:
             self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
             # setup callback slot for connected and error signals
@@ -1242,7 +1244,7 @@ class crawlWebSlot(QProcessSlot):
                 # Did not find any suitable xz file
                 if self.mTotalReq > 0 and self.mTotalReq == self.mTotalRemove and self.mResults == []:
                     _logger.info('{}: crawlWeb receive all request/response'.format(self.objectName()))
-                    self.sendError({'NoDLFile': False, 'ask': 'retry'})
+                    self.sendError({'NoDLFile': False, 'ask': 'retry' if IsATargetBoard() else 'quit'})
 
     def process(self, inputs):
         """
