@@ -1324,7 +1324,7 @@ class ConfigNicActionModeller(BaseActionModeller):
                 _logger.info('{}: ifconfig: names:{} max_bytes:{} names_addr:{}'.format(type(self).__name__, self.mNames.tostring(), max_bytes_out, names_address_out))
                 namestr = self.mNames.tostring()
                 self.mResult['iflist'] = {}
-                for i in range(0, max_bytes_out, 40 if platform.machine() == 'aarch64' else 32): # arm:32, arm64:40
+                for i in range(0, max_bytes_out, 40 if '64bit' in platform.architecture()[0] else 32): # 32bits 32, 64bits:40
                     name = namestr[ i : i+16 ].split(b'\0', 1)[0].decode('utf-8') # ifr_name
                     ip = []
                     for netaddr in namestr[ i+20 : i+24 ]: # ifr_addr
@@ -1332,10 +1332,12 @@ class ConfigNicActionModeller(BaseActionModeller):
                             ip.append(str(netaddr))
                         elif isinstance(netaddr, str):
                             ip.append(str(ord(netaddr)))
-                    self.mResult['iflist'].update({name: '.'.join(ip)})
+                    if self.mParam['target'] == 'any' or self.mParam['target'] == name:
+                        self.mResult['iflist'].update({name: '.'.join(ip)})
                 for dname in os.listdir('/sys/class/net/'):
                     if dname not in self.mResult['iflist']:
-                        self.mResult['iflist'].update({dname: 'unknown'})
+                        if self.mParam['target'] == 'any' or self.mParam['target'] == dname:
+                            self.mResult['iflist'].update({dname: 'unknown'})
                 return True
             elif self.mParam['config_id'] == 'ifhwaddr':
                 self.mResult['ifname'], macaddr = struct.unpack('16s8s232x', self.mResult['retcode'])
