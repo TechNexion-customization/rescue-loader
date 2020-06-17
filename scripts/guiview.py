@@ -1125,7 +1125,12 @@ def guiview():
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
     view = GuiViewer(sys.argv[-1], orient)
     sighdl.activate([signal.SIGINT, signal.SIGTERM, signal.SIGUSR1], view.stop)
-    view.show(geo)
+    if IsATargetBoard():
+        view.show(geo)
+    else:
+        # x, y, width, height
+        viewrect = QtCore.QRect(0, 0, int(geo.width() / 2), int(geo.height() / 2))
+        view.show(viewrect)
 
     try:
         sys.exit(app.exec_())
