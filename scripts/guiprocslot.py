@@ -2509,7 +2509,6 @@ class postDownloadSlot(QProcessSlot):
         self.mQRIcon = None
         self.mCheckSumFlag = False
         self.mDisks = []
-        self.mPartitions = {}
 
     def _queryResult(self, percent = 0):
         """
@@ -2582,16 +2581,6 @@ class postDownloadSlot(QProcessSlot):
             # parse the available storage for checking
             self.mDisks = [d for d in inputs if 'size' in d and d['size'] > 0]
             _logger.warn('{}: disks: {}'.format(self.objectName(), self.mDisks))
-
-        if self.sender().objectName() == 'scanPartition' and isinstance(inputs, dict):
-            # figure out the partition size to backup
-            for k, v in inputs.items():
-                if isinstance(v, dict) and 'sys_number' in v and int(v['sys_number']) == 1 and \
-                   'sys_name' in v and 'mmcblk' in v['sys_name'] and \
-                   'attributes' in v and isinstance(v['attributes'], dict) and \
-                   'size' in v['attributes'] and 'start' in v['attributes']:
-                        self.mPartitions.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size'])})
-                        _logger.warn('{}: {}: Start: {}, Size: {}, Partition: {}'.format(self.objectName(), k, int(v['attributes']['start']), int(v['attributes']['size']), self.mPartitions))
 
     def parseResult(self, results):
         self.mResults.clear()
@@ -2715,7 +2704,7 @@ class postDownloadSlot(QProcessSlot):
                     self.sendError({'NoEmmcBoot': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
 
     def _isTargetEMMC(self, storage_path):
-        _logger.info('{}: isTargetEMMC:\ndisks: {}\npartitions: {}\npick: {}'.format(self.objectName(), self.mDisks, self.mPartitions, self.mPick))
+        _logger.info('{}: isTargetEMMC:\ndisks: {}\npick: {}'.format(self.objectName(), self.mDisks, self.mPick))
         for d in self.mDisks:
             # find the disk info first from storage_path
             if storage_path == d['path']:
