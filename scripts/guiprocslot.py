@@ -2384,7 +2384,6 @@ class downloadImageSlot(QProcessSlot):
                 # get the first alive TechNexion server host
                 for h in hosts:
                     self.mHosts.append(dict(h))
-                return True
             else:
                 for host in self.mHosts:
                     for h in hosts:
@@ -2392,14 +2391,15 @@ class downloadImageSlot(QProcessSlot):
                             # if alive flag is different, then something is wrong
                             if host['alive'] != h['alive']:
                                 host['alive'] = h['alive']
-                _logger.info('{} updated hosts:{}'.format(self.objectName(), self.mHosts))
+            _logger.info('{} hosts updated to:{}'.format(self.objectName(), self.mHosts))
 
     def __checkNetworkError(self):
+        _logger.debug('{}: check NIC/NET error... mDetects:{}'.format(self.objectName(), self.mDetects))
         if self.mFlashFlag:
             # mDetects are errors passed in from scanNetwork after crawling has started
             if any(v is True for v in self.mDetects.values()):
+                _logger.error('{}: NIC/NET error detected during flash... so ask for serial connect mode'.format(self.objectName()))
                 # the system cannot connect to our rescue server, try a different server
-                _logger.error('{}: Connect to TechNexion rescue server failed, due to network error...'.format(self.objectName()))
                 self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
 
     def __checkMemory(self):
@@ -2420,6 +2420,9 @@ class downloadImageSlot(QProcessSlot):
             if self.__setAlternativeServer():
                 # reset the progress bar
                 self.progress.emit(0)
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
+                    self.mTimerId = None
                 self.__checkBeforeFlash()
             else:
                 # prompt error message for no alternative servers
@@ -2490,7 +2493,7 @@ class downloadImageSlot(QProcessSlot):
                     self.sendError({'NoSelection': True, 'ask': 'continue'})
         else:
             # prompt error message for trying to interrupt flashing with other user inputs
-            if self.sender().objectName() != 'detectDevice':
+            if self.sender().objectName() != 'scanNetwork':
                 self.sendError({'NoInterrupt': True, 'ask': 'continue'})
 
     def __getUrlStorageFromPick(self, pick):
@@ -2605,8 +2608,9 @@ class downloadImageSlot(QProcessSlot):
         for (idx, host) in enumerate(alives, start=0):
             if host['name'] in self.mFileUrl:
                 orghost = alives.pop(idx)
-        _logger.debug('{}: remaining alive-hosts {}'.format(self.objectName(), alives))
+        _logger.debug('{}: remaining alive-hosts:{}'.format(self.objectName(), alives))
         if len(alives) > 0:
+            # replace remote hosts
             if (alives[0]['protocol'] in self.mDefaultPorts.keys() and self.mDefaultPorts[alives[0]['protocol']] == alives[0]['port']):
                 # alternative host using protocol's standard port
                 if (orghost['protocol'] in self.mDefaultPorts.keys() and self.mDefaultPorts[orghost['protocol']] == orghost['port']):
@@ -2623,9 +2627,11 @@ class downloadImageSlot(QProcessSlot):
                 else:
                     # original using non standard port
                     self.mFileUrl = self.mFileUrl.replace('{}:{}'.format(orghost['name'], orghost['port']), '{}:{}'.format(alives[0]['name'], alives[0]['port']))
-            _logger.debug('{}: replaced Url: {}'.format(self.objetName(), self.mFileUrl))
+            # replace remote directory
+            if (orghost['path'] in self.mFileUrl and not alives[0]['path'] in self.mFileUrl):
+                self.mFileUrl = self.mFileUrl.replace('/{}/'.format(orghost['path']), '/{}/'.format(alives[0]['path']))
+            _logger.debug('{}: replaced Url: {}'.format(self.objectName(), self.mFileUrl))
             return True
-
         return False
 
 
