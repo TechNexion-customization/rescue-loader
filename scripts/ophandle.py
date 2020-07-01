@@ -650,13 +650,12 @@ class ConnectOperationHandler(BaseOperationHandler):
         # verify the ActionParam to pass to modeller
         if all(s in self.mActionParam for s in ['cmd', 'type']):
             _logger.debug('{}: __parseParam: mActionParam:{}'.format(self, self.mActionParam))
-            if 'src_filename' in self.mActionParam:
-                if 'mac_addr' in self.mActionParam:
-                    if self.mActionParam['type'] in ['serial', 'serialstorage', 'multi']:
+            if self.mActionParam['type'] in ['serial', 'serialstorage', 'multi']:
+                if self.mActionParam['cmd'] in ['connect']:
+                    if 'src_filename' in self.mActionParam:
                         return True
-                    else:
-                        return False
-                return True
+                elif self.mActionParam['cmd'] in ['disconnect']:
+                    return True
         return False
 
     def performOperation(self, OpParams):
