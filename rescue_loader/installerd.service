@@ -5,7 +5,7 @@ After=network.target dbus.service dbus-sess.service
 [Service]
 Type=simple
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/session_bus_socket
-ExecStart=/bin/python3 /home/rescue/opcontrol.py
+ExecStart=/usr/bin/python3 /usr/lib/python3.5/site-packages/rescue_loader/opcontrol.py
 
 [Install]
 WantedBy=multi-user.target
