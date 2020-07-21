@@ -3212,7 +3212,7 @@ class QMessageDialog(QtGui.QDialog):
         self.setPalette(palette)
 
         # sets fonts
-        font = QtGui.QFont('Lato', 32, QtGui.QFont.Normal)
+        font = QtGui.QFont('Lato', QtGui.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
         self.setFont(font)
         self.mIcon = None
         self.mTitle = None
@@ -3283,10 +3283,10 @@ class QMessageDialog(QtGui.QDialog):
         if isinstance(buttons, dict):
             if 'accept' in buttons.keys():
                 self.mButtons['accept'].setText(buttons['accept'])
-                self.layout().addWidget(self.mButtons['accept'], 4, 5)
+                self.layout().addWidget(self.mButtons['accept'], 4, 4, 1, 2)
             if 'reject' in buttons.keys():
                 self.mButtons['reject'].setText(buttons['reject'])
-                self.layout().addWidget(self.mButtons['reject'], 4, 4 if 'accept' in buttons.keys() else 5)
+                self.layout().addWidget(self.mButtons['reject'], 4, 2 if 'accept' in buttons.keys() else 4, 1, 2)
 
     def clearButtons(self):
         for k, btn in self.mButtons.items():

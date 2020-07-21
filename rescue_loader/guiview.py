@@ -965,12 +965,9 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setSpacing(w / 14)
 
             # draw logo according to scale
-            iconLogo = QtGui.QIcon(':/res/images/tn_logo.svg')
-            iconSize = iconLogo.actualSize(QtCore.QSize(100, 100))
             sizeLogo = QtCore.QSize(self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').size())
-            logoW = sizeLogo.width()
-            logoH = int(iconSize.height() * (logoW / iconSize.width()))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').setPixmap(iconLogo.pixmap(logoW, logoH))
+            iconLogo = QtGui.QIcon(':res/images/tn_logo.svg').pixmap(QtCore.QSize(sizeLogo.width() * 4, sizeLogo.height() * 4)).scaled(QtCore.QSize(sizeLogo.width(), sizeLogo.height()), QtCore.Qt.KeepAspectRatio)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').setPixmap(iconLogo)
 
             # work out the proportion to the selection icons
             sizeSelect = self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').size()
@@ -980,10 +977,11 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
 
             # set font size
-            fontsize = int(w/50)
-            _logger.warning('fontsize = {}'.format(fontsize))
+            fontsize = int(w/40) if int(w/40) > QtGui.QApplication.font().pointSize() else QtGui.QApplication.font().pointSize()
+            _logger.warning('fontsize = {} ({}>{})'.format(fontsize, int(w/40), QtGui.QApplication.font().pointSize()))
             self.mGuiRootWidget.setFont(QtGui.QFont('Lato', fontsize))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize * 2))
+            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize * 2))
 
             # Show/Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
@@ -1122,6 +1120,7 @@ def guiview():
     app = QtGui.QApplication(sys.argv)
     sighdl = SignalHandler(app)
     geo = app.desktop().screenGeometry()
+    _logger.warning('Desktop Geometry: {}'.format(geo))
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
     view = GuiViewer(sys.argv[-1], orient)
     sighdl.activate([signal.SIGINT, signal.SIGTERM, signal.SIGUSR1], view.stop)
