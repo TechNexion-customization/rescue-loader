@@ -1069,8 +1069,9 @@ class ConfigMmcActionModeller(BaseActionModeller):
 
             if stat.S_ISBLK(os.stat(self.mParam['target']).st_mode):
                 if self.mParam['config_id'] == 'bootpart':
-                    self.mSubProcCmd.extend([self.mParam['config_id'], self.mParam['config_action'], \
-                                             self.mParam['boot_part_no'], self.mParam['send_ack'], self.mParam['target']])
+                    self.mSubProcCmd.extend([self.mParam['config_id'], "enable", \
+                                             "0" if self.mParam['config_action'] == "disable" else self.mParam['boot_part_no'], \
+                                             self.mParam['send_ack'], self.mParam['target']])
                 elif self.mParam['config_id'] == 'readonly':
                     if 'boot' in self.mParam['target']:
                         tgtfile = self.mParam['target'][:self.mParam['target'].find('boot')].replace('/dev/', '')
