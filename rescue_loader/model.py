@@ -62,6 +62,7 @@ import pyudev
 import socket
 import struct
 import subprocess
+import signal
 import logging
 import pyqrcode
 from html.parser import HTMLParser
@@ -771,8 +772,8 @@ class WebDownloadActionModeller(BaseActionModeller):
             for k, v in DecompCmd.items():
                 if k in self.mIOs[0].getFileType():
                     decompcmd = v
-            wgetcmd = 'wget -O - {}'.format(self.mIOs[0].mUrl)
-            ddcmd = 'dd of={} bs=512k oflag=dsync status=progress'.format(self.mIOs[1].mFilename)
+            wgetcmd = 'wget -q -O - {}'.format(self.mIOs[0].mUrl)
+            ddcmd = 'dd of={} bs=4096 conv=notrunc,fsync'.format(self.mIOs[1].mFilename)
 
             # python lzma method
             chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
@@ -815,9 +816,9 @@ class WebDownloadActionModeller(BaseActionModeller):
         if m:
             _logger.debug('matched: {}'.format(m.groups()))
             if pid == self.__pddpid:
-                copied = m.groups()[0]
-                self.mResult['bytes_read'] = copied
-                self.mResult['bytes_written'] = copied
+                recin, partin, recout, partout = m.groups()
+                self.mResult['bytes_read'] = int(recin) * 4096
+                self.mResult['bytes_written'] = int(recout) * 4096
             else:
                 percent, read, eta = m.groups()
                 self.mResult['bytes_read'] = read
@@ -833,8 +834,9 @@ class WebDownloadActionModeller(BaseActionModeller):
                 fd.seek(0)
                 line = fd.readlines()
                 if line is not None:
-                    _logger.debug('last progress line: {}'.format(line[-1]))
-                    self.__parseProgress(self.__pddpid, line[-1], '(.*) bytes .* copied')
+                    lastline = '{}-{}'.format(line[-2].strip(), line[-1].strip())
+                    _logger.debug('last progress line: {}'.format(lastline))
+                    self.__parseProgress(self.__pddpid, lastline, '(.*)\+(.*) records in-(.*)\+(.*) records out')
             except Exception as ex:
                 # waiting for data to be available on stderr
                 _logger.error('read_stream exception: {}'.format(ex))
@@ -873,6 +875,7 @@ class WebDownloadActionModeller(BaseActionModeller):
                 pdd = subprocess.Popen(
                     [ddcmd],
                     stdin=pxz.stdout,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=True,
                 )
@@ -889,6 +892,7 @@ class WebDownloadActionModeller(BaseActionModeller):
                         out, err = ptee.communicate(timeout=1)
                         break
                     except subprocess.TimeoutExpired as ex:
+                        self.__signal_subproc(pdd)
                         if timeout_counter > 180: # timed out after 3 minutes
                             self.__kill_subproc([pwget, pxz, pdd, ptee])
                             raise ex
@@ -910,10 +914,11 @@ class WebDownloadActionModeller(BaseActionModeller):
         except Exception:
             raise
 
+    def __signal_subproc(self, proc):
+        proc.send_signal(signal.SIGUSR1)
+
     def __kill_subproc(self, procs):
         for proc in procs:
-            for cproc in proc.children(recursive=True):
-                cproc.kill()
             proc.kill()
 
 

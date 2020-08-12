@@ -2206,8 +2206,8 @@ class chooseSelectionSlot(QChooseSlot):
             # dd the first 139264 sectors(71,303,168 bytes, i.e. mbr boot sector + SPL), NOTE: bs = 1114112 = 71,303,168 * 512 / 64
             bsize = 1114112
         try:
-            _logger.info('{}: dd if={} of=/tmp/rescue.img bs={} count={} iflag=dsync'.format(self.objectName(), self.mPick['storage'], bsize, chunks))
-            ret = subprocess.check_call(['dd', 'if={}'.format(self.mPick['storage']), 'of=/tmp/rescue.img', 'bs={}'.format(bsize), 'count={}'.format(chunks), 'iflag=dsync'])
+            _logger.info('{}: dd if={} of=/tmp/rescue.img bs={} count={} conv=notrunc'.format(self.objectName(), self.mPick['storage'], bsize, chunks))
+            ret = subprocess.check_call(['dd', 'if={}'.format(self.mPick['storage']), 'of=/tmp/rescue.img', 'bs={}'.format(bsize), 'count={}'.format(chunks), 'conv=notrunc'])
         except subprocess.CalledProcessError as err:
             return err.returncode
         return ret
@@ -2344,7 +2344,7 @@ class downloadImageSlot(QProcessSlot):
                 # use subprocess to restor the rescue system
                 # i.e. subprocess.check_call(['mmc', 'bootpart', 'enable', '0', '1', '/dev/mmcblk2'])
                 try:
-                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage), 'bs=1M', 'oflag=dsync'])
+                    subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mTgtStorage), 'bs=1M', 'conv=notrunc,fsync'])
                 except subprocess.CalledProcessError as err:
                     _logger.error('{}: cmd: {} return code:{} output: {}'.format(self.objectName(), err.cmd, err.returncode, err.output))
                     raise
@@ -2697,8 +2697,8 @@ class postDownloadSlot(QProcessSlot):
         # copy back the backed up /tmp/rescue.img to target eMMC
         self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
         try:
-            _logger.info('{}: dd if=/tmp/rescue.img of={} bs=1M oflag=dsync'.format(self.objectName(), self.mPick['storage']))
-            subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'oflag=dsync'])
+            _logger.info('{}: dd if=/tmp/rescue.img of={} bs=1M conv=notrunc,fsync'.format(self.objectName(), self.mPick['storage']))
+            subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'conv=notrunc,fsync'])
         except subprocess.CalledProcessError as err:
             _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
             raise
