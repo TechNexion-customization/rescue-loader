@@ -556,7 +556,10 @@ class scanStorageSlot(QProcessSlot):
         # for Host PC
         # loop self.mResults and detemine emulated target emmc storage over the USB/Serial
         # find the emmc from target board first (serial conn type)
-        mmcs = [disk for disk in self.mResults if 'mmc:block' in disk['uevent'] and disk['conntype'] == 'serial']
+        if IsATargetBoard():
+            mmcs = [disk for disk in self.mResults if 'mmc:block' in disk['uevent'] and "MMC_TYPE=SD" in disk['uevent']]
+        else:
+            mmcs = [disk for disk in self.mResults if 'mmc:block' in disk['uevent'] and disk['conntype'] == 'serial']
         if len(mmcs) > 0:
             # remove emmcs of targetboard from results list
             for mmc in mmcs:
@@ -602,7 +605,9 @@ class mountStorageSlot(QProcessSlot):
                     if isinstance(disk, dict) and 'path' in disk and \
                        'device_type' in disk and disk['device_type'] == 'disk':
                         if IsATargetBoard():
-                            if self.mDiskPath != disk['path']:
+                            # WILL cause sendError twice when multiple storages
+                            # e.g. mmcblk2, mmcblk0 are found
+                            if self.mDiskPath is None:
                                 self.mDiskPath = disk['path'][:]
                                 _logger.warn('{}: found disk: {}'.format(self.objectName(), self.mDiskPath))
                                 self.sendError({'SerialMode': True, 'ask': 'serial'})
