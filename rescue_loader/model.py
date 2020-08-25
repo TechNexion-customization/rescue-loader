@@ -1317,7 +1317,7 @@ class ConfigNicActionModeller(BaseActionModeller):
                 if self.mResult['flags'] & 0x1:
                     self.mResult['state'].append('UP')
                 if self.mResult['flags'] & 0x2:
-                    self.mResult['state'].append('BOARDCAST')
+                    self.mResult['state'].append('BROARDCAST')
                 if self.mResult['flags'] & 0x40:
                     self.mResult['state'].append('RUNNING')
                 if self.mResult['flags'] & 0x1000:

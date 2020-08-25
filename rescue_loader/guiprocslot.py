@@ -701,31 +701,37 @@ class detectDeviceSlot(QProcessSlot):
         if 'cmd' in results and results['cmd'] == 'info' and \
            'target' in results and results['target'] == 'som' and \
            'status' in results and results['status'] == 'success':
+            if 'file_content' in results:
+                panel=None
+                # fall through to parse file content from /proc/device-tree/model returned from installerd
+                # they are returned as array of strings, but dbus message turns them in to string withs ""
+                lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
+                for i, w in enumerate(lstWords):
+                    # get CPU and FORM
+                    if '-' in w and 'imx' in w.lower():
+                        self.mCpu = w.split('-')[1]
+                        self.mForm = w.split('-')[0]
+                    # get PANEL
+                    if '-' in w and 'inch' in w.lower():
+                        panel = '{}'.format(w)
+                    elif 'inch' == w.lower():
+                        panel = '{}-{}'.format(lstWords[i-1], w.lower())
+                    # get BOARD
+                    if 'board' == w.lower():
+                        # for most edm system boards without baseboards
+                        if any(bd in self.mForm for bd in ['TEP', 'TEK']):
+                            self.mBaseboard = self.mForm
+                            if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
+                                self.mBaseboard += '_{}'.format(panel)
+                    elif 'baseboard' == w.lower():
+                        self.mBaseboard = lstWords[i-1]
             if 'found_match' in results:
-                self.mForm, self.mCpu, self.mBaseboard = results['found_match'].split(',')
-                if '-' in self.mCpu:
-                    self.mCpu = self.mCpu.split('-',1)[0]
-            else:
-                if 'file_content' in results:
-                    panel=None
-                    # fall through to parse file content from /proc/device-tree/model returned from installerd
-                    # they are returned as array of strings, but dbus message turns them in to string withs ""
-                    lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
-                    for i, w in enumerate(lstWords):
-                        if '-' in w and 'imx' in w.lower():
-                            self.mCpu = w.split('-')[1]
-                            self.mForm = w.split('-')[0]
-                        if '-' in w and 'inch' in w.lower():
-                            panel = '{}'.format(w)
-                        if 'board' in w or 'Board' in w and 'baseboard' not in w:
-                            # for most edm system boards without baseboards
-                            for bd in ['TEP', 'TEK']:
-                                if bd in self.mForm:
-                                    self.mBaseboard = bd
-                        if 'baseboard' in w:
-                            self.mBaseboard = lstWords[i-1]
-                    if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
-                        self.mBaseboard += '-{}'.format(panel)
+                # This is just to double confirm
+                frm, cpu, brd = results['found_match'].split(',')
+                if '-' in cpu and self.mCpu != cpu.split('-',1)[0]:
+                    self.mCpu = cpu.split('-',1)[0]
+                if self.mForm != frm:
+                    self.mForm = frm
 
     def validateResult(self):
         _logger.warn('{} validate result: cpu:{} form:{} baseboard:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))

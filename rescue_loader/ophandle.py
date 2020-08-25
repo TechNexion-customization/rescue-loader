@@ -416,7 +416,7 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['tgt_type'] = 'mem'
                 elif k==self.mArgs[0] and v=='som':
                     self.mActionParam['src_filename'] = '/proc/device-tree/model'
-                    self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) .* (\w+) \w*board'
+                    self.mActionParam['re_pattern'] = '\w+ (\w+)-([imx|IMX]\w+) (.*) .*board'
                 elif k==self.mArgs[0] and v=='cpu':
                     self.mActionParam['src_filename'] = '/sys/devices/soc0/soc_id'
                     self.mActionParam['re_pattern'] = '^(.*)[\s|\n]$'
