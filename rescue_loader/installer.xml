@@ -57,13 +57,13 @@
 							</font>
 						</property>
 						<property name="windowTitle">
-							<string>TechNexion Rescue System</string>
+							<string>TechNexion Software Loader</string>
 						</property>
 						<layout class="QGridLayout" name="gridLayoutMain">
 							<item row="0" column="0" colspan="5">
 								<widget class="QWidget" name="tabTitle" native="true">
-									<layout class="QGridLayout" name="GridLayoutTitle">
-										<item row="0" column="0" colspan="3">
+									<layout class="QGridLayout" name="gridLayoutTitle">
+										<item row="0" column="0" rowspan="2" colspan="3">
 											<widget class="QLabel" name="lblLogo">
 												<property name="styleSheet">
 													<string notr="true">background: transparent</string>
@@ -73,7 +73,7 @@
 												</property>
 											</widget>
 										</item>
-										<item row="0" column="3">
+										<item row="0" column="3" rowspan="2">
 											<widget class="QFrame" name="frameEmpty">
 												<property name="frameShape">
 													<enum>QFrame::NoFrame</enum>
@@ -81,62 +81,195 @@
 											</widget>
 										</item>
 										<item row="0" column="4" colspan="4">
-											<widget class="QListWidget" name="lstWgtSelection">
-												<property name="layoutDirection">
-													<enum>Qt::RightToLeft</enum>
+											<widget class="QLabel" name="lblVersion">
+												<property name="text">
+													<string>Ver 2020.06.30.1</string>
 												</property>
+												<property name="alignment">
+													<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter
+													</set>
+												</property>
+											</widget>
+										</item>
+										<item row="1" column="4" colspan="4">
+											<widget class="QLabel" name="lblCloud">
+												<property name="text">
+													<string></string>
+												</property>
+												<property name="alignment">
+													<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter
+													</set>
+												</property>
+											</widget>
+										</item>
+									</layout>
+								</widget>
+							</item>
+							<item row="1" column="0" rowspan="4" colspan="5">
+								<widget class="QWidget" name="tabError" native="true">
+									<layout class="QGridLayout" name="gridLayoutError">
+										<item row="0" column="0">
+											<widget class="QLabel" name="msgErrorIcon">
 												<property name="styleSheet">
 													<string notr="true">background: transparent</string>
 												</property>
-												<property name="frameShape">
-													<enum>QFrame::NoFrame</enum>
+												<property name="alignment">
+													<set>Qt::AlignCenter</set>
 												</property>
-												<property name="editTriggers">
-													<set>QAbstractItemView::NoEditTriggers</set>
+											</widget>
+										</item>
+										<item row="0" column="1" colspan="4">
+											<widget class="QLabel" name="msgErrorTitle">
+												<property name="styleSheet">
+													<string notr="true">background: transparent</string>
 												</property>
-												<property name="showDropIndicator" stdset="0">
-													<bool>false</bool>
+												<property name="alignment">
+													<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
 												</property>
-												<property name="dragDropMode">
-													<enum>QAbstractItemView::NoDragDrop</enum>
-												</property>
-												<property name="iconSize">
-													<size>
-														<width>100</width>
-														<height>100</height>
-													</size>
-												</property>
-												<property name="movement">
-													<enum>QListView::Static</enum>
-												</property>
-												<property name="viewMode">
-													<enum>QListView::IconMode</enum>
-												</property>
-												<property name="uniformItemSizes">
+												<property name="wordWrap">
 													<bool>true</bool>
 												</property>
-												<property name="sortingEnabled">
-													<bool>false</bool>
+											</widget>
+										</item>
+										<item row="0" column="5">
+											<widget class="QLabel" name="msgErrorQRcode">
+												<property name="styleSheet">
+													<string notr="true">background: transparent</string>
 												</property>
+												<property name="alignment">
+													<set>Qt::AlignCenter</set>
+												</property>
+											</widget>
+										</item>
+										<item row="1" column="0" rowspan="3" colspan="6">
+											<widget class="QLabel" name="msgErrorContent">
+												<property name="styleSheet">
+													<string notr="true">background: transparent</string>
+												</property>
+												<property name="alignment">
+													<set>Qt::AlignCenter</set>
+												</property>
+											</widget>
+										</item>
+										<item row="0" column="0" rowspan="4" colspan="6">
+											<widget class="QWidget" name="wgtErrorContent"
+												native="true">
+												<layout class="QGridLayout"
+													name="msgErrorContentLayout">
+													<item row="0" column="0">
+														<widget class="QLabel" name="lblErrorTickBox1">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="0" column="1" colspan="3">
+														<widget class="QLabel" name="lblErrorText1">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="1" column="0">
+														<widget class="QLabel" name="lblErrorTickBox2">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="1" column="1" colspan="3">
+														<widget class="QLabel" name="lblErrorText2">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="2" column="0">
+														<widget class="QLabel" name="lblErrorTickBox3">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="2" column="1" colspan="3">
+														<widget class="QLabel" name="lblErrorText3">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="3" column="0">
+														<widget class="QLabel" name="lblErrorTickBox4">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="3" column="1" colspan="3">
+														<widget class="QLabel" name="lblErrorText4">
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+													<item row="0" column="5" rowspan="4" colspan="4">
+														<widget class="QLabel" name="lblErrorMessages"><!-- msgContent -->
+															<property name="styleSheet">
+																<string notr="true">background: transparent; border: 5px
+																	solid white;
+																</string>
+															</property>
+															<property name="frameShape">
+																<enum>QFrame::Box</enum>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+															<property name="wordWrap">
+																<bool>true</bool>
+															</property>
+														</widget>
+													</item>
+												</layout>
 											</widget>
 										</item>
 									</layout>
 								</widget>
 							</item>
-							<item row="1" column="0" colspan="5">
-								<widget class="QWidget" name="tabSpace" native="true">
-									<layout class="QHBoxLayout" name="hboxLayoutSpace">
-										<item>
-											<widget class="QFrame" name="frameSpace">
-												<property name="frameShape">
-													<enum>QFrame::NoFrame</enum>
-												</property>
-											</widget>
-										</item>
-									</layout>
-								</widget>
-							</item>
-							<item row="2" column="0" rowspan="3" colspan="5">
+							<item row="1" column="0" rowspan="4" colspan="5">
 								<widget class="QWidget" name="tabBoard" native="true">
 									<layout class="QGridLayout" name="gridLayoutBoard">
 										<item row="0" column="0">
@@ -179,7 +312,7 @@
 									</layout>
 								</widget>
 							</item>
-							<item row="2" column="0" rowspan="3" colspan="5">
+							<item row="1" column="0" rowspan="4" colspan="5">
 								<widget class="QWidget" name="tabStorage" native="true">
 									<layout class="QGridLayout" name="gridLayoutStorage">
 										<item row="0" column="0">
@@ -222,7 +355,7 @@
 									</layout>
 								</widget>
 							</item>
-							<item row="2" column="0" rowspan="3" colspan="5">
+							<item row="1" column="0" rowspan="4" colspan="5">
 								<widget class="QWidget" name="tabOS" native="true">
 									<layout class="QGridLayout" name="gridLayoutOS">
 										<item row="0" column="0">
@@ -265,7 +398,7 @@
 									</layout>
 								</widget>
 							</item>
-							<item row="2" column="0" rowspan="3" colspan="5">
+							<item row="1" column="0" rowspan="4" colspan="5">
 								<widget class="QWidget" name="tabDisplay" native="true">
 									<layout class="QGridLayout" name="gridLayoutDisplay">
 										<item row="0" column="0">
@@ -308,7 +441,7 @@
 									</layout>
 								</widget>
 							</item>
-							<item row="2" column="0" rowspan="3" colspan="5">
+							<item row="1" column="0" rowspan="4" colspan="5">
 								<widget class="QWidget" name="tabInstall" native="true">
 									<layout class="QGridLayout" name="gridLayoutInstall">
 										<item row="0" column="0" rowspan="4" colspan="5">
@@ -335,7 +468,8 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbBoard" native="true">
+														<widget class="QWidget" name="vbBoard"
+															native="true">
 															<layout class="QVBoxLayout" name="vboxLayoutBoard">
 																<item>
 																	<widget class="QLabel" name="lblBoard">
@@ -355,8 +489,10 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbDisplay" native="true">
-															<layout class="QVBoxLayout" name="vboxLayoutDisplay">
+														<widget class="QWidget" name="vbDisplay"
+															native="true">
+															<layout class="QVBoxLayout"
+																name="vboxLayoutDisplay">
 																<item>
 																	<widget class="QLabel" name="lblDisplay">
 																		<property name="alignment">
@@ -377,7 +513,8 @@
 													<item>
 														<widget class="QLabel" name="lblArrow">
 															<property name="pixmap">
-																<pixmap resource="resource.qrc">:/res/images/tn_arrow.svg</pixmap>
+																<pixmap resource="resource.qrc">:/res/images/tn_arrow.svg
+																</pixmap>
 															</property>
 															<property name="alignment">
 																<set>Qt::AlignCenter</set>
@@ -385,8 +522,10 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbStorage" native="true">
-															<layout class="QVBoxLayout" name="vboxLayoutStorage">
+														<widget class="QWidget" name="vbStorage"
+															native="true">
+															<layout class="QVBoxLayout"
+																name="vboxLayoutStorage">
 																<item>
 																	<widget class="QLabel" name="lblStorage">
 																		<property name="alignment">
@@ -408,12 +547,14 @@
 											</widget>
 										</item>
 										<item row="4" column="0" colspan="5">
-											<widget class="QWidget" name="wgtProgress" native="true">
+											<widget class="QWidget" name="wgtProgress"
+												native="true">
 												<layout class="QGridLayout" name="gridayoutProgress">
 													<item row="0" column="0" rowspan="2" colspan="5">
 														<widget class="QPushButton" name="btnFlash">
 															<property name="sizePolicy">
-																<sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+																<sizepolicy hsizetype="Minimum"
+																	vsizetype="Expanding">
 																	<horstretch>0</horstretch>
 																	<verstretch>0</verstretch>
 																</sizepolicy>
@@ -438,7 +579,8 @@
 														</widget>
 													</item>
 													<item row="0" column="0" colspan="5">
-														<widget class="QProgressBar" name="progressBarStatus">
+														<widget class="QProgressBar"
+															name="progressBarStatus">
 															<property name="value">
 																<number>0</number>
 															</property>
@@ -453,14 +595,16 @@
 																<string>Remaining Time</string>
 															</property>
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing</set>
+																<set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing
+																</set>
 															</property>
 														</widget>
 													</item>
 													<item row="1" column="0" colspan="3">
 														<widget class="QLabel" name="lblDownloadFlash">
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter</set>
+																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
 															</property>
 														</widget>
 													</item>
@@ -472,55 +616,102 @@
 							</item>
 							<item row="5" column="0" colspan="5">
 								<widget class="QWidget" name="tabFooter" native="true">
-									<layout class="QHBoxLayout" name="hboxLayoutFooter">
-										<item>
-											<widget class="QLabel" name="lblInstruction">
-												<property name="text">
-													<string />
-												</property>
-												<property name="alignment">
-													<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-												</property>
+									<layout class="QGridLayout" name="gridlayoutFooter">
+										<item row="0" column="0">
+											<widget class="QWidget" name="wgtFooterMenu"
+												native="true">
+												<layout class="QGridLayout"
+													name="gridlayoutFooterMenu">
+													<item row="0" column="0">
+														<widget class="QListWidget" name="lstWgtSelection">
+															<property name="layoutDirection">
+																<enum>Qt::RightToLeft</enum>
+															</property>
+															<property name="styleSheet">
+																<string notr="true">background: transparent</string>
+															</property>
+															<property name="frameShape">
+																<enum>QFrame::NoFrame</enum>
+															</property>
+															<property name="editTriggers">
+																<set>QAbstractItemView::NoEditTriggers</set>
+															</property>
+															<property name="showDropIndicator" stdset="0">
+																<bool>false</bool>
+															</property>
+															<property name="dragDropMode">
+																<enum>QAbstractItemView::NoDragDrop</enum>
+															</property>
+															<property name="iconSize">
+																<size>
+																	<width>100</width>
+																	<height>100</height>
+																</size>
+															</property>
+															<property name="movement">
+																<enum>QListView::Static</enum>
+															</property>
+															<property name="viewMode">
+																<enum>QListView::IconMode</enum>
+															</property>
+															<property name="uniformItemSizes">
+																<bool>true</bool>
+															</property>
+															<property name="sortingEnabled">
+																<bool>false</bool>
+															</property>
+														</widget>
+													</item>
+												</layout>
 											</widget>
 										</item>
-										<item>
-											<widget class="QLabel" name="lblCpu">
-												<property name="text">
-													<string>No CPU</string>
-												</property>
-												<property name="alignment">
-													<set>Qt::AlignCenter</set>
-												</property>
-											</widget>
-										</item>
-										<item>
-											<widget class="QLabel" name="lblForm">
-												<property name="text">
-													<string>No Form Factor</string>
-												</property>
-												<property name="alignment">
-													<set>Qt::AlignCenter</set>
-												</property>
-											</widget>
-										</item>
-										<item>
-											<widget class="QLabel" name="lblBaseboard">
-												<property name="text">
-													<string>No Baseboard</string>
-												</property>
-												<property name="alignment">
-													<set>Qt::AlignCenter</set>
-												</property>
-											</widget>
-										</item>
-										<item>
-											<widget class="QLabel" name="lblVersion">
-												<property name="text">
-													<string>Ver 2020.06.30.1</string>
-												</property>
-												<property name="alignment">
-													<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-												</property>
+										<item row="0" column="0">
+											<widget class="QWidget" name="wgtFooterInfo"
+												native="true">
+												<layout class="QHBoxLayout"
+													name="hboxLayoutFooterInfo">
+													<item>
+														<widget class="QLabel" name="lblCpu">
+															<property name="text">
+																<string>No CPU</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignCenter</set>
+															</property>
+														</widget>
+													</item>
+													<item>
+														<widget class="QLabel" name="lblForm">
+															<property name="text">
+																<string>No Form Factor</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignCenter</set>
+															</property>
+														</widget>
+													</item>
+													<item>
+														<widget class="QLabel" name="lblBaseboard">
+															<property name="text">
+																<string>No Baseboard</string>
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignCenter</set>
+															</property>
+														</widget>
+													</item>
+													<item>
+														<widget class="QLabel" name="lblInstruction">
+															<property name="text">
+																<string />
+															</property>
+															<property name="alignment">
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
+															</property>
+														</widget>
+													</item>
+												</layout>
 											</widget>
 										</item>
 									</layout>
@@ -687,7 +878,8 @@
 								</item>
 							</layout>
 						</widget>
-						<widget class="QProcessSlot" name="detectDevice" native="true">
+						<widget class="QProcessSlot" name="detectDevice"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -697,7 +889,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanStorage" native="true">
+						<widget class="QProcessSlot" name="scanStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -707,7 +900,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanNetwork" native="true">
+						<widget class="QProcessSlot" name="scanNetwork"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -717,7 +911,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanPartition" native="true">
+						<widget class="QProcessSlot" name="scanPartition"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -727,7 +922,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="mountStorage" native="true">
+						<widget class="QProcessSlot" name="mountStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -747,7 +943,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="crawlLocalfs" native="true">
+						<widget class="QProcessSlot" name="crawlLocalfs"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -757,7 +954,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="downloadImage" native="true">
+						<widget class="QProcessSlot" name="downloadImage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -767,7 +965,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="postDownload" native="true">
+						<widget class="QProcessSlot" name="postDownload"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -777,7 +976,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="processError" native="true">
+						<widget class="QProcessSlot" name="processError"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -797,7 +997,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseBoard" native="true">
+						<widget class="QProcessSlot" name="chooseBoard"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -807,7 +1008,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseDisplay" native="true">
+						<widget class="QProcessSlot" name="chooseDisplay"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -817,7 +1019,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseStorage" native="true">
+						<widget class="QProcessSlot" name="chooseStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -827,7 +1030,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseSelection" native="true">
+						<widget class="QProcessSlot" name="chooseSelection"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -1965,7 +2169,8 @@
 										<item row="0" column="0">
 											<widget class="QLabel" name="lblLogo">
 												<property name="sizePolicy">
-													<sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+													<sizepolicy hsizetype="Expanding"
+														vsizetype="Expanding">
 														<horstretch>1</horstretch>
 														<verstretch>0</verstretch>
 													</sizepolicy>
@@ -1984,7 +2189,8 @@
 										<item row="1" column="0" rowspan="2">
 											<widget class="QListWidget" name="lstWgtSelection">
 												<property name="sizePolicy">
-													<sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+													<sizepolicy hsizetype="Expanding"
+														vsizetype="Expanding">
 														<horstretch>1</horstretch>
 														<verstretch>1</verstretch>
 													</sizepolicy>
@@ -2240,8 +2446,10 @@
 								<widget class="QWidget" name="tabInstall" native="true">
 									<layout class="QGridLayout" name="gridLayoutInstall">
 										<item row="0" column="0">
-											<widget class="QWidget" name="wgtTopOutput" native="true">
-												<layout class="QHBoxLayout" name="hboxLayoutTopOutput">
+											<widget class="QWidget" name="wgtTopOutput"
+												native="true">
+												<layout class="QHBoxLayout"
+													name="hboxLayoutTopOutput">
 													<item>
 														<widget class="QWidget" name="vbOS" native="true">
 															<layout class="QVBoxLayout" name="vboxLayoutOS">
@@ -2263,7 +2471,8 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbBoard" native="true">
+														<widget class="QWidget" name="vbBoard"
+															native="true">
 															<layout class="QVBoxLayout" name="vboxLayoutBoard">
 																<item>
 																	<widget class="QLabel" name="lblBoard">
@@ -2283,8 +2492,10 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbDisplay" native="true">
-															<layout class="QVBoxLayout" name="vboxLayoutDisplay">
+														<widget class="QWidget" name="vbDisplay"
+															native="true">
+															<layout class="QVBoxLayout"
+																name="vboxLayoutDisplay">
 																<item>
 																	<widget class="QLabel" name="lblDisplay">
 																		<property name="alignment">
@@ -2306,12 +2517,15 @@
 											</widget>
 										</item>
 										<item row="1" column="0">
-											<widget class="QWidget" name="wgtButtomOutput" native="true">
-												<layout class="QHBoxLayout" name="hboxLayoutBottomOutput">
+											<widget class="QWidget" name="wgtButtomOutput"
+												native="true">
+												<layout class="QHBoxLayout"
+													name="hboxLayoutBottomOutput">
 													<item>
 														<widget class="QLabel" name="lblArrow">
 															<property name="pixmap">
-																<pixmap resource="resource.qrc">:/res/images/tn_arrow.svg</pixmap>
+																<pixmap resource="resource.qrc">:/res/images/tn_arrow.svg
+																</pixmap>
 															</property>
 															<property name="alignment">
 																<set>Qt::AlignCenter</set>
@@ -2319,8 +2533,10 @@
 														</widget>
 													</item>
 													<item>
-														<widget class="QWidget" name="vbStorage" native="true">
-															<layout class="QVBoxLayout" name="vboxLayoutStorage">
+														<widget class="QWidget" name="vbStorage"
+															native="true">
+															<layout class="QVBoxLayout"
+																name="vboxLayoutStorage">
 																<item>
 																	<widget class="QLabel" name="lblStorage">
 																		<property name="alignment">
@@ -2342,12 +2558,14 @@
 											</widget>
 										</item>
 										<item row="4" column="0">
-											<widget class="QWidget" name="wgtProgress" native="true">
+											<widget class="QWidget" name="wgtProgress"
+												native="true">
 												<layout class="QGridLayout" name="gridayoutProgress">
 													<item row="0" column="0" rowspan="2" colspan="5">
 														<widget class="QPushButton" name="btnFlash">
 															<property name="sizePolicy">
-																<sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+																<sizepolicy hsizetype="Minimum"
+																	vsizetype="Expanding">
 																	<horstretch>0</horstretch>
 																	<verstretch>0</verstretch>
 																</sizepolicy>
@@ -2372,7 +2590,8 @@
 														</widget>
 													</item>
 													<item row="0" column="0" colspan="5">
-														<widget class="QProgressBar" name="progressBarStatus">
+														<widget class="QProgressBar"
+															name="progressBarStatus">
 															<property name="value">
 																<number>0</number>
 															</property>
@@ -2387,14 +2606,16 @@
 																<string>Remaining Time</string>
 															</property>
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing</set>
+																<set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing
+																</set>
 															</property>
 														</widget>
 													</item>
 													<item row="1" column="0" colspan="3">
 														<widget class="QLabel" name="lblDownloadFlash">
 															<property name="alignment">
-																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter</set>
+																<set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
 															</property>
 														</widget>
 													</item>
@@ -2408,8 +2629,10 @@
 								<widget class="QWidget" name="tabFooter" native="true">
 									<layout class="QGridLayout" name="gridLayoutFooter">
 										<item row="0" column="0">
-											<widget class="QWidget" name="wgtTopFooter" native="true">
-												<layout class="QHBoxLayout" name="hboxLayoutBottomFooter">
+											<widget class="QWidget" name="wgtTopFooter"
+												native="true">
+												<layout class="QHBoxLayout"
+													name="hboxLayoutBottomFooter">
 													<item>
 														<widget class="QLabel" name="lblCpu">
 															<property name="text">
@@ -2444,15 +2667,18 @@
 											</widget>
 										</item>
 										<item row="1" column="0">
-											<widget class="QWidget" name="wgtBottomFooter" native="true">
-												<layout class="QHBoxLayout" name="hboxLayoutTopFooter">
+											<widget class="QWidget" name="wgtBottomFooter"
+												native="true">
+												<layout class="QHBoxLayout"
+													name="hboxLayoutTopFooter">
 													<item>
 														<widget class="QLabel" name="lblInstruction">
 															<property name="text">
 																<string />
 															</property>
 															<property name="alignment">
-																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+																<set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
+																</set>
 															</property>
 														</widget>
 													</item>
@@ -2462,7 +2688,8 @@
 																<string>Ver 2020.06.30.1</string>
 															</property>
 															<property name="alignment">
-																<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+																<set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter
+																</set>
 															</property>
 														</widget>
 													</item>
@@ -2633,7 +2860,8 @@
 								</item>
 							</layout>
 						</widget>
-						<widget class="QProcessSlot" name="detectDevice" native="true">
+						<widget class="QProcessSlot" name="detectDevice"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2643,7 +2871,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanStorage" native="true">
+						<widget class="QProcessSlot" name="scanStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2653,7 +2882,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanNetwork" native="true">
+						<widget class="QProcessSlot" name="scanNetwork"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2663,7 +2893,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="scanPartition" native="true">
+						<widget class="QProcessSlot" name="scanPartition"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2673,7 +2904,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="mountStorage" native="true">
+						<widget class="QProcessSlot" name="mountStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2693,7 +2925,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="crawlLocalfs" native="true">
+						<widget class="QProcessSlot" name="crawlLocalfs"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2703,7 +2936,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="downloadImage" native="true">
+						<widget class="QProcessSlot" name="downloadImage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2713,7 +2947,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="postDownload" native="true">
+						<widget class="QProcessSlot" name="postDownload"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2723,7 +2958,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="processError" native="true">
+						<widget class="QProcessSlot" name="processError"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2743,7 +2979,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseBoard" native="true">
+						<widget class="QProcessSlot" name="chooseBoard"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2753,7 +2990,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseDisplay" native="true">
+						<widget class="QProcessSlot" name="chooseDisplay"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2763,7 +3001,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseStorage" native="true">
+						<widget class="QProcessSlot" name="chooseStorage"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>
@@ -2773,7 +3012,8 @@
 								</rect>
 							</property>
 						</widget>
-						<widget class="QProcessSlot" name="chooseSelection" native="true">
+						<widget class="QProcessSlot" name="chooseSelection"
+							native="true">
 							<property name="geometry">
 								<rect>
 									<x>0</x>

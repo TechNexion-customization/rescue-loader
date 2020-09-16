@@ -932,13 +932,16 @@ class GuiViewer(QObject, BaseViewer):
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
             pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 4, scnRect.height() * 4)).scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio)
             brush = QtGui.QBrush(pixmap)
-            palette.setBrush(QtGui.QPalette.Background, brush)
+            palette.setBrush(QtGui.QPalette.Window, brush)
+            txtbrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+            palette.setBrush(QtGui.QPalette.WindowText, txtbrush)
+            palette.setBrush(QtGui.QPalette.ButtonText, txtbrush)
+            palette.setBrush(QtGui.QPalette.Text, txtbrush)
             self.mGuiRootWidget.setPalette(palette)
             self.mGuiRootWidget.setGeometry(scnRect)
 
             # set the tabTitle widget so that the layout can then be calculated automatically.
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabTitle').setFixedHeight(int(scnRect.height() / 4))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabSpace').setFixedHeight(int(scnRect.height() / 24))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').setFixedHeight(int(scnRect.height() / 16 * 9))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').setFixedHeight(int(scnRect.height() / 16 * 9))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').setFixedHeight(int(scnRect.height() / 16 * 9))
@@ -946,7 +949,7 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
             #self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
             # Set the geometry of the message box to slightly smaller than application geomtry
-            dialogrect = QtCore.QRect(int(scnRect.width() / 16), int(scnRect.height() / 16), int(scnRect.width() - (scnRect.width() / 8)), int(scnRect.height() - (scnRect.height() / 8)))
+            dialogrect = QtCore.QRect(0, 0, scnRect.width(), scnRect.height())
             self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setGeometry(dialogrect)
             self.mGuiRootWidget.show()
 

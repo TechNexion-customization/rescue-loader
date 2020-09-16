@@ -45,7 +45,7 @@
     <file>images/no_cpuform.svg</file>
     <file>images/tick.svg</file>
     <file>images/cross.svg</file>
-    <file>images/ok.svg</file>
+    <file>images/box.svg</file>
     <file>images/stop.svg</file>
     <file>images/error_edm-fairy_reset.gif</file>
   </qresource>
