@@ -610,7 +610,11 @@ class mountStorageSlot(QProcessSlot):
                             if self.mDiskPath is None:
                                 self.mDiskPath = disk['path'][:]
                                 _logger.warn('{}: found disk: {}'.format(self.objectName(), self.mDiskPath))
-                                self.sendError({'SerialMode': True, 'ask': 'serial'})
+                                #self.sendError({'SerialMode': True, 'ask': 'serial'})
+                                # bypass asking for serial communication mode here on Target Device
+                                # leave asking for after download failures
+                                self.mResults.update({'cmd': 'connect', 'status': 'continue', 'src_filename': '{}'.format(self.mDiskPath)})
+                                self.finish.emit()
                             else:
                                 # already found last time, so finish emit and continue
                                 _logger.warn('{}: already found disk: {}'.format(self.objectName(), self.mDiskPath))
