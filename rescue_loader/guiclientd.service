@@ -4,8 +4,7 @@ After=dbus.service dbus-sess.service installerd.service network-online.target sy
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/systemd/guiclientd.conf
-ExecStart=/usr/bin/python3 /usr/lib/python3.5/site-packages/rescue_loader/guiview.py $ARG
+ExecStart=/usr/sbin/guiclientd.sh
 
 [Install]
 WantedBy=multi-user.target
