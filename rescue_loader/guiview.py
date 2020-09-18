@@ -947,10 +947,12 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').setFixedHeight(int(scnRect.height() / 16 * 9))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').setFixedHeight(int(scnRect.height() / 16 * 9))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabError').setFixedHeight(int(scnRect.height() / 16 * 9))
             #self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
             # Set the geometry of the message box to slightly smaller than application geomtry
             dialogrect = QtCore.QRect(0, 0, scnRect.width(), scnRect.height())
             self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setGeometry(dialogrect)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabMsgBoxTitle').setFixedHeight(int(scnRect.height() / 4))
             self.mGuiRootWidget.show()
 
             # setup the icon size for QListWidgets
@@ -978,22 +980,32 @@ class GuiViewer(QObject, BaseViewer):
             smalliconsize = QtCore.QSize(sh, sh)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'wgtFooterInfo').hide()
 
             # set font size
             fontsize = int(w/40) if int(w/40) > QtGui.QApplication.font().pointSize() else QtGui.QApplication.font().pointSize()
             _logger.warning('fontsize = {} ({}>{})'.format(fontsize, int(w/40), QtGui.QApplication.font().pointSize()))
             self.mGuiRootWidget.setFont(QtGui.QFont('Lato', fontsize))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize * 2))
-            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize * 2))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').setFont(QtGui.QFont('Lato', fontsize * 2))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorMessages').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorContent').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorIcon').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorTitle').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorQRcode').hide()
+            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize + 2))
 
             # Show/Hide additional Widgets
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'waitingIndicator').hide()
 
     ###########################################################################

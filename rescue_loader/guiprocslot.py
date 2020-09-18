@@ -805,7 +805,8 @@ class scanPartitionSlot(QProcessSlot):
         if isinstance(self.mResults, dict):
             if len(self.mResults):
                 # emit results to the next QProcessSlot, i.e. crawlLocalfs
-                self.sendError({'Show': False})
+                #self.sendError({'Show': False})
+                pass
             else:
                 self.sendError({'NoPartition': True})
             self.success.emit(self.mResults)
@@ -875,9 +876,10 @@ class crawlLocalfsSlot(QProcessSlot):
         # flow comes here (gets called) after self.finish.emit()
         _logger.debug('{}: validate results: {}'.format(self.objectName(), self.mResults))
         if isinstance(self.mResults, list) and len(self.mResults):
-            self._findChildWidget('waitingIndicator').hide()
+            #self._findChildWidget('waitingIndicator').hide()
             # if found suitable xz files, send them on to the next process slot
-            self.sendError({'Show': False})
+            #self.sendError({'Show': False})
+            pass
         else:
             # Did not find any suitable xz file on mounted partitions
             self.sendError({'NoLocal': True})
@@ -921,8 +923,8 @@ class scanNetworkSlot(QProcessSlot):
             _logger.debug('{}: sendError: {}'.format(self.objectName(), err))
             self.fail.emit(err)
         else:
-            # when mSentFlag already set, that means scanStorage and scanPartition has started
-            # crawlWeb is not waiting for connectable server and then potentially any further eror
+            # when mSentFlag already set in scanStorage/scanPartition, that means they have started
+            # crawlWeb is not waiting for connectable server and then potentially any further error
             if 'Repeat' in err and err['Repeat']:
                 self.mRepeatFlag = False
                 self.mNetErr.pop('Repeat', None)
@@ -1013,7 +1015,7 @@ class scanNetworkSlot(QProcessSlot):
                 elif results['config_id'] == 'dns' and (results['status'] == 'success' or results['status'] == 'failure'):
                     for host in self.mHosts:
                         if isinstance(host, dict):
-                            if host['name'] == results['target']:
+                            if host['name'] == results['target'] and 'host_ip' in results.keys():
                                 host.update({'host_ip': results['host_ip']})
                     if all('host_ip' in host for host in self.mHosts):
                         QtCore.QTimer.singleShot(1000, self.__checkIP)
@@ -1093,7 +1095,7 @@ class scanNetworkSlot(QProcessSlot):
             if self.mRepeatTimerId is None:
                 _logger.warn('{}: start timer at 2m interval'.format(self.objectName()))
                 self.mRepeatTimerId = self.startTimer(120000)
-                # send/re-direct 1st set of list of errors to crawlWeb
+                # DIRTY-HACK: send/re-direct 1st set of list of errors to crawlWeb
                 self.mNetErr.update({'Repeat': True})
                 self.sendError(self.mNetErr)
 
@@ -1153,7 +1155,7 @@ class scanNetworkSlot(QProcessSlot):
                 elif all(v['NoCable'] is True for v in self.mNICNames.values()):
                     self.mNicErr.update({'NoCable': True})
                 # retry check 3. for NIC if failed
-                _logger.debug('{}: ifflags has errors, re-check NICs...'.format(self.objectName()))
+                _logger.warn('{}: ifflags has errors, re-check NICs...'.format(self.objectName()))
                 self.sendError(self.mNicErr)
                 QtCore.QTimer.singleShot(1000, self.__checkNIC)
 
@@ -1650,6 +1652,7 @@ class QChooseSlot(QProcessSlot):
         enableList(key, parsedUIList, enabledSet)
 
     def _updateDisplay(self):
+        self._findChildWidget('tabFooter').show()
         self._findChildWidget('tabOS').hide()
         self._findChildWidget('tabBoard').hide()
         self._findChildWidget('tabDisplay').hide()
@@ -2246,6 +2249,7 @@ class chooseSelectionSlot(QChooseSlot):
                     self.chosen.emit(self.mPick)
 
     def _updateDisplay(self):
+        self._findChildWidget('tabFooter').show()
         if 'os' in self.mUserData:
             self._findChildWidget('tabInstall').hide()
             self._findChildWidget('tabBoard').hide()
@@ -2605,6 +2609,7 @@ class downloadImageSlot(QProcessSlot):
     def _updateDisplay(self):
         # show and hide some Gui elements
         self.mLstWgtSelection.setDisabled(True)
+        self._findChildWidget('tabFooter').hide()
         self._findChildWidget('btnFlash').hide()
         self._findChildWidget('progressBarStatus').show()
         self.mLblRemain.show()
@@ -2984,7 +2989,7 @@ class processErrorSlot(QProcessSlot):
             # not critical, ignore
             self.mMsgBox.setMessage('NoLocal')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.warn('{}: No Flashable File from Local Storage.'.format(self.objectName()))
+            _logger.warn('{}: No Programmable File from Local Storage.'.format(self.objectName()))
             self.mMsgBox.display(False)
             return
         if 'NoStorage' in self.mErrors:
@@ -3227,88 +3232,60 @@ class QMessageDialog(QtGui.QDialog):
         self.setPalette(palette)
 
         # sets fonts
-        font = QtGui.QFont('Lato', QtGui.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
-        self.setFont(font)
+        #font = QtGui.QFont('Lato', QtGui.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
+        #self.setFont(font)
         self.mIcon = None
         self.mTitle = None
         self.mContent = None
         self.mStatus = None
         self.mQRcode = None
+        self.mWgtErrorDialog = None
+        self.mWgtErrorChecking = None
+        self.mWgtErrorCheckingLayout = None
         self.mWgtContent = None
         self.mWgtContentLayout = None
         self.mCheckFlags = {}
+        self.mCheckingMsg = None
+        self.mShowChecking = False
+        self.mWgtButton = None
+        self.mButtonLayout = None
         self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel')}
+        sizePolicy=QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        self.mButtons['accept'].setSizePolicy(sizePolicy)
+        self.mButtons['reject'].setSizePolicy(sizePolicy)
+        self.mButtons['accept'].setStyleSheet('background-color: rgb(16, 55, 112); color: white; border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding: 4px;')
+        self.mButtons['reject'].setStyleSheet('background-color: rgb(16, 55, 112); color: white; border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding: 4px;')
+        self.mButtons['accept'].setFont(QtGui.QFont('Lato', self.font().pointSize() * 2))
+        self.mButtons['reject'].setFont(QtGui.QFont('Lato', self.font().pointSize() * 2))
         self.mButtons['accept'].clicked.connect(self.accept)
         self.mButtons['reject'].clicked.connect(self.reject)
 
-    def resizeEvent(self, event):
-        #rect = event.rect()
-        self.mRect = self.rect()
-
-        # draw and mask round corner
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QtCore.QRectF(self.rect()), 20, 20)
-        mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
-        self.setMask(mask)
-
-        # draw background
-        palette = QtGui.QPalette(self.palette())
-        # and fill it with our technexion background image
-        pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(self.rect().width() * 2, self.rect().height() * 2)).scaled(QtCore.QSize(self.rect().width(), self.rect().height()), QtCore.Qt.IgnoreAspectRatio)
-        brush = QtGui.QBrush(pixmap)
-        palette.setBrush(QtGui.QPalette.Background, brush)
-        self.setPalette(palette)
-
-#         # Create widgets
-#         self.mIcon = QtGui.QLabel()
-#         self.mIcon.setAlignment(QtCore.Qt.AlignCenter)
-#         self.mTitle = QtGui.QLabel()
-#         self.mContent = QtGui.QLabel()
-#         self.mContent.setAlignment(QtCore.Qt.AlignCenter)
-#         self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel'), 'done': QtGui.QPushButton('done')}
-#
-#         # Set dialog layout
-#         # Create grid layout for the MessageDialog widget and add widgets to layout
-#         self.mLayout = QtGui.QGridLayout()
-#         self.mLayout.addWidget(self.mIcon, 0, 0)
-#         self.mLayout.addWidget(self.mTitle, 0, 1, 1, 4)  # row, col, rowspan, colspan
-#         self.mLayout.addWidget(self.mContent, 1, 0, 3, 5)  # row, col, rowspan, colspan
-#         self.mLayout.addWidget(self.mButtons['accept'], 6, 4)
-#         self.mLayout.addWidget(self.mButtons['reject'], 6, 3)
-#         self.setLayout(self.mLayout)
-#
-#         # Setup button signal to Dialog default slots
-#         self.mButtons['accept'].clicked.connect(self.accept)
-#         self.mButtons['reject'].clicked.connect(self.reject)
-#         self.mButtons['done'].clicked.connect(self.done)
-
-    def paintEvent(self, event):
-        # draw the boundary edges
-        painter = QtGui.QPainter()
-        painter.begin(self)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setPen(QtGui.QPen(QtCore.Qt.black, 10))
-        painter.drawRoundedRect(self.mRect, 20, 20)
-        # unset drawing pen
-        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-        painter.end()
-
     def setButtons(self, buttons):
-        self.clearButtons()
-        if isinstance(buttons, dict):
-            if 'accept' in buttons.keys():
-                self.mButtons['accept'].setText(buttons['accept'])
-                self.layout().addWidget(self.mButtons['accept'], 4, 4, 1, 2)
-            if 'reject' in buttons.keys():
-                self.mButtons['reject'].setText(buttons['reject'])
-                self.layout().addWidget(self.mButtons['reject'], 4, 2 if 'accept' in buttons.keys() else 4, 1, 2)
+        if not self.mWgtButton:
+            self.mWgtButton = self.window().findChild(QtGui.QWidget, 'wgtMsgBoxFooterBar')
+        if self.mWgtButton and not self.mButtonLayout:
+            self.mButtonLayout = self.mWgtButton.layout()
+        if self.mButtonLayout:
+            self.clearButtons()
+            if isinstance(buttons, dict):
+                if 'accept' in buttons.keys():
+                    self.mButtons['accept'].setText(buttons['accept'])
+                    self.mButtonLayout.addWidget(self.mButtons['accept'], 0, 4, 1, 1)
+                if 'reject' in buttons.keys():
+                    self.mButtons['reject'].setText(buttons['reject'])
+                    self.mButtonLayout.addWidget(self.mButtons['reject'], 0, 3 if 'accept' in buttons.keys() else 4, 1, 1)
 
     def clearButtons(self):
         for k, btn in self.mButtons.items():
             btn.setParent(None)
 
     def setIcon(self, icon):
-        if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mIcon:
+            self.mIcon = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorIcon')
         if self.mIcon and isinstance(icon, QtGui.QIcon):
             d = self.rect().height() / 8 if self.rect().height() < self.rect().width() else self.rect().width() / 8
             iconsize = QtCore.QSize(d, d)
@@ -3317,20 +3294,34 @@ class QMessageDialog(QtGui.QDialog):
             #self.mIcon.setMask(pix.mask())
 
     def clearIcon(self):
-        if not self.mIcon: self.mIcon = self.window().findChild(QtGui.QLabel, 'msgIcon')
-        if self.mIcon: self.mIcon.clear()
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mIcon:
+            self.mIcon = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorIcon')
+        if self.mIcon:
+            self.mIcon.clear()
 
     def setTitle(self, title):
-        if not self.mTitle: self.mTitle = self.window().findChild(QtGui.QLabel, 'msgTitle')
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mTitle:
+            self.mTitle = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorTitle')
         if self.mTitle and isinstance(title, str):
             self.mTitle.setText(title)
 
     def clearTitle(self):
-        if not self.mTitle: self.mTitle = self.window().findChild(QtGui.QLabel, 'msgTitle')
-        if self.mTitle: self.mTitle.clear()
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mTitle:
+            self.mTitle = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorTitle')
+        if self.mTitle:
+            self.mTitle.clear()
 
     def setContent(self, content):
-        if not self.mContent: self.mContent = self.window().findChild(QtGui.QWidget, 'msgContent')
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mContent:
+            self.mContent = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorContent')
         if self.mContent:
             if isinstance(content, str):
                 self.mContent.setText(content)
@@ -3347,12 +3338,18 @@ class QMessageDialog(QtGui.QDialog):
                 content.start()
 
     def clearContent(self):
-        if not self.mContent: self.mContent = self.window().findChild(QtGui.QWidget, 'msgContent')
-        if self.mContent: self.mContent.clear()
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mContent:
+            self.mContent = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorContent')
+        if self.mContent:
+            self.mContent.clear()
 
     def setQrCode(self, icon):
-        if not self.mQRcode: self.mQRcode = self.window().findChild(QtGui.QWidget, 'msgQRcode')
-
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mQRcode:
+            self.mQRcode = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorQRcode')
         if self.mQRcode:
             if isinstance(icon, QtGui.QIcon):
                 w1 = self.rect().height() / 4 if self.rect().height() < self.rect().width() else self.rect().width() / 4
@@ -3364,11 +3361,18 @@ class QMessageDialog(QtGui.QDialog):
                 self.mQRcode.setPixmap(pix)
 
     def clearQrCode(self):
-        if not self.mQRcode: self.mQRcode = self.window().findChild(QtGui.QWidget, 'msgQRcode')
-        if self.mQRcode: self.mQRcode.clear()
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mQRcode:
+            self.mQRcode = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorQRcode')
+        if self.mQRcode:
+            self.mQRcode.clear()
 
     def setStatus(self, status):
-        if not self.mStatus: self.mStatus = self.window().findChild(QtGui.QWidget, 'msgStatus')
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mStatus:
+            self.mStatus = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorStatus')
         if self.mStatus:
             if isinstance(status, str):
                 self.mStatus.setText(status)
@@ -3385,67 +3389,90 @@ class QMessageDialog(QtGui.QDialog):
                 status.start()
 
     def clearStatus(self):
-        if not self.mStatus: self.mStatus = self.window().findChild(QtGui.QWidget, 'msgStatus')
-        if self.mStatus: self.mStatus.clear()
+        if not self.mWgtErrorDialog:
+            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+        if self.mWgtErrorDialog and not self.mStatus:
+            self.mStatus = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorStatus')
+        if self.mStatus:
+            self.mStatus.clear()
+
+    def setErrorMessages(self, messages):
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mCheckingMsg:
+            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtGui.QWidget, 'lblErrorMessages')
+        if self.mCheckingMsg:
+            self.mCheckingMsg.setText(messages)
+
+    def clearErrorMessages(self):
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mCheckingMsg:
+            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtGui.QWidget, 'lblErrorMessages')
+        if self.mCheckingMsg:
+            self.mCheckingMsg.clear()
 
     def setBackgroundIcons(self, icons):
-        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
+            self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
 
-        d = self.rect().width() / 6
-        if self.mWgtContent and isinstance(icons, dict):
+        d = self.rect().width() / 8 if self.rect().width() < self.rect().height() else self.rect().height() / 8
+        if self.mWgtErrorChecking and isinstance(icons, dict):
             for key, res in icons.items():
                 lbl = None
-                if key == 'NoNic':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0') # 'msgItem0'
-                elif key == 'NoIface':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1') # 'msgItem1'
-                elif key == 'NoCable':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2') # 'msgItem2'
-                elif key == 'NoIP':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0') # 'msgItem0'
-                elif key == 'NoDNS':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1') # 'msgItem1'
-                elif key == 'NoServer':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2') # 'msgItem3'
+                if key in ['NoNic', 'NoIface', 'NoCable', 'NoIP', 'NoDNS', 'NoServer']:
+                    lbl1 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText1') # 'msgItem2'
+                    lbl2 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText2') # 'msgItem0'
+                    lbl3 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText3') # 'msgItem1'
+                    lbl4 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText4') # 'msgItem3'
+                    if lbl1: lbl1.setText('Network Cable')
+                    if lbl2: lbl2.setText('IP Configuration')
+                    if lbl3: lbl3.setText('Internet Access')
+                    if lbl4: lbl4.setText('TechNexion Cloud')
                 else:
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0')
+                    lbl = self.window().findChild(QtGui.QWidget, 'msgErrorQRcode')
 
                 if lbl:
                     lbl.setPixmap(QtGui.QIcon(res).pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio))
 
     def clearBackgroundIcons(self):
-        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
-        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
-        if self.mWgtContentLayout:
-            for index in range(self.mWgtContentLayout.count()):
-                self.mWgtContentLayout.itemAt(index).widget().clear() # call QLabel 's clear
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
+            self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
+        if self.mWgtErrorCheckingLayout:
+            for index in range(self.mWgtErrorCheckingLayout.count()):
+                self.mWgtErrorCheckingLayout.itemAt(index).widget().clear() # call QLabel 's clear
+        self.window().findChild(QtGui.QLabel, 'msgErrorQRcode').clear()
 
     def setCheckFlags(self, flags):
-        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
-        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
+            self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
 
-        d = self.rect().width() / 6
-        if self.mWgtContent and isinstance(flags, dict):
+        d = self.rect().width() / 8 if self.rect().width() < self.rect().height() else self.rect().height() / 8
+        if self.mWgtErrorChecking and isinstance(flags, dict):
             self.mCheckFlags.update(flags)
 
             # loop all current set flags
             for key, flag in self.mCheckFlags.items():
                 # setup which label to show
                 lbl = None
-                if key == 'NoNIC':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL') # 'msgItem0'
-                elif key == 'NoIface':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1_OL') # 'msgItem1'
+                if key in ['NoNIC', 'NoIface']:
+                    pass
                 elif key == 'NoCable':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2_OL') # 'msgItem2'
+                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox1') # 'msgItem2_OL'
                 elif key == 'NoIP':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL') # 'msgItem0'
+                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox2') # 'msgItem0_OL'
                 elif key == 'NoDNS':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem1_OL') # 'msgItem1'
+                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox3') # 'msgItem0_OL'
                 elif key == 'NoServer':
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem2_OL') # 'msgItem3'
+                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox4') # 'msgItem3_OL'
                 else:
-                    lbl = self.mWgtContent.findChild(QtGui.QLabel, 'msgItem0_OL')
+                    lbl = self.window().findChild(QtGui.QLabel, 'msgErrorQRcode')
 
                 # setup which flag icon to use
                 if flag: # True or False
@@ -3461,39 +3488,41 @@ class QMessageDialog(QtGui.QDialog):
                     lbl.setPixmap(pixmap)
 
     def clearCheckFlags(self):
-        if not self.mWgtContent: self.mWgtContent = self.window().findChild(QtGui.QWidget, 'wgtContent')
-        if self.mWgtContent and not self.mWgtContentLayout: self.mWgtContentLayout = self.mWgtContent.layout()
-        if self.mWgtContentLayout:
-            for index in range(self.mWgtContentLayout.count()):
+        if not self.mWgtErrorChecking:
+            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+        if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
+            self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
+        if self.mWgtErrorCheckingLayout:
+            for index in range(self.mWgtErrorCheckingLayout.count()):
                 # call QLabel 's clear
-                self.mWgtContentLayout.itemAt(index).widget().clear()
+                self.mWgtErrorCheckingLayout.itemAt(index).widget().clear()
+        self.window().findChild(QtGui.QLabel, 'msgErrorQRcode').clear()
         self.mCheckFlags.clear()
 
     def setMessage(self, msgtype):
-        if msgtype in ['NoNIC', 'NoIface', 'NoCable']:
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
-            self.setTitle("System Check")
+        self.mShowChecking = False
+        if msgtype in ['NoNIC', 'NoIface', 'NoCable', 'NoIP', 'NoDNS', 'NoServer']:
             self.setBackgroundIcons({'NoNIC': ':res/images/no_nic.svg', \
                                      'NoIface': ':res/images/no_iface.svg', \
-                                     'NoCable': ':res/images/no_cable.svg'})
-            if msgtype == 'NoNIC':
-                self.setStatus('No network adaptor found.')
-            elif msgtype == 'NoIface':
-                self.setStatus('Ethernet interface is not available.')
-            elif msgtype == 'NoCable':
-                self.setStatus('Please connect a network cable.')
-        elif msgtype in ['NoIP', 'NoDNS', 'NoServer']:
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
-            self.setTitle("System Check")
-            self.setBackgroundIcons({'NoIP': ':res/images/no_ip.svg', \
+                                     'NoCable': ':res/images/no_cable.svg', \
+                                     'NoIP': ':res/images/no_ip.svg', \
                                      'NoDNS': ':res/images/no_dns.svg', \
-                                     'NoServer': ':res/images/no_server.svg'}) # {'NoNIC': ':res/images/no_nic.svg'}
-            if msgtype == 'NoServer':
-                self.setStatus('TechNexion server is temporary unavailable, try again later.')
-            elif msgtype == 'NoDNS':
-                self.setStatus('Cannot resolve domain name')
+                                     'NoServer': ':res/images/no_server.svg'})
+            #self.setStatus('No network adaptor found.') # NoNIC
+            #self.setStatus('Ethernet interface is not available.') # NoIface
+            if msgtype == 'NoCable':
+                #self.setStatus('Please connect a network cable.') # NoCable
+                self.setErrorMessages("Make sure your network LAN cable is connected correctly to your wired network (for example your Wi-Fi router or switch")
             elif msgtype == 'NoIP':
-                self.setStatus('No IP address assigned')
+                #self.setStatus('No IP address assigned')
+                self.setErrorMessages("Your network didn't automatically assign an IP address. Please contact your IT department for help")
+            elif msgtype == 'NoDNS':
+                #self.setStatus('Cannot resolve domain name')
+                self.setErrorMessages("We are offline.\nCheck your Internet connection")
+            elif msgtype == 'NoServer':
+                #self.setStatus('TechNexion server is temporary unavailable, try again later.')
+                self.setErrorMessages("There is nothing wrong with you. It's us.\nThe TechNexion cloud is currently unavailable.\nGrab a cup of coffee and try again later")
+            self.mShowChecking = True
         elif msgtype == 'NoCpuForm':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
@@ -3512,7 +3541,7 @@ class QMessageDialog(QtGui.QDialog):
             self.setTitle("System Check")
             self.setContent("Could not connect to any servers or networks.")
             if IsATargetBoard():
-                self.setStatus("SERIALMODE to start, CONTINUE to skip")
+                self.setStatus("SERIALCOMM to start, CONTINUE to skip")
         elif msgtype == 'NoSerial':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("System Check")
@@ -3590,7 +3619,7 @@ class QMessageDialog(QtGui.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Serial Communication Mode")
             self.setContent("You can run host version of rescue loader on your PC to program target board...\nMake sure to connect an USB data cable.")
-            self.setStatus("SERIALMODE to start, CONTINUE to skip")
+            self.setStatus("SERIALCOMM to start, CONTINUE to skip")
         elif msgtype == 'SerialConnect':
             # special serial communication established
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
@@ -3618,7 +3647,7 @@ class QMessageDialog(QtGui.QDialog):
         elif asktype == 'interrupt':
             self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
         elif asktype == 'serial':
-            self.setButtons({'accept': 'SERIALMODE', 'reject': 'CONTINUE'})
+            self.setButtons({'accept': 'SERIALCOMM', 'reject': 'CONTINUE'})
         elif asktype == 'alternative':
             self.setButtons({'accept': 'CONTINUE', 'reject': 'RETRY'})
 
@@ -3640,6 +3669,13 @@ class QMessageDialog(QtGui.QDialog):
             if self.isVisible():
                 self.exit()
         else:
+            if self.mShowChecking:
+                self.mWgtErrorDialog.hide()
+                self.mWgtErrorChecking.show()
+            else:
+                self.mWgtErrorDialog.show()
+                self.mWgtErrorChecking.hide()
+
             if self.isModal():
                 _logger.debug('exec Modal')
                 ret = self.exec_()
