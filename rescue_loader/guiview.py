@@ -997,6 +997,7 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize + 2))
 
             # Show/Hide additional Widgets
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setTextVisible(False)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()

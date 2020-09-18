@@ -378,7 +378,7 @@
                     <item row="0" column="0">
                       <widget class="QWidget" name="wgtProgress" native="true">
                         <layout class="QGridLayout" name="gridayoutProgress">
-                          <item row="0" column="0" rowspan="2" colspan="5">
+                          <item row="0" column="0" rowspan="2">
                             <widget class="QLabel" name="lblProgramming">
                               <property name="text">
                                 <string>Retrieving selected software image from the TechNexion Cloud and configuring
@@ -393,8 +393,11 @@
                               </property>
                             </widget>
                           </item>
-                          <item row="3" column="0" colspan="5">
+                          <item row="3" column="0">
                             <widget class="QProgressBar" name="progressBarStatus">
+                              <property name="styleSheet">
+                                <string notr="true">color: black</string>
+                              </property>
                               <property name="value">
                                 <number>0</number>
                               </property>
@@ -403,22 +406,20 @@
                               </property>
                             </widget>
                           </item>
-                          <item row="4" column="3" colspan="2">
+                          <item row="3" column="0">
                             <widget class="QLabel" name="lblRemaining">
-                              <property name="text">
-                                <string>Remaining Time</string>
+                              <property name="styleSheet">
+                                <string notr="true">background: transparent; padding: 1px</string>
                               </property>
                               <property name="alignment">
-                                <set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing
-                                </set>
+                                <set>Qt::AlignCenter</set>
                               </property>
                             </widget>
                           </item>
-                          <item row="5" column="0" colspan="3">
+                          <item row="4" column="0">
                             <widget class="QLabel" name="lblDownloadFlash">
                               <property name="alignment">
-                                <set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter
-                                </set>
+                                <set>Qt::AlignCenter</set>
                               </property>
                             </widget>
                           </item>

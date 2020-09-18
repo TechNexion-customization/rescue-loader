@@ -2382,8 +2382,8 @@ class downloadImageSlot(QProcessSlot):
                         self.mRemaining = float((int(res['total_uncompressed']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
                         self.mLastWritten = int(res['bytes_written'])
                         _logger.debug('{}: total: {} written:{} av:{} remain: {}'.format(self.objectName(), int(res['total_uncompressed']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
-                        self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
                         pcent = int(round(float(res['bytes_written']) / float(res['total_uncompressed']) * 100))
+                        self.mLblRemain.setText('{}% - {:02}:{:02}(s) remaining'.format(pcent, int(self.mRemaining / 60), int(self.mRemaining % 60)))
                         self.progress.emit(pcent)
 
     def __mountStorage(self):
@@ -2589,7 +2589,7 @@ class downloadImageSlot(QProcessSlot):
             if self.mResults['status'] == 'success' and int(self.mResults['total_uncompressed']) == int(self.mResults['bytes_written']):
                 # succeed programming the eMMC
                 self.progress.emit(100)
-                self.mLblRemain.setText('Remaining Time: 00:00')
+                self.mLblRemain.setText('100% - 00:00(s) remaining')
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': True, 'bytes_written': int(self.mResults['bytes_written'])})
                 _logger.debug('{}: successfully flashed to emmc and emit signal: {}'.format(self.objectName(), self.mPick))
@@ -2598,7 +2598,7 @@ class downloadImageSlot(QProcessSlot):
             else:
                 # succeed but not all bytes written, something wrong with network connection
                 # or failed programming the eMMC
-                self.mLblRemain.setText('Remaining Time: --:--')
+                self.mLblRemain.setText('--:--(s) remaining')
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False, 'total_uncompressed': int(self.mResults['total_uncompressed']), 'bytes_written': int(self.mResults['bytes_written'])})
                 _logger.debug('{}: emit signal: {}'.format(self.objectName(), self.mPick))
@@ -2709,8 +2709,8 @@ class postDownloadSlot(QProcessSlot):
                         self.mRemaining = float((int(res['total_size']) - int(res['bytes_written'])) / self.mAvSpeed if self.mAvSpeed > 0 else 0.0001)
                         self.mLastWritten = int(res['bytes_written'])
                         _logger.debug('{}: total: {} written:{} av:{} remain: {}'.format(self.objectName(), int(res['total_size']), int(res['bytes_written']), self.mAvSpeed, self.mRemaining))
-                        self.mLblRemain.setText('Remaining Time: {:02}:{:02}'.format(int(self.mRemaining / 60), int(self.mRemaining % 60)))
                         pcent = int(round(float(res['bytes_written']) / float(res['total_size']) * 100))
+                        self.mLblRemain.setText('{}% - {:02}:{:02}(s) remaining'.format(pcent, int(self.mRemaining / 60), int(self.mRemaining % 60)))
                         self.progress.emit(pcent)
 
     def _recoverRescue(self):
@@ -2832,10 +2832,10 @@ class postDownloadSlot(QProcessSlot):
                 # do one last query result before killing the timer
                 if results['status'] == 'success':
                     self._queryResult(100)
-                    self.mLblRemain.setText('Remaining Time: 00:00')
+                    self.mLblRemain.setText('100% - 00:00(s) remaining')
                 elif results['status'] == 'failure':
                     self._queryResult(0)
-                    self.mLblRemain.setText('Remaining Time: --:--')
+                    self.mLblRemain.setText('--:--(s) remaining')
                 self.mFlashFlag = False
 
                 # handling various image flashed in postDownloads.
