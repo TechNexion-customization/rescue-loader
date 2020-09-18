@@ -377,7 +377,7 @@
                     </item>
                     <item row="0" column="0">
                       <widget class="QWidget" name="wgtProgress" native="true">
-                        <layout class="QGridLayout" name="gridayoutProgress">
+                        <layout class="QGridLayout" name="gridLayoutProgress">
                           <item row="0" column="0" rowspan="2">
                             <widget class="QLabel" name="lblProgramming">
                               <property name="text">
@@ -431,7 +431,7 @@
               </item>
               <item row="5" column="0" colspan="5">
                 <widget class="QWidget" name="tabFooter" native="true">
-                  <layout class="QGridLayout" name="gridlayoutFooter">
+                  <layout class="QGridLayout" name="gridLayoutFooter">
                     <item row="0" column="0">
                       <widget class="QListWidget" name="lstWgtSelection">
                         <property name="layoutDirection">
@@ -474,10 +474,10 @@
                     </item>
                     <item row="0" column="0">
                       <widget class="QWidget" name="wgtFooterMenu" native="true">
-                        <layout class="QGridLayout" name="gridlayoutFooterMenu">
+                        <layout class="QGridLayout" name="gridLayoutFooterMenu">
                           <item row="0" column="0">
                             <widget class="QWidget" name="wgtFooterSoftwareMenu" native="true">
-                              <layout class="QGridLayout" name="gridlayoutFooterSoftwareMenu">
+                              <layout class="QGridLayout" name="gridLayoutFooterSoftwareMenu">
                                 <item row="0" column="0" colspan="2">
                                   <widget class="QPushButton" name="btnSelOS">
                                     <property name="sizePolicy">
@@ -500,15 +500,14 @@
                                 <item row="0" column="2">
                                   <widget class="QPushButton" name="btnSelOSIcon">
                                     <property name="sizePolicy">
-                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
                                         <horstretch>0</horstretch>
                                         <verstretch>0</verstretch>
                                       </sizepolicy>
                                     </property>
                                     <property name="styleSheet">
                                       <string notr="true">background-color: rgb(16, 55, 112); color: white;
-                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
-                                        4px;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
                                       </string>
                                     </property>
                                   </widget>
@@ -518,48 +517,7 @@
                           </item>
                           <item row="0" column="1">
                             <widget class="QWidget" name="wgtFooterDisplayMenu" native="true">
-                              <layout class="QGridLayout" name="gridlayoutFooterDisplayMenu">
-                                <item row="0" column="0" colspan="2">
-                                  <widget class="QPushButton" name="btnSelDisplay">
-                                    <property name="sizePolicy">
-                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-                                        <horstretch>0</horstretch>
-                                        <verstretch>0</verstretch>
-                                      </sizepolicy>
-                                    </property>
-                                    <property name="styleSheet">
-                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
-                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
-                                        4px;
-                                      </string>
-                                    </property>
-                                    <property name="text">
-                                      <string>Display</string>
-                                    </property>
-                                  </widget>
-                                </item>
-                                <item row="0" column="2">
-                                  <widget class="QPushButton" name="btnSelDisplayIcon">
-                                    <property name="sizePolicy">
-                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-                                        <horstretch>0</horstretch>
-                                        <verstretch>0</verstretch>
-                                      </sizepolicy>
-                                    </property>
-                                    <property name="styleSheet">
-                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
-                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
-                                        4px;
-                                      </string>
-                                    </property>
-                                  </widget>
-                                </item>
-                              </layout>
-                            </widget>
-                          </item>
-                          <item row="0" column="2">
-                            <widget class="QWidget" name="wgtFooterBaseboardMenu" native="true">
-                              <layout class="QGridLayout" name="gridlayoutFooterBaseboardMenu">
+                              <layout class="QGridLayout" name="gridLayoutFooterDisplayMenu">
                                 <item row="0" column="0" colspan="2">
                                   <widget class="QPushButton" name="btnSelBaseboard">
                                     <property name="sizePolicy">
@@ -582,6 +540,27 @@
                                 <item row="0" column="2">
                                   <widget class="QPushButton" name="btnSelBaseboardIcon">
                                     <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
+                                      </string>
+                                    </property>
+                                  </widget>
+                                </item>
+                              </layout>
+                            </widget>
+                          </item>
+                          <item row="0" column="2">
+                            <widget class="QWidget" name="wgtFooterBaseboardMenu" native="true">
+                              <layout class="QGridLayout" name="gridLayoutFooterBaseboardMenu">
+                                <item row="0" column="0" colspan="2">
+                                  <widget class="QPushButton" name="btnSelDisplay">
+                                    <property name="sizePolicy">
                                       <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
                                         <horstretch>0</horstretch>
                                         <verstretch>0</verstretch>
@@ -591,6 +570,24 @@
                                       <string notr="true">background-color: rgb(16, 55, 112); color: white;
                                         border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
                                         4px;
+                                      </string>
+                                    </property>
+                                    <property name="text">
+                                      <string>Display</string>
+                                    </property>
+                                  </widget>
+                                </item>
+                                <item row="0" column="2">
+                                  <widget class="QPushButton" name="btnSelDisplayIcon">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
                                       </string>
                                     </property>
                                   </widget>
@@ -617,6 +614,25 @@
                                     </property>
                                     <property name="text">
                                       <string>INSTALL</string>
+                                    </property>
+                                  </widget>
+                                </item>
+                                <item row="0" column="0">
+                                  <widget class="QPushButton" name="btnAbort">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+                                    </property>
+                                    <property name="text">
+                                      <string>ABORT</string>
                                     </property>
                                   </widget>
                                 </item>
@@ -708,6 +724,9 @@
                 </item>
                 <item row="1" column="0" rowspan="4" colspan="5">
                   <widget class="QWidget" name="tabError" native="true">
+                    <property name="styleSheet">
+                      <string notr="true">background-color: rgb(16, 55, 112);</string>
+                    </property>
                     <layout class="QGridLayout" name="gridLayoutError">
                       <item row="0" column="0">
                         <widget class="QWidget" name="wgtErrorDialog" native="true">
@@ -715,7 +734,7 @@
                             <item row="0" column="0">
                               <widget class="QLabel" name="msgErrorIcon">
                                 <property name="styleSheet">
-                                  <string notr="true">background: transparent
+                                  <string notr="true">background: transparent; color: white
                                   </string>
                                 </property>
                                 <property name="alignment">
@@ -741,7 +760,7 @@
                             <item row="0" column="6">
                               <widget class="QLabel" name="msgErrorQRcode">
                                 <property name="styleSheet">
-                                  <string notr="true">background: transparent
+                                  <string notr="true">background: transparent; color: white
                                   </string>
                                 </property>
                                 <property name="alignment">
@@ -899,6 +918,9 @@
                 </item>
                 <item row="5" column="0" colspan="5">
                   <widget class="QWidget" name="wgtMsgBoxFooter" native="true">
+                    <property name="styleSheet">
+                      <string notr="true">background-color: rgb(16, 55, 112);</string>
+                    </property>
                     <layout class="QGridLayout" name="gridLayoutMsgBoxFooter">
                       <item row="0" column="0">
                         <widget class="QWidget" name="wgtMsgBoxFooterBar" native="true">

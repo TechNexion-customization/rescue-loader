@@ -2148,8 +2148,11 @@ class chooseSelectionSlot(QChooseSlot):
         self.mLstWgtSelection =None
         self.mLstWgtStorage = None
         self.mLstWgtOS = None
+        self.mBtnSelOS = None
         self.mLstWgtBoard = None
+        self.mBtnSelBoard = None
         self.mLstWgtDisplay = None
+        self.mBtnSelDisplay = None
         self.mUserData = None
         self.mPartitions = {}
 
@@ -2159,8 +2162,11 @@ class chooseSelectionSlot(QChooseSlot):
         if self.mLstWgtSelection is None: self.mLstWgtSelection = self._findChildWidget('lstWgtSelection')
         if self.mLstWgtStorage is None: self.mLstWgtStorage = self._findChildWidget('lstWgtStorage')
         if self.mLstWgtOS is None: self.mLstWgtOS = self._findChildWidget('lstWgtOS')
+        if self.mBtnSelOS is None: self.mBtnSelOS = self._findChildWidget('btnSelOSIcon')
         if self.mLstWgtBoard is None: self.mLstWgtBoard = self._findChildWidget('lstWgtBoard')
+        if self.mBtnSelBoard is None: self.mBtnSelBoard = self._findChildWidget('btnSelBaseboardIcon')
         if self.mLstWgtDisplay is None: self.mLstWgtDisplay = self._findChildWidget('lstWgtDisplay')
+        if self.mBtnSelDisplay is None: self.mBtnSelDisplay = self._findChildWidget('btnSelDisplayIcon')
 
         if self.sender().objectName() == 'chooseOS' or self.sender().objectName() == 'chooseBoard' or \
            self.sender().objectName() == 'chooseDisplay' or self.sender().objectName() == 'chooseStorage':
@@ -2278,6 +2284,7 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabDisplay').hide()
             self._findChildWidget('tabStorage').show()
             self._findChildWidget('lblInstruction').setText('Choose a storage device to program')
+        self.window().setFocus()
 
     def _updateOutputLabel(self):
         for item in self._findChildWidget('lstWgtSelection').findItems('.*', QtCore.Qt.MatchRegExp):
@@ -2286,18 +2293,21 @@ class chooseSelectionSlot(QChooseSlot):
                 # update text/icon on lblOS with chosen OS name and version number
                 self._findChildWidget('lblOS').setPixmap(item.icon().pixmap(self._findChildWidget('lblOS').size()))
                 self._findChildWidget('lblOSTxt').setText('{}\n{}'.format(self.mPick['os'], self.mPick['ver'] if self.mPick['ver'] is not None else ''))
-
+                self.mBtnSelOS.setIcon(QtGui.QIcon(item.icon()))
+                self.mBtnSelOS.setIconSize(self.mBtnSelOS.size())
             elif 'board' in self.mPick and self.mPick['board'] is not None and 'board' in data and data['board'] is not None and self.mPick['board'] == data['board']:
                 # update text/icon on lblBoard with chosen board
                 self._findChildWidget('lblBoard').setPixmap(item.icon().pixmap(self._findChildWidget('lblBoard').size()))
                 self._findChildWidget('lblBoardTxt').setText('{}'.format(self.mPick['board']))
-
+                self.mBtnSelBoard.setIcon(QtGui.QIcon(item.icon()))
+                self.mBtnSelBoard.setIconSize(self.mBtnSelBoard.size())
             elif 'display' in self.mPick and self.mPick['display'] is not None and 'display' in data and data['display'] is not None and self.mPick['display'] == data['display']:
                 # self.mPick['display'] could be a list of '050', '070' etc
                 # update text/icon on lblDisplay with chosen display
                 self._findChildWidget('lblDisplay').setPixmap(item.icon().pixmap(self._findChildWidget('lblDisplay').size()))
                 self._findChildWidget('lblDisplayTxt').setText('{}'.format('/\n'.join(self.mPick['display'])))
-
+                self.mBtnSelDisplay.setIcon(QtGui.QIcon(item.icon()))
+                self.mBtnSelDisplay.setIconSize(self.mBtnSelDisplay.size())
             elif 'storage' in self.mPick and self.mPick['storage'] is not None and 'storage' in data and data['storage'] is not None and self.mPick['storage'] == data['storage']:
                 # update text/icon on lblStorage with chosen storage
                 self._findChildWidget('lblStorage').setPixmap(item.icon().pixmap(self._findChildWidget('lblStorage').size()))
@@ -2311,6 +2321,7 @@ class chooseSelectionSlot(QChooseSlot):
                 if data['conntype'] == 'serial':
                     text = text + '\non Target'
                     self._findChildWidget('lblStorageTxt').setText(text)
+        self.window().setFocus()
 
 
 
@@ -2609,8 +2620,10 @@ class downloadImageSlot(QProcessSlot):
     def _updateDisplay(self):
         # show and hide some Gui elements
         self.mLstWgtSelection.setDisabled(True)
-        self._findChildWidget('tabFooter').hide()
         self._findChildWidget('btnFlash').hide()
+        self._findChildWidget('btnAbort').show()
+        self._findChildWidget('wgtOutput').hide()
+        self._findChildWidget('wgtProgress').show()
         self._findChildWidget('progressBarStatus').show()
         self.mLblRemain.show()
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
@@ -2735,6 +2748,8 @@ class postDownloadSlot(QProcessSlot):
                 self.progress.connect(self.mProgressBar.setValue)
 
         if self.sender().objectName() == 'downloadImage':
+            self._findChildWidget('wgtProgress').hide()
+            self._findChildWidget('tabFooter').hide()
             # get the pick choices and target torage and url from downloadImage
             self.mPick.update(inputs)
             if 'flashed' in self.mPick:

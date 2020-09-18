@@ -997,15 +997,14 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize + 2))
 
             # Show/Hide additional Widgets
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setTextVisible(False)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setTextVisible(False)
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'wgtProgress').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'waitingIndicator').hide()
 
