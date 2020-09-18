@@ -280,81 +280,79 @@
               <item row="1" column="0" rowspan="4" colspan="5">
                 <widget class="QWidget" name="tabInstall" native="true">
                   <layout class="QGridLayout" name="gridLayoutInstall">
-                    <item row="0" column="0" rowspan="4" colspan="5">
+                    <item row="0" column="0">
                       <widget class="QWidget" name="wgtOutput" native="true">
-                        <layout class="QHBoxLayout" name="hboxLayoutOutput">
-                          <item>
-                            <widget class="QWidget" name="vbOS" native="true">
-                              <layout class="QVBoxLayout" name="vboxLayoutOS">
-                                <item>
-                                  <widget class="QLabel" name="lblOS">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                                <item>
-                                  <widget class="QLabel" name="lblOSTxt">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                              </layout>
-                            </widget>
-                          </item>
-                          <item>
-                            <widget class="QWidget" name="vbBoard" native="true">
-                              <layout class="QVBoxLayout" name="vboxLayoutBoard">
-                                <item>
-                                  <widget class="QLabel" name="lblBoard">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                                <item>
-                                  <widget class="QLabel" name="lblBoardTxt">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                              </layout>
-                            </widget>
-                          </item>
-                          <item>
-                            <widget class="QWidget" name="vbDisplay" native="true">
-                              <layout class="QVBoxLayout" name="vboxLayoutDisplay">
-                                <item>
-                                  <widget class="QLabel" name="lblDisplay">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                                <item>
-                                  <widget class="QLabel" name="lblDisplayTxt">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                  </widget>
-                                </item>
-                              </layout>
-                            </widget>
-                          </item>
-                          <item>
-                            <widget class="QLabel" name="lblArrow">
-                              <property name="pixmap">
-                                <pixmap resource="resource.qrc">:/res/images/tn_arrow.svg
-                                </pixmap>
+                        <layout class="QGridLayout" name="gridLayoutOutput">
+                          <item row="0" column="0" colspan="3">
+                            <widget class="QWidget" name="wgtGroupOutput" native="true">
+                              <property name="styleSheet">
+                                <string notr="true">background: white</string>
                               </property>
-                              <property name="alignment">
-                                <set>Qt::AlignCenter</set>
-                              </property>
+                              <layout class="QHBoxLayout" name="hboxLayoutGroupOutput">
+                                <item>
+                                  <widget class="QWidget" name="vbOS" native="true">
+                                    <layout class="QVBoxLayout" name="vboxLayoutOS">
+                                      <item>
+                                        <widget class="QLabel" name="lblOS">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                      <item>
+                                        <widget class="QLabel" name="lblOSTxt">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                    </layout>
+                                  </widget>
+                                </item>
+                                <item>
+                                  <widget class="QWidget" name="vbBoard" native="true">
+                                    <layout class="QVBoxLayout" name="vboxLayoutBoard">
+                                      <item>
+                                        <widget class="QLabel" name="lblBoard">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                      <item>
+                                        <widget class="QLabel" name="lblBoardTxt">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                    </layout>
+                                  </widget>
+                                </item>
+                                <item>
+                                  <widget class="QWidget" name="vbDisplay" native="true">
+                                    <layout class="QVBoxLayout" name="vboxLayoutDisplay">
+                                      <item>
+                                        <widget class="QLabel" name="lblDisplay">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                      <item>
+                                        <widget class="QLabel" name="lblDisplayTxt">
+                                          <property name="alignment">
+                                            <set>Qt::AlignCenter</set>
+                                          </property>
+                                        </widget>
+                                      </item>
+                                    </layout>
+                                  </widget>
+                                </item>
+                              </layout>
                             </widget>
                           </item>
-                          <item>
+                          <item row="0" column="4">
                             <widget class="QWidget" name="vbStorage" native="true">
                               <layout class="QVBoxLayout" name="vboxLayoutStorage">
                                 <item>
@@ -377,37 +375,25 @@
                         </layout>
                       </widget>
                     </item>
-                    <item row="4" column="0" colspan="5">
+                    <item row="0" column="0">
                       <widget class="QWidget" name="wgtProgress" native="true">
                         <layout class="QGridLayout" name="gridayoutProgress">
                           <item row="0" column="0" rowspan="2" colspan="5">
-                            <widget class="QPushButton" name="btnFlash">
-                              <property name="sizePolicy">
-                                <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-                                  <horstretch>0</horstretch>
-                                  <verstretch>0</verstretch>
-                                </sizepolicy>
-                              </property>
-                              <property name="font">
-                                <font>
-                                  <family>Lato</family>
-                                  <pointsize>32</pointsize>
-                                  <weight>75</weight>
-                                  <bold>true</bold>
-                                </font>
-                              </property>
-                              <property name="styleSheet">
-                                <string notr="true">background-color: rgb(184, 28, 34); color: white;
-                                  border-style:outset; border-width:5px; border-radius:15px; border-color:black;
-                                  padding: 4px;
+                            <widget class="QLabel" name="lblProgramming">
+                              <property name="text">
+                                <string>Retrieving selected software image from the TechNexion Cloud and configuring
+                                  your evaluation kit.
                                 </string>
                               </property>
-                              <property name="text">
-                                <string>Program Me!</string>
+                              <property name="alignment">
+                                <set>Qt::AlignCenter</set>
+                              </property>
+                              <property name="wordWrap">
+                                <bool>true</bool>
                               </property>
                             </widget>
                           </item>
-                          <item row="0" column="0" colspan="5">
+                          <item row="3" column="0" colspan="5">
                             <widget class="QProgressBar" name="progressBarStatus">
                               <property name="value">
                                 <number>0</number>
@@ -417,7 +403,7 @@
                               </property>
                             </widget>
                           </item>
-                          <item row="1" column="3" colspan="2">
+                          <item row="4" column="3" colspan="2">
                             <widget class="QLabel" name="lblRemaining">
                               <property name="text">
                                 <string>Remaining Time</string>
@@ -428,7 +414,7 @@
                               </property>
                             </widget>
                           </item>
-                          <item row="1" column="0" colspan="3">
+                          <item row="5" column="0" colspan="3">
                             <widget class="QLabel" name="lblDownloadFlash">
                               <property name="alignment">
                                 <set>Qt::AlignBottom|Qt::AlignLeft|Qt::AlignVCenter
@@ -492,19 +478,37 @@
                             <widget class="QWidget" name="wgtFooterSoftwareMenu" native="true">
                               <layout class="QGridLayout" name="gridlayoutFooterSoftwareMenu">
                                 <item row="0" column="0" colspan="2">
-                                  <widget class="QLabel" name="lblSelOS">
+                                  <widget class="QPushButton" name="btnSelOS">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+                                    </property>
                                     <property name="text">
                                       <string>Software</string>
-                                    </property>
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
                                     </property>
                                   </widget>
                                 </item>
                                 <item row="0" column="2">
-                                  <widget class="QLabel" name="lblSelOSIcon">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
+                                  <widget class="QPushButton" name="btnSelOSIcon">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
                                     </property>
                                   </widget>
                                 </item>
@@ -515,19 +519,37 @@
                             <widget class="QWidget" name="wgtFooterDisplayMenu" native="true">
                               <layout class="QGridLayout" name="gridlayoutFooterDisplayMenu">
                                 <item row="0" column="0" colspan="2">
-                                  <widget class="QLabel" name="lblSelDisplay">
+                                  <widget class="QPushButton" name="btnSelDisplay">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+                                    </property>
                                     <property name="text">
                                       <string>Display</string>
-                                    </property>
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
                                     </property>
                                   </widget>
                                 </item>
                                 <item row="0" column="2">
-                                  <widget class="QLabel" name="lblSelDisplayIcon">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
+                                  <widget class="QPushButton" name="btnSelDisplayIcon">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
                                     </property>
                                   </widget>
                                 </item>
@@ -538,19 +560,37 @@
                             <widget class="QWidget" name="wgtFooterBaseboardMenu" native="true">
                               <layout class="QGridLayout" name="gridlayoutFooterBaseboardMenu">
                                 <item row="0" column="0" colspan="2">
-                                  <widget class="QLabel" name="lblSelBaseboard">
+                                  <widget class="QPushButton" name="btnSelBaseboard">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+                                    </property>
                                     <property name="text">
                                       <string>Baseboard</string>
-                                    </property>
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
                                     </property>
                                   </widget>
                                 </item>
                                 <item row="0" column="2">
-                                  <widget class="QLabel" name="lblSelBaseboardIcon">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
+                                  <widget class="QPushButton" name="btnSelBaseboardIcon">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
                                     </property>
                                   </widget>
                                 </item>
@@ -559,11 +599,23 @@
                           </item>
                           <item row="0" column="3">
                             <widget class="QWidget" name="wgtFooterButtonMenu" native="true">
-                              <layout class="QGridLayout" name="gridlayoutFooterButtonMenu">
+                              <layout class="QGridLayout" name="gridLayoutFooterButtonMenu">
                                 <item row="0" column="0">
-                                  <widget class="QLabel" name="lblFooterButton">
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
+                                  <widget class="QPushButton" name="btnFlash">
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
+                                    </property>
+                                    <property name="styleSheet">
+                                      <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+                                    </property>
+                                    <property name="text">
+                                      <string>INSTALL</string>
                                     </property>
                                   </widget>
                                 </item>

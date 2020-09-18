@@ -2614,7 +2614,7 @@ class downloadImageSlot(QProcessSlot):
         self._findChildWidget('progressBarStatus').show()
         self.mLblRemain.show()
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
-        self.mLblDownloadFlash.setText('Please do not power off the device')
+        self.mLblDownloadFlash.setText('Please Standby\nDo not power off the device')
         self.mLblDownloadFlash.show()
         self._findChildWidget('lblInstruction').setText('Downloading and flashing...')
 
