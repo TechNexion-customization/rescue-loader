@@ -2253,6 +2253,27 @@ class chooseSelectionSlot(QChooseSlot):
             # process can be restarted from where it is disgarded
             self.success.emit(self.mPick)
 
+        if self.sender() == self.mBtnSelDisplay or self.sender() == self._findChildWidget('btnSelDisplay'):
+            # btnSelOS or btnSelOSIcon clicked
+            # remove selection from lstWgtSelection
+            self.mPick['display'] = None
+            # disable the clicked/selected item from the lstWgtSelection
+            for item in self.mLstWgtSelection.findItems('.*', QtCore.Qt.MatchRegExp):
+                if 'display' in item.data(QtCore.Qt.UserRole):
+                    _logger.warn('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
+                    # if selection item has an disabled existing item, remove it
+                    if item.flags() & QtCore.Qt.ItemIsEnabled:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
+                    self.mUserData = item.data(QtCore.Qt.UserRole)
+                    break
+            # show/hide GUI components
+            self.mLstWgtSelection.clearSelection()
+            self.mBtnSelDisplay.setIcon(QtGui.QIcon())
+            self._updateDisplay()
+            # send the self.mPick to appropriate QProcSlot so picking
+            # process can be restarted from where it is disgarded
+            self.success.emit(self.mPick)
+
         if self.sender().objectName() == 'scanPartition' and isinstance(inputs, dict):
             # figure out the partition size to backup
             for k, v in inputs.items():
