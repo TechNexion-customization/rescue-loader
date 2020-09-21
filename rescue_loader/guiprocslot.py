@@ -308,13 +308,15 @@ class QProcessSlot(QtGui.QWidget):
             self.fail.emit(err)
 
     def sendCommand(self, cmd):
-        self.mTotalReq += 1
         self.mCmdEv.wait(0)
         self.mCmdEv.clear()
-        self.mCmds.append(cmd)
-        self.mMsgs.append(dict(cmd))
+        # Do not queue stop cmd
+        if 'cmd' in cmd and cmd['cmd'] is not 'stop':
+            self.mTotalReq += 1
+            self.mCmds.append(cmd)
+            self.mMsgs.append(dict(cmd))
+            _logger.warn('{}: queue cmd request: {} remaining cmds: {}'.format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
         self.mCmdEv.set()
-        _logger.warn('{}: queue cmd request: {} remaining cmds: {}'.format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
         self.request.emit(cmd)
 
     def _setupUserInputResponse(self):
@@ -2410,6 +2412,7 @@ class downloadImageSlot(QProcessSlot):
         self.mLastWritten = 0
         self.mRemaining = 0
         self.mTimerId = None
+        self.mLblProgramming = None
         self.mLblRemain = None
         self.mLblDownloadFlash = None
         self.mLstWgtSelection = None
@@ -2528,6 +2531,8 @@ class downloadImageSlot(QProcessSlot):
         # grab the dl_url and tgt_filename from the tableRescueFile and tableTargetStorage itemClicked() signals
         # when signal sender is from btnFlash, issue flash command with clicked rescue file and target storage.
         #
+        if self.mLblProgramming is None:
+            self.mLblProgramming = self._findChildWidget('lblProgramming')
         if self.mLblRemain is None:
             self.mLblRemain = self._findChildWidget('lblRemaining')
         if self.mLblDownloadFlash is None:
@@ -2552,18 +2557,24 @@ class downloadImageSlot(QProcessSlot):
 
         if self.sender().objectName() == 'processError':
             if isinstance(inputs, dict) and 'alternative' in inputs.keys():
-                _logger.debug('{}: ask:alternative signal from processError: alternative:{}'.format(self.objectName(), inputs['alternative']))
+                _logger.warn('{}: ask:alternative dialog response from processError: alternative:{}'.format(self.objectName(), inputs['alternative']))
                 self.mAlternativeFlag = inputs['alternative']
                 # Queue the retry on alternative server in 1s
                 self.__retryAlternativeServer()
 
-            if isinstance(inputs, dict) and 'accept' in inputs.keys() and 'reject' in inputs.keys():
-                _logger.debug('{}: ask:serial signal from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
-                if self.inputs('accept'):
+            if isinstance(inputs, dict) and 'alternative' in inputs.keys() and 'accept' in inputs.keys() and 'reject' in inputs.keys():
+                _logger.warn('{}: ask:serial dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
+                if inputs('accept'):
                     self.__mountStorage()
                 else:
                     # Queue the retry on alternative server in 1s
                     self.__retryAlternativeServer()
+
+            if isinstance(inputs, dict) and 'Interrupt' in inputs.keys() and 'reject' in inputs.keys() and inputs['reject']:
+                _logger.warn('{}: ask:interrupt dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
+                if self.mTimerId:
+                    self.killTimer(self.mTimerId)
+                self.sendCommand({'cmd': 'stop', 'type': 'job'})
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
@@ -2588,7 +2599,8 @@ class downloadImageSlot(QProcessSlot):
         else:
             # prompt error message for trying to interrupt flashing with other user inputs
             if self.sender().objectName() != 'scanNetwork':
-                self.sendError({'NoInterrupt': True, 'ask': 'continue'})
+                if self.sender() == self._findChildWidget('btnAbort'):
+                    self.sendError({'Interrupt': True, 'ask': 'interrupt'})
 
     def __getUrlStorageFromPick(self, pick):
         filteredAttr = []
@@ -2689,9 +2701,11 @@ class downloadImageSlot(QProcessSlot):
         self._findChildWidget('wgtOutput').hide()
         self._findChildWidget('wgtProgress').show()
         self._findChildWidget('progressBarStatus').show()
+        self.mLblProgramming.setText('Retrieving selected software image from the TechNexion Cloud and\nconfiguring your evaluation kit.\nPlease standby')
+        self.mLblProgramming.show()
         self.mLblRemain.show()
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
-        self.mLblDownloadFlash.setText('Please Standby\nDo not power off the device')
+        self.mLblDownloadFlash.setText('Do not power off the device')
         self.mLblDownloadFlash.show()
         self._findChildWidget('lblInstruction').setText('Downloading and flashing...')
 
@@ -2750,8 +2764,10 @@ class postDownloadSlot(QProcessSlot):
         self.mLastWritten = 0
         self.mRemaining = 0
         self.mTimerId = None
+        self.mLblProgramming = None
         self.mLblRemain = None
         self.mProgressBar = None
+        self.mConnType = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
         self.mQRIcon = None
         self.mCheckSumFlag = False
@@ -2765,13 +2781,14 @@ class postDownloadSlot(QProcessSlot):
         if self.mViewer:
             try:
                 res = self.mViewer.queryResult(self.mConnType)
-            except:
+            except Exception as ex:
+                _logger.warn('Viewer QueryResult exception: {}'.format(ex))
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
-                self._recoverRescue()
-                self.sendError({'NoDbus': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
+#                self._recoverRescue()
+#                self.sendError({'NoDbus': True, 'ask': 'reboot' if IsATargetBoard() else 'quit'})
                 return
             else:
                 if res == {}:
@@ -2791,21 +2808,22 @@ class postDownloadSlot(QProcessSlot):
                         self.progress.emit(pcent)
 
     def _recoverRescue(self):
-        # copy back the backed up /tmp/rescue.img to target eMMC
-        self._findChildWidget('lblInstruction').setText('Restoring Rescue System...')
-        try:
-            _logger.info('{}: dd if=/tmp/rescue.img of={} bs=1M conv=notrunc,fsync'.format(self.objectName(), self.mPick['storage']))
-            subprocess.check_call(['dd', 'if=/tmp/rescue.img', 'of={}'.format(self.mPick['storage']), 'bs=1M', 'conv=notrunc,fsync'])
-        except subprocess.CalledProcessError as err:
-            _logger.error('cmd: {} return code:{} output: {}'.format(err.cmd, err.returncode, err.output))
-            raise
+        self._findChildWidget('wgtProgress').show()
+        self.mLblProgramming.setText("It's not you, it's us.\nSomething went wrong\nWe are now reconditioning your evaluation kit automatically")
+        self.mLblRemain.setText('--:--(s) remaining')
+        self.progress.emit(0)
+        self.mConnType = 'dbus'
+        self.sendCommand({'cmd': 'flash', 'src_filename': '/tmp/rescue.img', 'tgt_filename': '{}'.format(self.mPick['storage']), 'chunk_size': '524288'})
 
     def process(self, inputs):
         """
         Called by downloadImage's success signal, do post actions, i.e. get qrcode and determine whether to clear
         emmc boot partition option 1 or enable it
         """
-        if self.mLblRemain is None: self.mLblRemain = self._findChildWidget('lblRemaining')
+        if self.mLblProgramming is None:
+            self.mLblProgramming = self._findChildWidget('lblProgramming')
+        if self.mLblRemain is None:
+            self.mLblRemain = self._findChildWidget('lblRemaining')
         if self.mProgressBar is None:
             self.mProgressBar = self._findChildWidget('progressBarStatus')
             if self.mProgressBar:
@@ -2823,10 +2841,12 @@ class postDownloadSlot(QProcessSlot):
                     self.sendCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
                 else:
                     # flash failed
-                    _logger.error('{}: flash failed: recover rescues system to target storage {}'.format(self.objectName(), self.mPick['storage']))
+                    _logger.error('{}: download failed: recover rescues system to target storage {}'.format(self.objectName(), self.mPick['storage']))
                     self._recoverRescue()
 
         if self.sender().objectName() == 'scanStorage' and isinstance(inputs, list):
+            if 'conntype' in inputs:
+                self.mConnType = inputs['conntype']
             # parse the available storage for checking
             self.mDisks = [d for d in inputs if 'size' in d and d['size'] > 0]
             _logger.warn('{}: disks: {}'.format(self.objectName(), self.mDisks))
@@ -2865,7 +2885,7 @@ class postDownloadSlot(QProcessSlot):
             # check for sdcard or emmc
             # NOTE: on PC-version, need to know storage device path of the target board
             if results['status'] == 'success' or results['status'] == 'failure':
-                _logger.info('{}: check whether target storage {} is emmc'.format(self.objectName(), self.mPick['storage']))
+                _logger.info('{}: check whether target storage {} is emmc after flash/download'.format(self.objectName(), self.mPick['storage']))
                 if self._isTargetEMMC(self.mPick['storage']):
                     self._findChildWidget('lblInstruction').setText('{} target emmc boot partition...'.format('Flash' if 'androidthings' in self.mPick['os'] else 'Clear'))
                     # 1. disable mmc boot partition 1 boot option
@@ -2891,16 +2911,21 @@ class postDownloadSlot(QProcessSlot):
                     # 2. clear the mmc boot partition
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
                     _logger.warn('issue command to clear {} boot partition'.format(self.mPick['storage']))
+                    self._findChildWidget('wgtProgress').show()
+                    self.mLblProgramming.setText("We are now clearing the eMMC boot partition for your evaluation kit")
+                    self.mLblRemain.setText('--:--(s) remaining')
+                    self.progress.emit(0)
+                    self.mConnType = 'dbus'
                     self.sendCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': '{}boot0'.format(self.mPick['storage']), 'chunk_size': '524288'})
             elif results['status'] == 'failure':
                 if IsATargetBoard():
                     # failed to disable mmc write boot partition option
-                    self.sendError({'NoEmmcWrite': True, 'ask': 'interrupt'})
+                    self.sendError({'NoEmmcWrite': True, 'ask': 'continue'})
 
         # flashed either zero, rescue, or androidthing uboot.imx into emmc boot part
         if results['cmd'] == 'flash':
             if results['status'] == 'processing':
-                _logger.warn('{}: start timer to update progressbar for clearing emmc {} boot partition'.format(self.objectName(), self.mPick['storage']))
+                _logger.warn('{}: start timer to update progressbar'.format(self.objectName()))
                 if self.mTimerId is None:
                     self.mTimerId = self.startTimer(1000) # 1000 ms
                 self.mFlashFlag = True
@@ -3134,6 +3159,9 @@ class processErrorSlot(QProcessSlot):
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
             _logger.warn('{}: Flash complete, reboot the system into new OS...'.format(self.objectName()))
+        if 'Interrupt' in self.mErrors:
+            self.mMsgBox.setMessage('Interrupt')
+            _logger.warn('{}: Flashing in progress. Interrupt from user inputs'.format(self.objectName()))
         if 'SerialMode' in self.mErrors:
             self.mMsgBox.setMessage('SerialMode')
             _logger.warning('{}: Set to SerialMode for PC-Host version...'.format(self.objectName()))
@@ -3178,14 +3206,8 @@ class processErrorSlot(QProcessSlot):
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
                 if ret == QtGui.QDialog.Rejected:
-                    try:
-                        if IsATargetBoard():
-                            # reset/reboot the system
-                            subprocess.check_call(['systemctl', 'stop', 'guiclientd.service'])
-                        else:
-                            os.kill(os.getpid(), signal.SIGUSR1)
-                    except:
-                        raise
+                    self.mErrors.update({'reject': True, 'accept': False})
+                    self.__returnResponse(self.mErrors)
             elif self.mAsk == 'serial':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
@@ -3681,14 +3703,14 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
-            self.setContent('Please reset your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent('Please remove power from your evaluation key and reboot.\n\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
-            self.setContent('Please power off and restart your board.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent("Congratulations. You makde it.\n\nNow it's time to reboot your system.\n\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)")
         elif msgtype == 'Interrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")

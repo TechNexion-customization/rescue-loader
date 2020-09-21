@@ -338,8 +338,8 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
         else:
             raise reply.error()
 
-    def interrupt(self):
-        ret = self.asyncCall('interrupt') # or self.call()
+    def interrupt(self, msg):
+        ret = self.asyncCall('interrupt', msg) # or self.call()
         reply = QtDBus.QDBusReply(ret)
         if reply.isValid():
             return reply.value()
@@ -436,19 +436,19 @@ class QtDbusMessenger(QObject, BaseMessenger):
         # emit recv signal which connects to cbReceiveSlotHandle callback handler
         self.sigExecmd.emit(params)
 
-    def setInterrupt(self, param):
+    def setInterrupt(self, msg):
         """
         allow the client to setInterrupt to the QtDBus server via emit intr signal
         which calls back to cbInterruptSlotHandle
         """
-        if isinstance(param, dict):
+        if isinstance(msg, dict):
             if self.mIsServer:
                 # called by the QtDBus Adaptor to emit the signal to set interrupt
-                self.sigIntrpt.emit(param)
+                self.sigIntrpt.emit(msg)
             else:
                 # called by the CLI/WEB/GUI viewer to interrupt server jobs
                 if self.mIface and self.mIface.isValid():
-                    return self.mIface.interrupt(param)
+                    return self.mIface.interrupt(msg)
                 else:
                     raise ReferenceError('Unable to access DBUS exported object')
         else:
@@ -553,7 +553,9 @@ class MsgDispatcher(QObject):
                 self.mSender = sender
                 self.mSender.finish.connect(self._reqCompleted)
                 if hasattr(self.mSender, 'resultSlot'):
-                    # connect signal to sender's resultSlot
+                    # connect signal to sender's resultSlot,
+                    # NOTE: this replaces the old _setupUserInputResponse way
+                    # to setup the callback to sender's resultSlot.
                     self.respSignal.connect(self.mSender.resultSlot)
                 self.mMsgCmd.update(reqMsg)
             else:
@@ -987,8 +989,8 @@ class GuiViewer(QObject, BaseViewer):
             fontsize = int(w/40) if int(w/40) > QtGui.QApplication.font().pointSize() else QtGui.QApplication.font().pointSize()
             _logger.warning('fontsize = {} ({}>{})'.format(fontsize, int(w/40), QtGui.QApplication.font().pointSize()))
             self.mGuiRootWidget.setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize * 2))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').setFont(QtGui.QFont('Lato', fontsize * 2))
+            #self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize * 2))
+            #self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').setFont(QtGui.QFont('Lato', fontsize * 2))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorMessages').setFont(QtGui.QFont('Lato', fontsize + 2))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorContent').setFont(QtGui.QFont('Lato', fontsize + 2))
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorIcon').hide()
@@ -1035,6 +1037,25 @@ class GuiViewer(QObject, BaseViewer):
         if len(self.mCmd) > 0:
             return True
         else:
+            return False
+
+    def _preExec(self):
+        """
+        Override BaseView::_preExec()
+        handler user interrupt
+        """
+        try:
+            if isinstance(self.mCmd, dict):
+                mgr = self.mMsger[int(self.mCmd['msger_id'])]
+                if 'cmd' in self.mCmd and self.mCmd['cmd'] is 'stop':
+                    _logger.warn('user interrupt: {}'.format(self.mCmd))
+                    # use interrupt
+                    ret = mgr.setInterrupt(self.mCmd)
+                    _logger.warn('interrupt returns: {}'.format(ret))
+                    return False
+                return True
+        except Exception as ex:
+            _logger.error('_preExec: exception: {}'.format(ex))
             return False
 
     def _mainExec(self):

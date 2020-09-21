@@ -381,9 +381,7 @@
                           <item row="0" column="0" rowspan="2">
                             <widget class="QLabel" name="lblProgramming">
                               <property name="text">
-                                <string>Retrieving selected software image from the TechNexion Cloud and configuring
-                                  your evaluation kit.
-                                </string>
+                                <string>Retrieving selected software image from the TechNexion Cloud and configuring your evaluation kit.</string>
                               </property>
                               <property name="alignment">
                                 <set>Qt::AlignCenter</set>
@@ -2171,6 +2169,22 @@
               <sender>btnFlash</sender>
               <signal>clicked()</signal>
               <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>btnAbort</sender>
+              <signal>clicked()</signal>
+              <receiver>downloadImage</receiver>
               <slot>processSlot()</slot>
               <hints>
                 <hint type="sourcelabel">

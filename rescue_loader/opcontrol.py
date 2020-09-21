@@ -236,6 +236,7 @@ class OpController(object):
         """
         Manage user interrupt from client/viewer
         """
+        _logger.warn("handler user interrupt: {}".format(param))
         if 'cmd' in param and 'type' in param:
             if param['cmd'] == 'stop' and param['type'] == 'job':
                 # for stopping jobs, loop through worker threads to find all the running
@@ -244,7 +245,7 @@ class OpController(object):
                 for thrd in self.mThreads:
                     thWkrHdlr = thrd.getWorkerHandler()
                     if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
-                        _logger.info("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
+                        _logger.warn("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
                         # call handler's updateUserResponse() api with param, and wait for handler to quit itself
                         thWkrHdlr.updateUserResponse(param)
             elif param['cmd'] in ['connect', 'disconnect'] and \
@@ -258,7 +259,7 @@ class OpController(object):
         Callback Handles for requesting more user inputs from the opOperationHandler
         - send the user req by triggering receive signal, then user should interrupt
           by calling the DBus interrupt i/f method
-        NOTE: Not called back by any ophandlers at the moment at the moment
+        NOTE: Not called back by any ophandlers at the moment
         """
         userReq = {}
         if isinstance(req, dict):

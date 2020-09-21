@@ -124,7 +124,8 @@ class BaseActionModeller(object):
 
     def checkInterruptAndExit(self):
         if self.mInterruptedFlag:
-            raise Exception("Interrupted by User Request")
+            return True
+        return False
 
     def getResult(self):
         return self.mResult
@@ -368,8 +369,8 @@ class CopyBlockActionModeller(BaseActionModeller):
                 _logger.debug('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
-                        self.checkInterruptAndExit()
-                        self.__copyChunk(srcaddr, tgtaddr, 1)
+                        if not self.checkInterruptAndExit():
+                            self.__copyChunk(srcaddr, tgtaddr, 1)
                 else:
                     self.__copyChunk(srcstart, tgtstart, totalbytes)
                 return True
@@ -748,17 +749,22 @@ class WebDownloadActionModeller(BaseActionModeller):
                 _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
                 if len(address) > 1:
                     for count, (srcaddr, tgtaddr) in enumerate(address):
-                        self.checkInterruptAndExit()
-                        self.__copyChunk(srcaddr, tgtaddr, 1, wgetcmd, decompcmd, ddcmd)
+                        if not self.checkInterruptAndExit():
+                            self.__copyChunk(srcaddr, tgtaddr, 1, wgetcmd, decompcmd, ddcmd)
                 else:
                     self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
             else:
                 # otherwise use subprocess's Popen
                 self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
-            return True
+            ret = True
         except Exception as ex:
             _logger.error('WebDownload main-action exception: {}'.format(ex))
-            raise
+
+        # close the block device
+        for ioobj in self.mIOs:
+            ioobj._close()
+        del self.mIOs
+        return ret
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
@@ -850,7 +856,10 @@ class WebDownloadActionModeller(BaseActionModeller):
                         break
                     except subprocess.TimeoutExpired as ex:
                         self.__signal_subproc(pdd)
-                        if timeout_counter > 180: # timed out after 3 minutes
+                        if self.checkInterruptAndExit():
+                            self.__kill_subproc([pwget, pxz, pdd, ptee])
+                            raise InterruptedError('User Interrupt to cancel running process')
+                        elif timeout_counter > 180: # timed out after 3 minutes
                             self.__kill_subproc([pwget, pxz, pdd, ptee])
                             raise ex
                         else:
