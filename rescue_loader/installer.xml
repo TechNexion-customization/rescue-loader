@@ -2215,6 +2215,38 @@
                 </hint>
               </hints>
             </connection>
+            <connection>
+              <sender>btnSelBaseboard</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>btnSelBaseboardIcon</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
           </connections>
           <slots>
             <signal>initialised()</signal>
