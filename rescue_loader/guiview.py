@@ -1118,11 +1118,15 @@ class GuiViewer(QObject, BaseViewer):
 
 def guiview():
     app = QtGui.QApplication(sys.argv)
+    conf = sys.argv.pop(0) if sys.argv else None
     sighdl = SignalHandler(app)
     geo = app.desktop().screenGeometry()
-    _logger.warning('Desktop Geometry: {}'.format(geo))
+    _logger.warn('Desktop Geometry: {}'.format(geo))
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
-    view = GuiViewer(sys.argv[-1], orient)
+    if 'touch' in sys.argv[-1]:
+        app.setOverrideCursor(QtCore.Qt.BlankCursor)
+        _logger.warn('Hide Cursor: {}'.format(geo))
+    view = GuiViewer(conf, orient)
     sighdl.activate([signal.SIGINT, signal.SIGTERM, signal.SIGUSR1], view.stop)
     if IsATargetBoard():
         view.show(geo)

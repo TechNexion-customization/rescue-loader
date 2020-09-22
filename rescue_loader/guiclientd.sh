@@ -1,5 +1,24 @@
 #!/bin/bash
 
+detect_touch () {
+for i in /sys/class/input/input?
+do
+  if ( grep -qE "EP000|EP079|EP082|EP085|EP0510|EP0512|EXC3146|EXC3160|P80H100" ${i}/name ); then
+    export QWS="-touch -qws"
+    return
+  elif ( grep -qE "P80H60" ${i}/name ); then
+    export QWS="-touch -qws"
+    return
+  elif ( grep -qE "ADS7846" ${i}/name ); then
+    export QWS="-touch -qws"
+    return
+  else
+    export QWS="-qws"
+  fi
+done
+}
+
+
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/dbus/session_bus_socket"
 if fbset | grep geometry | awk '{print (( test $2 < $3 ))}'; then
   export QWS_DISPLAY="transformed:mmWidth140:mmHeight68:rot270 directfb:0"
@@ -7,5 +26,7 @@ if fbset | grep geometry | awk '{print (( test $2 < $3 ))}'; then
 else
   export QWS_DISPLAY="directfb:0"
 fi
-/usr/bin/python3 /usr/lib/python3.5/site-packages/rescue_loader/guiview.py -qws
+
+detect_touch
+/usr/bin/python3 /usr/lib/python3.5/site-packages/rescue_loader/guiview.py $QWS
 
