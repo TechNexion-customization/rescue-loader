@@ -2516,7 +2516,7 @@ class downloadImageSlot(QProcessSlot):
         self.mLstWgtSelection = None
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
-        self.mTotalMem = None
+        self.mMemFree = None
         self.mHosts = []
         self.mAlternativeFlag = False
         self.mAbortFlag = False
@@ -2605,8 +2605,8 @@ class downloadImageSlot(QProcessSlot):
                 # the system cannot connect to our rescue server, try a different server
                 self.sendError({'NoNetwork': True, 'ask': 'serial' if IsATargetBoard() else 'quit'})
 
-    def __checkMemory(self):
-        self.sendCommand({'cmd': 'info', 'target': 'mem', 'location': 'total'})
+    def __checkFreeMemory(self):
+        self.sendCommand({'cmd': 'info', 'target': 'mem', 'location': 'free'})
 
     def __checkBeforeFlash(self):
         cpu = self._findChildWidget('lblCpu').text().lower()
@@ -2620,6 +2620,10 @@ class downloadImageSlot(QProcessSlot):
             else:
                 _logger.info('{}: download from {} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
                 self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree})
+            # Start a timer to query results every 1 second and set flash flag
+            if self.mTimerId is None:
+                self.mTimerId = self.startTimer(1000) # 1000 ms
+            self.mFlashFlag = True
             # show/hide GUI components
             self._updateDisplay()
 
@@ -2657,6 +2661,8 @@ class downloadImageSlot(QProcessSlot):
 
         # get the default remote http server host_name from defconfig in self.mViewer
         if self.sender().objectName() == 'scanNetwork':
+            if self.mMemFree is None:
+                self.__checkFreeMemory()
             if all(isinstance(item, dict) for item in inputs):
                 # found hosts, parse alive/connectable rescue servers
                 self.__parseHosts(inputs)
@@ -2760,20 +2766,16 @@ class downloadImageSlot(QProcessSlot):
         _logger.warn('{}: found URL: {}, STORAGE: {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
-        # Start a timer to query results every 1 second
+
         self.mResults.update(results)
 
         if 'cmd' in results and results['cmd'] == 'info' and results['target'] == 'mem' and results['status'] == 'success':
-            self.mTotalMem = int(results['total'])
+            self.mMemFree = results['free']
 
         # ignore downloadImage on serial msger entirely
         elif 'cmd' in results and results['cmd'] == 'download' and 'status' in results and \
             'msger_type' in results and results['msger_type'] == 'dbus':
-            if results['status'] == 'processing':
-                if self.mTimerId is None:
-                    self.mTimerId = self.startTimer(1000) # 1000 ms
-                self.mFlashFlag = True
-            else:
+            if results['status'] == 'success' or results['status'] == 'failure':
                 # stop flash job either success or failure
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
@@ -2923,6 +2925,7 @@ class postDownloadSlot(QProcessSlot):
                         self.progress.emit(pcent)
 
     def _recoverRescue(self):
+        # copy back the backed up /tmp/rescue.img to target eMMC
         self._findChildWidget('wgtProgress').show()
         self.mLblProgramming.setText("Recovering technexion software loader\n")
         self.mLblRemain.setText('--:--(s) remaining')

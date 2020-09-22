@@ -547,6 +547,11 @@ class DownloadOperationHandler(BaseOperationHandler):
                 self.mActionParam['host_username'] = '{}'.format(OpParams['dl_username'])
             if 'dl_password' in OpParams and len(OpParams['dl_password']) > 0:
                 self.mActionParam['host_password'] = '{}'.format(OpParams['dl_password'])
+            # use dd cmd when free mem > 200
+            if 'mem_free' in OpParams and int(OpParams['mem_free']) < (200 * 1024 * 1024):
+                self.mActionParam['use_dd'] = True
+            else:
+                self.mActionParam['use_dd'] = False
 
             if all(s in OpParams for s in self.mArgs):
                 # check for download from web and flash to target file

@@ -377,6 +377,8 @@ class CopyBlockActionModeller(BaseActionModeller):
                     for (srcaddr, tgtaddr) in address:
                         if not self.checkInterruptAndExit():
                             self.__copyChunk(srcaddr, tgtaddr, 1)
+                        else:
+                            raise InterruptedError('User Interrupt to cancel running process')
                 else:
                     self.__copyChunk(srcstart, tgtstart, totalbytes)
                 ret = True
@@ -748,12 +750,12 @@ class WebDownloadActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIOs = []
+        self.mUseDD = True
 
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
-        # get memory information from the system
-        #self.__meminfo = psutil.virtual_memory()
+        self.mUseDD = self.mParam['use_dd'] if 'use_dd' in self.mParam else True
 
         # setup options, chunk_size in bytes default 64KB, i.e. 65535
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
@@ -816,18 +818,20 @@ class WebDownloadActionModeller(BaseActionModeller):
             else:
                 raise IOError('There is 0 Total Bytes to download')
 
-            # if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
-            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
+            # if free mem available > 671088640: # 640 * 1024 * 1024 bytes
+            if not self.mUseDD: # dd-able (plenty of free memory)
                 _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
                 if len(address) > 1:
                     for count, (srcaddr, tgtaddr) in enumerate(address):
                         if not self.checkInterruptAndExit():
-                            self.__copyChunk(srcaddr, tgtaddr, 1, wgetcmd, decompcmd, ddcmd)
+                            self.__copyChunk(srcaddr, tgtaddr, 1)
+                        else:
+                            raise InterruptedError('User Interrupt to cancel running process')
                 else:
-                    self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
+                    self.__copyChunk(srcstart, tgtstart, totalbytes)
             else:
-                # otherwise use subprocess's Popen
-                self.__copyChunk(srcstart, tgtstart, totalbytes, wgetcmd, decompcmd, ddcmd)
+                # otherwise use subprocess's Popen to dd
+                self.__ddChunk(wgetcmd, decompcmd, ddcmd)
             ret = True
         except Exception as ex:
             _logger.error('WebDownload main-action exception: {}'.format(ex))
@@ -861,7 +865,22 @@ class WebDownloadActionModeller(BaseActionModeller):
                 self.mResult['bytes_written'] = self.mResult['total_uncompressed'] * int(percent) // 100
                 self.mResult['eta'] = eta
 
-    def __copyChunk(self, srcaddr, tgtaddr, numChunks, wgetcmd, decompcmd, ddcmd):
+    def __copyChunk(self, srcaddr, tgtaddr, numChunks):
+        try:
+            # read src and write to the target
+            data = self.mIOs[0].Read(srcaddr, numChunks)
+            self.mResult['bytes_read'] += len(data)
+            written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
+            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
+            # write should return number of bytes written
+            if (written > 0):
+                self.mResult['bytes_written'] += written
+            del data # hopefully this would clear the write data buffer
+
+        except Exception:
+            raise
+
+    def __ddChunk(self, wgetcmd, decompcmd, ddcmd):
         def read_stream(fd):
             try:
                 # set non-blocking flag while preserving old flags
@@ -880,75 +899,63 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
 
         try:
-            # if self.__meminfo.available > 671088640: # 640 * 1024 * 1024 bytes
-            if not IsATargetBoard(): # if is not a target board use inputoutput else use subprocess.popen
-                # read src and write to the target
-                data = self.mIOs[0].Read(srcaddr, numChunks)
-                self.mResult['bytes_read'] += len(data)
-                written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-                _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
-                # write should return number of bytes written
-                if (written > 0):
-                    self.mResult['bytes_written'] += written
-                del data # hopefully this would clear the write data buffer
-            else:
-                timeout_counter = 0
-                last_written =  0
-                fd = open('/tmp/progress.log', 'w+')
-                _logger.info('copyChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
-                pwget = subprocess.Popen(
-                    [wgetcmd],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=True,
-                )
-                pxz = subprocess.Popen(
-                    [decompcmd],
-                    stdin=pwget.stdout,
-                    stdout=subprocess.PIPE,
-                    shell=True,
-                )
-                pdd = subprocess.Popen(
-                    [ddcmd],
-                    stdin=pxz.stdout,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=True,
-                )
-                fd.flush()
-                ptee = subprocess.Popen(
-                    ['tee'],
-                    stdin=pdd.stderr,
-                    stdout=fd,
-                    shell=True,
-                )
-                self.__pddpid = pdd.pid
-                while True:
-                    try:
-                        out, err = ptee.communicate(timeout=1)
-                        break
-                    except subprocess.TimeoutExpired as ex:
-                        self.__signal_subproc(pdd)
-                        if self.checkInterruptAndExit():
-                            self.__kill_subproc([pwget, pxz, pdd, ptee])
-                            raise InterruptedError('User Interrupt to cancel running process')
-                        elif timeout_counter > 180: # timed out after 3 minutes
-                            self.__kill_subproc([pwget, pxz, pdd, ptee])
-                            raise ex
+            timeout_counter = 0
+            last_written =  0
+            fd = open('/tmp/progress.log', 'w+')
+            _logger.info('ddChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
+            pwget = subprocess.Popen(
+                [wgetcmd],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+            )
+            pxz = subprocess.Popen(
+                [decompcmd],
+                stdin=pwget.stdout,
+                stdout=subprocess.PIPE,
+                shell=True,
+            )
+            pdd = subprocess.Popen(
+                [ddcmd],
+                stdin=pxz.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+            )
+            fd.flush()
+            ptee = subprocess.Popen(
+                ['tee'],
+                stdin=pdd.stderr,
+                stdout=fd,
+                shell=True,
+            )
+            self.__pddpid = pdd.pid
+            while True:
+                try:
+                    out, err = ptee.communicate(timeout=1)
+                    break
+                except subprocess.TimeoutExpired as ex:
+                    self.__signal_subproc(pdd)
+                    if self.checkInterruptAndExit():
+                        self.__kill_subproc([pwget, pxz, pdd, ptee])
+                        raise InterruptedError('User Interrupt to cancel running process')
+                    elif timeout_counter > 180: # timed out after 3 minutes
+                        self.__kill_subproc([pwget, pxz, pdd, ptee])
+                        raise ex
+                    else:
+                        _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
+                        if read_stream(fd) and last_written != self.mResult['bytes_written']:
+                            last_written = self.mResult['bytes_written']
+                            timeout_counter = 0
                         else:
-                            _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
-                            if read_stream(fd) and last_written != self.mResult['bytes_written']:
-                                last_written = self.mResult['bytes_written']
-                                timeout_counter = 0
-                            else:
-                                timeout_counter += 1
-                            continue
-                    except:
-                        read_stream(fd)
-                        fd.close()
-                        raise BlockingIOError('Subprocess Popen failed')
-                read_stream(fd)
-                fd.close()
+                            timeout_counter += 1
+                        continue
+                except:
+                    read_stream(fd)
+                    fd.close()
+                    raise BlockingIOError('Subprocess Popen failed')
+            read_stream(fd)
+            fd.close()
 
         except Exception:
             raise
