@@ -741,6 +741,9 @@ if __name__ == "__main__":
     elif sys.argv[1] == 'baseboard':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'baseboard'}
+    elif sys.argv[1] == 'mem':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'mem', 'location': 'free'}
     elif sys.argv[1] == 'web':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
