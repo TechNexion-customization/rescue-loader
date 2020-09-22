@@ -296,6 +296,7 @@ class BasicBlockActionModeller(BaseActionModeller):
             raise ValueError('mainAction: Invalid parameter values.')
 
         # close the block input/output device
+        _logger.warn('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
         self.mIO._close()
         del self.mIO
         return ret
@@ -382,6 +383,7 @@ class CopyBlockActionModeller(BaseActionModeller):
 
         # close the block device
         for ioobj in self.mIOs:
+            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
         return ret
@@ -526,7 +528,9 @@ class QueryFileActionModeller(BaseActionModeller):
             ret = True
 
         # clear the mIO
-        if self.mIO: del self.mIO
+        _logger.warn('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
+        self.mIO._close()
+        del self.mIO
         return ret
 
 
@@ -762,6 +766,7 @@ class WebDownloadActionModeller(BaseActionModeller):
 
         # close the block device
         for ioobj in self.mIOs:
+            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
         return ret
@@ -926,29 +931,37 @@ class QueryWebFileActionModeller(BaseActionModeller):
     def _mainAction(self):
         # TODO: should implement writing files in the future
         # setup the web input output
-        webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
-        if webIO:
-            _logger.debug('{} Host: {} Path: {} File Type: {}'.format(type(self).__name__, self.mWebHost, self.mSrcPath, webIO.getFileType()))
-            if 'html' in webIO.getFileType():
-                webpage = webIO.Read(0, 0)
-                # parse the web pages
-                dctFiles = self.__parseWebPage(webpage)
-                if len(dctFiles) > 0:
-                    self.mResult['file_list'] = dctFiles
-                    self.mResult['lines_read'] += len(webpage)
-                    return True
-            elif 'xz' in webIO.getFileType():
-                self.mResult['header_info'] = webIO.getHeaderInfo()
-                self.mResult['file_type'] = webIO.getFileType()
-                self.mResult['total_size'] = webIO.getFileSize()
-                self.mResult['total_uncompressed'] = webIO.getUncompressedSize()
-                return True
+        ret = False
+        try:
+            webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
+            if webIO:
+                _logger.debug('{} Host: {} Path: {} File Type: {}'.format(type(self).__name__, self.mWebHost, self.mSrcPath, webIO.getFileType()))
+                if 'html' in webIO.getFileType():
+                    webpage = webIO.Read(0, 0)
+                    # parse the web pages
+                    dctFiles = self.__parseWebPage(webpage)
+                    if len(dctFiles) > 0:
+                        self.mResult['file_list'] = dctFiles
+                        self.mResult['lines_read'] += len(webpage)
+                        ret = True
+                elif 'xz' in webIO.getFileType():
+                    self.mResult['header_info'] = webIO.getHeaderInfo()
+                    self.mResult['file_type'] = webIO.getFileType()
+                    self.mResult['total_size'] = webIO.getFileSize()
+                    self.mResult['total_uncompressed'] = webIO.getUncompressedSize()
+                    ret = True
+                else:
+                    raise IOError('mainAction: Cannot read non-text based web files')
             else:
-                raise IOError('mainAction: Cannot read non-text based web files')
-        else:
-            raise ValueError('mainAction: Cannot create WebInputOutput with {} {}'.format(self.mSrcPath, self.mWebHost))
+                raise ValueError('mainAction: Cannot create WebInputOutput with {} {}'.format(self.mSrcPath, self.mWebHost))
+        except:
+            raise
+        finally:
+            if webIO:
+                webIO._close()
+            del webIO
 
-        return False
+        return ret
 
     def __parseWebPage(self, page):
         """
@@ -1005,7 +1018,9 @@ class QueryLocalFileActionModeller(BaseActionModeller):
                             except Exception as ex:
                                 raise IOError('mainAction: Cannot create BlockInputOutput with {}, error:{}'.format(self.mSrcPath, ex))
                             finally:
-                                if self.mIO: del self.mIO
+                                if self.mIO:
+                                    self.mIO._close()
+                                del self.mIO
                                 self.mIO = None
                         _logger.debug('QueryLocalFile: {}: {}'.format(file, os.path.join(dirpath, file)))
             return True
@@ -1484,6 +1499,7 @@ class CheckBlockActionModeller(BaseActionModeller):
 
         # close the block device again
         for ioobj in self.mIOs:
+            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
         return ret
