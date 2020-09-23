@@ -330,16 +330,19 @@ class CopyBlockActionModeller(BaseActionModeller):
                 # default mode is rb+
                 self.mIOs.append(BlockInputOutput(chunksize, self.mParam['src_filename'], 'rb'))
                 self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
-                filesize = self.mIOs[-1].getFileSize()
                 if self.isSrcCharDev:
-                    # special case where source is a char device and target is a block device, e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
-                    # self.mIOs[-1].getBlockSize() => 4096
-                    blksize = chunksize
+                    filesize = self.mIOs[-1].getFileSize()
+                    # special case where source is a char device and target is a block device, 
+                    # e.g. dd if=/dev/zero of=/dev/mmcblk2boot0
+                    blksize = self.mIOs[-1].getBlockSize() # => 4096
+                    #blksize = chunksize
                     self.mParam['src_start_sector'] = 0
                     self.mParam['tgt_start_sector'] = 0
                 else:
+                    filesize = self.mIOs[0].getFileSize()
                     # setup different size params
-                    blksize = self.mIOs[-1].getBlockSize()
+                    blksize = chunksize
+                    # blksize = self.mIOs[-1].getBlockSize() # => 4096
                 if ('src_total_sectors' not in self.mParam) or (self.mParam['src_total_sectors'] == -1):
                     chunks, remainder = divmod(filesize, blksize)
                     self.mParam['src_total_sectors'] = chunks + (0 if remainder == 0 else 1)
@@ -349,43 +352,45 @@ class CopyBlockActionModeller(BaseActionModeller):
             raise ValueError('preAction: Neither src nor tgt file specified')
 
         if len(self.mIOs) > 0 and all(isinstance(ioobj, BaseInputOutput) for ioobj in self.mIOs):
+            _logger.warn('self.mParam: {}'.format(self.mParam))
             return True
         return False
 
     def _mainAction(self):
         # copy specified address range from src file to target file
+        ret = False
         try:
             if all(s in self.mParam for s in ['src_start_sector', 'src_total_sectors', 'tgt_start_sector']):
                 chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 1048576 # 1MB
                 if self.isSrcCharDev:
-                    blksize = chunksize
+                    blksize = self.mIOs[-1].getBlockSize() # => 4096
                 else:
-                    blksize = self.mIOs[0].getBlockSize()
+                    blksize = chunksize
                 srcstart = self.mParam['src_start_sector'] * blksize
                 tgtstart = self.mParam['tgt_start_sector'] * blksize
                 totalbytes = self.mParam['src_total_sectors'] * blksize
                 self.mResult['total_size'] = totalbytes
                 # sector addresses of a very large file for looping
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-                _logger.debug('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
+                _logger.warn('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
                         if not self.checkInterruptAndExit():
                             self.__copyChunk(srcaddr, tgtaddr, 1)
                 else:
                     self.__copyChunk(srcstart, tgtstart, totalbytes)
-                return True
+                ret = True
             else:
                 self.__copyChunk(srcstart, tgtstart, totalbytes)
             ret = True
         except:
             raise ValueError('mainAction: No specified src/tgt start sector, nor total sectors')
-
-        # close the block device
-        for ioobj in self.mIOs:
-            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
-            ioobj._close()
-        del self.mIOs
+        finally:
+            # close the block device
+            for ioobj in self.mIOs:
+                _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+                ioobj._close()
+            del self.mIOs
         return ret
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks):

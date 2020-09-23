@@ -2701,7 +2701,7 @@ class downloadImageSlot(QProcessSlot):
         self._findChildWidget('wgtOutput').hide()
         self._findChildWidget('wgtProgress').show()
         self._findChildWidget('progressBarStatus').show()
-        self.mLblProgramming.setText('Retrieving selected software image from the TechNexion Cloud and\nconfiguring your evaluation kit.\nPlease standby')
+        self.mLblProgramming.setText('Retrieving selected software image from the TechNexion Cloud and\nconfiguring your evaluation kit.\nPlease standby\n')
         self.mLblProgramming.show()
         self.mLblRemain.show()
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
@@ -2766,6 +2766,7 @@ class postDownloadSlot(QProcessSlot):
         self.mTimerId = None
         self.mLblProgramming = None
         self.mLblRemain = None
+        self.mLblDownloadFlash = None
         self.mProgressBar = None
         self.mConnType = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None, 'target': None, 'url': None}
@@ -2809,11 +2810,14 @@ class postDownloadSlot(QProcessSlot):
 
     def _recoverRescue(self):
         self._findChildWidget('wgtProgress').show()
-        self.mLblProgramming.setText("It's not you, it's us.\nSomething went wrong\nWe are now reconditioning your evaluation kit automatically")
+        self.mLblProgramming.setText("It's not you, it's us.\n\nSomething went wrong\n\nWe are now reconditioning your evaluation kit automatically\n")
         self.mLblRemain.setText('--:--(s) remaining')
+        self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
+        self.mLblDownloadFlash.setText('Do not power off the device')
+        self.mLblDownloadFlash.show()
         self.progress.emit(0)
         self.mConnType = 'dbus'
-        self.sendCommand({'cmd': 'flash', 'src_filename': '/tmp/rescue.img', 'tgt_filename': '{}'.format(self.mPick['storage']), 'chunk_size': '524288'})
+        self.sendCommand({'cmd': 'flash', 'src_filename': '/tmp/rescue.img', 'tgt_filename': '{}'.format(self.mPick['storage']), 'chunk_size': '1048576'})
 
     def process(self, inputs):
         """
@@ -2824,6 +2828,8 @@ class postDownloadSlot(QProcessSlot):
             self.mLblProgramming = self._findChildWidget('lblProgramming')
         if self.mLblRemain is None:
             self.mLblRemain = self._findChildWidget('lblRemaining')
+        if self.mLblDownloadFlash is None:
+            self.mLblDownloadFlash = self._findChildWidget('lblDownloadFlash')
         if self.mProgressBar is None:
             self.mProgressBar = self._findChildWidget('progressBarStatus')
             if self.mProgressBar:
@@ -2912,8 +2918,10 @@ class postDownloadSlot(QProcessSlot):
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
                     _logger.warn('issue command to clear {} boot partition'.format(self.mPick['storage']))
                     self._findChildWidget('wgtProgress').show()
-                    self.mLblProgramming.setText("We are now clearing the eMMC boot partition for your evaluation kit")
+                    self.mLblProgramming.setText("We are now clearing the eMMC boot partition for your evaluation kit\nPlease standby\n")
                     self.mLblRemain.setText('--:--(s) remaining')
+                    self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
+                    self.mLblDownloadFlash.setText('Do not power off the device')
                     self.progress.emit(0)
                     self.mConnType = 'dbus'
                     self.sendCommand({'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': '{}boot0'.format(self.mPick['storage']), 'chunk_size': '524288'})
