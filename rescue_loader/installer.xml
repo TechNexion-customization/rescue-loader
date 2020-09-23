@@ -893,7 +893,7 @@
                             <item row="0" column="5" rowspan="4" colspan="4">
                               <widget class="QLabel" name="lblErrorMessages">
                                 <property name="styleSheet">
-                                  <string notr="true">background: transparent; border: 5px solid white; color: white
+                                  <string notr="true">background: transparent; border: 5px solid white; color: white; padding: 5px
                                   </string>
                                 </property>
                                 <property name="frameShape">

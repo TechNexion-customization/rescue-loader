@@ -810,7 +810,8 @@ class scanPartitionSlot(QProcessSlot):
                 #self.sendError({'Show': False})
                 pass
             else:
-                self.sendError({'NoPartition': True})
+                #self.sendError({'NoPartition': True})
+                pass
             self.success.emit(self.mResults)
 
 
@@ -884,7 +885,8 @@ class crawlLocalfsSlot(QProcessSlot):
             pass
         else:
             # Did not find any suitable xz file on mounted partitions
-            self.sendError({'NoLocal': True})
+            #self.sendError({'NoLocal': True})
+            pass
         if not self.mSentFlag:
             self.success.emit(self.mResults)
             self.mSentFlag = True
@@ -907,8 +909,7 @@ class scanNetworkSlot(QProcessSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
-        self.mNicErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True, 'Show': True}
-        self.mNetErr = {'NoIP': True, 'NoDNS': True, 'NoServer': True, 'Show': True}
+        self.mNetErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True, 'NoIP': True, 'NoDNS': True, 'NoServer': True, 'Show': True}
         self.mTgtNICs = {}
         self.mHosts = []
         self.mLocalIPs = {}
@@ -930,12 +931,9 @@ class scanNetworkSlot(QProcessSlot):
             if 'Repeat' in err and err['Repeat']:
                 self.mRepeatFlag = False
                 self.mNetErr.pop('Repeat', None)
-                allerrors = {}
-                allerrors.update(self.mNicErr)
-                allerrors.update(self.mNetErr)
-                allerrors.pop('Show', None)
-                _logger.warn('{}: sendError: re-direct errors to crawlWeb/downloadImage: {}'.format(self.objectName(), allerrors))
-                self.success.emit(list(allerrors.items()))
+                self.mNetErr.pop('Show', None)
+                _logger.warn('{}: sendError: re-direct errors to crawlWeb/downloadImage: {}'.format(self.objectName(), self.mNetErr))
+                self.success.emit(list(self.mNetErr.items()))
 
     def process(self, inputs = None):
         """
@@ -989,11 +987,11 @@ class scanNetworkSlot(QProcessSlot):
                                     _logger.warn('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
                                     self.mNICNames.update({k: {'ip':v}})
 
-                            self.mNicErr.update({'NoNIC': False})
+                            self.mNetErr.update({'NoNIC': False})
                         else:
-                            self.mNicErr.update({'NoNIC': True})
-
-                        self.sendError(self.mNicErr)
+                            self.mNetErr.update({'NoNIC': True})
+                        _logger.warn('{}: 1. ifconf: found NICS:{}'.format(self.objectName(), self.mNICNames))
+                        self.sendError(self.mNetErr)
                         # redo the check NIC, to continue to 3b.
                         if self.mNICNames != {}:
                             # i.e. send another query to query for ifflags with proper NIC I/F name
@@ -1009,7 +1007,7 @@ class scanNetworkSlot(QProcessSlot):
                         for name, value in self.mNICNames.items():
                             if name == results['target']:
                                 value.update({'state': results['state']})
-                        _logger.warn('{}: NICNames: {}'.format(self.objectName(), self.mNICNames))
+                        _logger.warn('{}: 2. ifflags: updated NICs: {}'.format(self.objectName(), self.mNICNames))
                         if all('state' in v for v in self.mNICNames.values()):
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
@@ -1019,10 +1017,11 @@ class scanNetworkSlot(QProcessSlot):
                         if isinstance(host, dict):
                             if host['name'] == results['target'] and 'host_ip' in results.keys():
                                 host.update({'host_ip': results['host_ip']})
+                    _logger.warn('{}: 3b. dns: updated hosts: {}'.format(self.objectName(), self.mHosts))
                     if all('host_ip' in host for host in self.mHosts):
-                        QtCore.QTimer.singleShot(1000, self.__checkIP)
+                        QtCore.QTimer.singleShot(1000, self.__checkNetAccess)
 
-                # results from IP Network Checks, i.e. from __checkIP
+                # results from IP Network Checks, i.e. from __checkNetAccess
                 elif results['config_id'] == 'ip' and results['status'] == 'success':
                     # for both target device and host pc from installerd
                     # check 5: find matching IP for the NIC Name
@@ -1078,7 +1077,7 @@ class scanNetworkSlot(QProcessSlot):
                     _logger.warn('{}: found target board NICs: {}'.format(self.objectName(), self.mTgtNICs))
 
     def validateResult(self):
-        _logger.warn('{} validate results: mHosts:{}'.format(self.objectName(), self.mHosts))
+        _logger.warn('{}: validate results: mHosts:{}'.format(self.objectName(), self.mHosts))
         # flow comes here (gets called) after self.finish.emit()
         # tell the processError to display with no icons specified, i.e. hide
         if all(('alive' in host) for host in self.mHosts):
@@ -1113,61 +1112,63 @@ class scanNetworkSlot(QProcessSlot):
         self.__checkNIC()
 
     def __checkNIC(self):
+        # 1. Network Detection Starting Point
         # send request to installerd.service to request for network status.
         if self.mNICNames == {}:
             # 3a. didn't get nic iface name, so query ifconfig first,
-            _logger.warn('{}: check ifconfig for all local nic interfaces...'.format(self.objectName()))
+            _logger.warn('{}: __checkNIC: 1. issue ifconfig for all local nic interfaces...'.format(self.objectName()))
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
         else:
-            _logger.warn('{}: check ifflags on found local nic interface: {}...'.format(self.objectName(), self.mNICNames))
+            _logger.warn('{}: __checkNIC: 2. issue ifflags on found local nic interface: {}...'.format(self.objectName(), self.mNICNames))
             # 3b. check ifflags on local nic interfaces
             for name, ip in self.mNICNames.items():
                 self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': name})
 
     def __checkDNS(self):
-        _logger.warn('{}: __checkDNS: {}'.format(self.objectName(), self.mNICNames))
         if all('state' in value for value in self.mNICNames.values()):
             for value in self.mNICNames.values():
                 if 'UP' in value['state']:
                     value.update({'NoIface': False})
                     # 3b-3. Check NIC connection is running (flag says IFF_RUNNING?)
-                    #self.mNicErr.update({'NoIface': False})
+                    #self.mNetErr.update({'NoIface': False})
                     if 'RUNNING' in value['state']:
                         # 3b-4. when all is running, check to see if we can connect to our rescue server.
                         value.update({'NoCable': False})
-                        #self.mNicErr.update({'NoCable': False, 'Show': False})
+                        #self.mNetErr.update({'NoCable': False})
                     else:
                         value.update({'NoCable': True})
-                        #self.mNicErr.update({'NoCable': True})
+                        #self.mNetErr.update({'NoCable': True})
                 else:
                     value.update({'NoIface': True})
-                    #self.mNicErr.update({'NoIface': True})
+                    #self.mNetErr.update({'NoIface': True})
+            _logger.warn('{}: __checkDNS: 3a. check all states: updated NICs: {}'.format(self.objectName(), self.mNICNames))
         if all(('NoIface' in v and 'NoCable' in v) for v in self.mNICNames.values()):
             if any((v['NoIface'] is False and v['NoCable'] is False) for v in self.mNICNames.values()):
+                _logger.warn('{}: __checkDNS: 3b. issue getHostByName to check for DNS for NICs with detected iface/cable...'.format(self.objectName()))
                 # if any nic i/f is up and running, carry on to check host by name
-                self.mNicErr.update({'NoIface': False, 'NoCable': False})
+                self.mNetErr.update({'NoIface': False, 'NoCable': False})
                 self.sendError(self.mNetErr)
-                _logger.warn('{}: check whether we can find host by name...'.format(self.objectName()))
-                # check 4a. get IP from socket connected to DNS
+                # check 4a. try to get ip by host, and fails means no DNS,
                 for host in self.mHosts:
                     self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'dns', 'config_action': 'get', 'target': host['name']})
             else:
                 if all(v['NoIface'] is True for v in self.mNICNames.values()):
-                    self.mNicErr.update({'NoIface': True})
+                    self.mNetErr.update({'NoIface': True})
+                elif any(v['NoIface'] is False for v in self.mNICNames.values()):
+                    self.mNetErr.update({'NoIface': False})
                 elif all(v['NoCable'] is True for v in self.mNICNames.values()):
-                    self.mNicErr.update({'NoCable': True})
+                    self.mNetErr.update({'NoCable': True})
                 # retry check 3. for NIC if failed
-                _logger.warn('{}: ifflags has errors, re-check NICs...'.format(self.objectName()))
-                self.sendError(self.mNicErr)
+                _logger.warn('{}: __checkDNS: 3c. check all states with some iface/cable, re-check NICs...'.format(self.objectName()))
+                self.sendError(self.mNetErr)
                 QtCore.QTimer.singleShot(1000, self.__checkNIC)
 
-    def __checkIP(self):
-        _logger.warn('{}: __checkIP: {}'.format(self.objectName(), self.mHosts))
+    def __checkNetAccess(self):
         if all('host_ip' in host for host in self.mHosts):
             if all(host['host_ip'] is 'None' for host in self.mHosts):
                 self.mNetErr.update({'NoDNS': True})
                 self.sendError(self.mNetErr)
-                _logger.warn('{}: check whether we have IP and connectable to 8.8.8.8...'.format(self.objectName()))
+                _logger.warn('{}: 4a. __checkNetAccess: NoDNS: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
                 # check 4b. all host ip are 'None', means cannot resolve hostnames
                 for nicname in self.mNICNames:
                     self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': nicname})
@@ -1175,17 +1176,19 @@ class scanNetworkSlot(QProcessSlot):
                 if all(v['ip'] is 'unknown' for n, v in self.mNICNames.items() if n.startswith('e')):
                     self.mNetErr.update({'NoIP': True})
                     self.sendError(self.mNetErr)
+                    _logger.warn('{}: 4b. __checkNetAccess: NoIP in NICs: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
                     for n, v in self.mNICNames.items():
                         if n.startswith('e'):
                             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': n})
                 else:
                     self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                     self.sendError(self.mNetErr)
+                    _logger.warn('{}: with DNS and NetAccess: {}'.format(self.objectName(), self.mNICNames))
                     QtCore.QTimer.singleShot(1000, self.__checkTNServer)
 
     def __checkTNServer(self):
         # check connectivity to TechNexion server
-        _logger.warn('{}: check whether we have connectivity to server... {} sockets: {}'.format(self.objectName(), self.mHosts, self.mSockets))
+        _logger.warn('{}: 5. __checkTNServer: check servers alive: servers:{} sockets:{}'.format(self.objectName(), self.mHosts, self.mSockets))
         for host in self.mHosts:
             if host['name'] not in self.mSockets:
                 self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
@@ -3055,36 +3058,10 @@ class processErrorSlot(QProcessSlot):
             self.mMsgBox.setMessage('NoDbus')
             self.mMsgBox.setCheckFlags(self.mErrors)
             _logger.critical('{}: DBus session bus or installer dbus server not available!!! {}'.format(self.objectName(), 'Retrying...' if self.mAsk is None else 'Restore Rescue System'))
-        if 'NoCable' in self.mErrors and self.mErrors['NoCable']:
-            # add NoCable icon
-            self.mMsgBox.setMessage('NoCable')
+        if all(netErr in self.mErrors for netErr in ['NoNIC', 'NoIface', 'NoCable', 'NoIP', 'NoDNS', 'NoServer']):
+            self.mMsgBox.setMessage('NoNetScan')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: Network cable not connected!!! Retrying...'.format(self.objectName()))
-        if 'NoIface' in self.mErrors and self.mErrors['NoIface']:
-            # add NoIface icon
-            self.mMsgBox.setMessage('NoIface')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: NIC I/F not available!!! Retrying...'.format(self.objectName()))
-        if 'NoNIC' in self.mErrors and self.mErrors['NoNIC']:
-            # add NoNIC icon
-            self.mMsgBox.setMessage('NoNIC')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: DBus session bus or installer dbus server not available!!! Retrying...'.format(self.objectName()))
-        if 'NoServer' in self.mErrors and self.mErrors['NoServer']:
-            # add NoServer icon
-            self.mMsgBox.setMessage('NoServer')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: Cannot connect to TechNexion Rescue Server!!! Retrying...'.format(self.objectName()))
-        if 'NoDNS' in self.mErrors and self.mErrors['NoDNS']:
-            # add NoCable icon
-            self.mMsgBox.setMessage('NoDNS')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: Cannot resolve domain name!!! Retrying...'.format(self.objectName()))
-        if 'NoIP' in self.mErrors and self.mErrors['NoIP']:
-            # add NoCable icon
-            self.mMsgBox.setMessage('NoIP')
-            self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.error('{}: No IP address assigned!!! Retrying...'.format(self.objectName()))
+            _logger.error('{}: Network Scan Errors: {} Retrying...'.format(self.objectName(), self.mErrors))
         if 'NoNetwork' in self.mErrors:
             self.mMsgBox.setMessage('NoNetwork')
             _logger.warn('{}: No Network connection or No Servers available...'.format(self.objectName()))
@@ -3570,23 +3547,49 @@ class QMessageDialog(QtGui.QDialog):
             for key, flag in self.mCheckFlags.items():
                 # setup which label to show
                 lbl = None
-                if key in ['NoNIC', 'NoIface']:
+                if key == 'NoNIC':
+                    #self.setStatus('No network adaptor found.') # canonical_equivalents
+                    pass
+                elif key == 'NoIface':
+                    #self.setStatus('Ethernet interface is not available.') # NoIface
                     pass
                 elif key == 'NoCable':
+                    #self.setStatus('Please connect a network cable.') # NoCable
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox1') # 'msgItem2_OL'
+                    self.setErrorMessages("Make sure your network\nLAN cable is connected\ncorrectly to your wired\nnetwork (for example your\nWi-Fi router or switch")
                 elif key == 'NoIP':
+                    #self.setStatus('No IP address assigned')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox2') # 'msgItem0_OL'
+                    if flag:
+                        if self.mCheckFlags['NoCable']:
+                            flag = None
+                        else:
+                            self.setErrorMessages("Your network didn't automatically\nassign an IP address.\nPlease contact your IT\ndepartment for help")
                 elif key == 'NoDNS':
+                    #self.setStatus('Cannot resolve domain name')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox3') # 'msgItem0_OL'
+                    if flag:
+                        if self.mCheckFlags['NoIP']:
+                            flag = None
+                        else:
+                            self.setErrorMessages("We are offline.\nCheck your Internet connection")
                 elif key == 'NoServer':
+                    #self.setStatus('TechNexion server is temporary unavailable, try again later.')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox4') # 'msgItem3_OL'
+                    if flag:
+                        if self.mCheckFlags['NoDNS']:
+                            flag = None
+                        else:
+                            self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee\nand try again later")
                 else:
                     lbl = self.window().findChild(QtGui.QLabel, 'msgErrorQRcode')
 
                 # setup which flag icon to use
-                if flag: # True or False
+                if flag is None:
+                    pixmap = QtGui.QIcon(':res/images/box.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
+                elif flag: # True
                     pixmap = QtGui.QIcon(':res/images/cross.svg').pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio)
-                else:
+                else: # False
                     if ('NoDbus' in flags or 'NoCpuForm' in flags):
                         pixmap = None
                     else:
@@ -3606,31 +3609,18 @@ class QMessageDialog(QtGui.QDialog):
                 # call QLabel 's clear
                 self.mWgtErrorCheckingLayout.itemAt(index).widget().clear()
         self.window().findChild(QtGui.QLabel, 'msgErrorQRcode').clear()
+        self.clearErrorMessages()
         self.mCheckFlags.clear()
 
     def setMessage(self, msgtype):
         self.mShowChecking = False
-        if msgtype in ['NoNIC', 'NoIface', 'NoCable', 'NoIP', 'NoDNS', 'NoServer']:
+        if msgtype == 'NoNetScan':
             self.setBackgroundIcons({'NoNIC': ':res/images/no_nic.svg', \
                                      'NoIface': ':res/images/no_iface.svg', \
                                      'NoCable': ':res/images/no_cable.svg', \
                                      'NoIP': ':res/images/no_ip.svg', \
                                      'NoDNS': ':res/images/no_dns.svg', \
                                      'NoServer': ':res/images/no_server.svg'})
-            #self.setStatus('No network adaptor found.') # NoNIC
-            #self.setStatus('Ethernet interface is not available.') # NoIface
-            if msgtype == 'NoCable':
-                #self.setStatus('Please connect a network cable.') # NoCable
-                self.setErrorMessages("Make sure your network LAN cable is connected correctly to your wired network (for example your Wi-Fi router or switch")
-            elif msgtype == 'NoIP':
-                #self.setStatus('No IP address assigned')
-                self.setErrorMessages("Your network didn't automatically assign an IP address. Please contact your IT department for help")
-            elif msgtype == 'NoDNS':
-                #self.setStatus('Cannot resolve domain name')
-                self.setErrorMessages("We are offline.\nCheck your Internet connection")
-            elif msgtype == 'NoServer':
-                #self.setStatus('TechNexion server is temporary unavailable, try again later.')
-                self.setErrorMessages("There is nothing wrong with you. It's us.\nThe TechNexion cloud is currently unavailable.\nGrab a cup of coffee and try again later")
             self.mShowChecking = True
         elif msgtype == 'NoCpuForm':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
