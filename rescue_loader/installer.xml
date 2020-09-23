@@ -364,8 +364,14 @@
                                 </item>
                                 <item>
                                   <widget class="QLabel" name="lblStorageTxt">
+                                    <property name="styleSheet">
+                                      <string notr="true">background: transparent; color: white; padding: 5px</string>
+                                    </property>
                                     <property name="alignment">
                                       <set>Qt::AlignCenter</set>
+                                    </property>
+                                    <property name="wordWrap">
+                                      <bool>true</bool>
                                     </property>
                                   </widget>
                                 </item>

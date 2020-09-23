@@ -2401,7 +2401,8 @@ class chooseSelectionSlot(QChooseSlot):
                     text = 'SDCard'
                 if data['conntype'] == 'serial':
                     text = text + '\non Target'
-                    self._findChildWidget('lblStorageTxt').setText(text)
+                    #self._findChildWidget('lblStorageTxt').setText(text)
+                self._findChildWidget('lblStorageTxt').setText('Click here to\nFinalize and\nConfigure your\nevaluation kit')
         self.window().setFocus()
 
 

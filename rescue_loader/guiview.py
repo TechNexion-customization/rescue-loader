@@ -1003,6 +1003,7 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
+            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblStorage').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setTextVisible(False)
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'wgtProgress').hide()
             self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
