@@ -1536,7 +1536,7 @@ class crawlWebSlot(QProcessSlot):
         # flow comes here (gets called) after self.finish.emit()
         if isinstance(self.mResults, list) and len(self.mResults):
             self._findChildWidget('waitingIndicator').hide()
-            _logger.debug('{}: validate result: {}'.format(self.objectName(), self.mResults))
+            _logger.debug('{}: rescue checked: {}, validate result: {}'.format(self.objectName(), self.mRescueChecked, self.mResults))
             # if found suitable xz files, send them on to the next process slot
             # but check for rescue update first.
             if not self.mRescueChecked:
@@ -1546,9 +1546,14 @@ class crawlWebSlot(QProcessSlot):
 
     def __checkForRescueUpdate(self):
         if not self.mRescueChecked:
-            # check for rescue.xz in the extrated list
-            year1, month1, day1, minor1 = self._findChildWidget('lblVersion').text().lower().split(' ')[1].split('.')
-            date1 = datetime.date(int(year1), int(month1), int(day1))
+            strVer = self._findChildWidget('lblVersion').text().lower().split(' ')[1]
+            # new version string has the yy.mm.a[alpha]/b[beta] format, so replace it by day 2 and day 1 for comparison
+            strVer = strVer.replace('a', '05') # 05 > 01, so alpha replaces beta
+            strVer = strVer.replace('b', '01')
+            dateVer = strVer.split('.')
+            minor1 = dateVer[3] if len(dateVer) == 4 else '0'
+            year1 = 2000 + int(dateVer[0]) if len(dateVer[0]) == 2 else int(dateVer[0])
+            date1 = datetime.date(year1, int(dateVer[1]), int(dateVer[2]))
             # get the latest rescue version
             year2, month2, day2, minor2 = (2000, 1, 1, 0)
             rescue_index = None
@@ -1558,10 +1563,17 @@ class crawlWebSlot(QProcessSlot):
                     rescues.append(item)
                     # has to match the target board
                     if item['board'] == self.mBoard and item['ver'] and len(item['ver']):
-                        y, m, d, r = item['ver'].split('.')
+                        itemVer = item['ver'].split('.')
+                        if len(itemVer) > 2:
+                            itemVer[2] = itemVer[2].replace('a', '05')
+                            itemVer[2] = itemVer[2].replace('b', '01')
+                        y = 2000 + int(itemVer[0]) if len(itemVer[0]) == 2 else int(itemVer[0])
+                        m =  int(itemVer[1])
+                        d = int(itemVer[2]) if len(itemVer) > 2 else 1
+                        r = int(itemVer[3]) if len(itemVer) > 3 else 1
                         d1 = datetime.date(int(year2), int(month2), int(day2))
                         d2 = datetime.date(int(y), int(m), int(d))
-                        if d2 > d1 or (d2 == d1 and int(r) > int(minor2)):
+                        if d2 > d1 or (d2 == d1 and r > minor2):
                             year2 = y
                             month2 = m
                             day2 = d
