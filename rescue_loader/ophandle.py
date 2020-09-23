@@ -54,7 +54,7 @@ from threading import Thread, Event, RLock
 from model import CopyBlockActionModeller, \
                   QueryMemActionModeller, \
                   QueryFileActionModeller, \
-                  QueryBlockDevActionModeller, \
+                  QueryUDevActionModeller, \
                   WebDownloadActionModeller, \
                   QueryWebFileActionModeller, \
                   QueryLocalFileActionModeller, \
@@ -375,7 +375,7 @@ class InfoOperationHandler(BaseOperationHandler):
     def _setupActions(self):
         # setup "info" cmd operations
         if self.mActionParam:
-            self.mActionModellers.append(QueryBlockDevActionModeller())
+            self.mActionModellers.append(QueryUDevActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
             self.mActionModellers.append(QueryWebFileActionModeller())
             self.mActionModellers[-1].setActionParam(self.mActionParam)
@@ -412,6 +412,8 @@ class InfoOperationHandler(BaseOperationHandler):
                 elif k==self.mArgs[0] and v=='hd':
                     # check for the correct /dev/sd[x] path and set it
                     self.mActionParam['tgt_type'] = 'sd'
+                elif k==self.mArgs[0] and v=='display':
+                    self.mActionParam['tgt_type'] = 'disp'
                 elif k==self.mArgs[0] and v=='mem':
                     self.mActionParam['tgt_type'] = 'mem'
                 elif k==self.mArgs[0] and v=='som':
@@ -446,6 +448,10 @@ class InfoOperationHandler(BaseOperationHandler):
                     self.mActionParam['dst_pos'] = 'd' # disk
                 elif k==self.mArgs[1] and v=='partition':
                     self.mActionParam['dst_pos'] = 'p' # partition
+                elif k==self.mArgs[1] and v=='interface':
+                    self.mActionParam['dst_pos'] = 'i' # display iface driver
+                elif k==self.mArgs[1] and v=='mode':
+                    self.mActionParam['dst_pos'] = 'm' # display config modes
                 elif k==self.mArgs[1] and v=='file':
                     self.mActionParam['src_filename'] = OpParams['target']
                     self.mActionParam['get_stat'] = True;
@@ -741,6 +747,9 @@ if __name__ == "__main__":
     elif sys.argv[1] == 'baseboard':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'baseboard'}
+    elif sys.argv[1] == 'display':
+        hdlr = InfoOperationHandler(opcb)
+        param = {'cmd': 'info', 'target': 'display'}
     elif sys.argv[1] == 'mem':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'mem', 'location': 'free'}

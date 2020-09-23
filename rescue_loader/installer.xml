@@ -674,9 +674,6 @@
                         <layout class="QHBoxLayout" name="hboxLayoutFooterInfo">
                           <item>
                             <widget class="QLabel" name="lblCpu">
-                              <property name="text">
-                                <string>No CPU</string>
-                              </property>
                               <property name="alignment">
                                 <set>Qt::AlignCenter</set>
                               </property>
@@ -684,9 +681,6 @@
                           </item>
                           <item>
                             <widget class="QLabel" name="lblForm">
-                              <property name="text">
-                                <string>No Form Factor</string>
-                              </property>
                               <property name="alignment">
                                 <set>Qt::AlignCenter</set>
                               </property>
@@ -694,19 +688,13 @@
                           </item>
                           <item>
                             <widget class="QLabel" name="lblBaseboard">
-                              <property name="text">
-                                <string>No Baseboard</string>
-                              </property>
                               <property name="alignment">
                                 <set>Qt::AlignCenter</set>
                               </property>
                             </widget>
                           </item>
                           <item>
-                            <widget class="QLabel" name="lblInstruction">
-                              <property name="text">
-                                <string />
-                              </property>
+                            <widget class="QLabel" name="lblDispConf">
                               <property name="alignment">
                                 <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter
                                 </set>

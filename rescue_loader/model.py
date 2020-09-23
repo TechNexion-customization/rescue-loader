@@ -540,7 +540,7 @@ class QueryFileActionModeller(BaseActionModeller):
 
 
 
-class QueryBlockDevActionModeller(BaseActionModeller):
+class QueryUDevActionModeller(BaseActionModeller):
     """
     A wrapper class for pyudev to get block device info
     """
@@ -551,44 +551,74 @@ class QueryBlockDevActionModeller(BaseActionModeller):
         self.mCtrls = []
         self.mDisks = []
         self.mPartitions = []
+        self.mDisplays = []
 
     def _preAction(self):
+        # tgt_type: mmc, sd, mipi-dsi, drm
+        # dst_pos: for mmc sd: c/ctrl d/disk p/partition, for drm: m/mode s/status, for mipi-dsi: r/driver
         if all(s in self.mParam for s in ['tgt_type', 'dst_pos']):
-            self.__gatherStorage()
-            _logger.debug('{} controllers: {}\ndisks: {}\npartitions: {}'.format(type(self).__name__, self.mCtrls, self.mDisks, self.mPartitions))
-            if len(self.mPartitions) > 0 and len(self.mDisks) > 0 and len(self.mCtrls) > 0:
-                return True
+            if self.mParam['tgt_type'] in ['mmc', 'sd']:
+                self.__gatherStorage()
+                _logger.debug('{} controllers: {}\ndisks: {}\npartitions: {}'.format(type(self).__name__, self.mCtrls, self.mDisks, self.mPartitions))
+                if len(self.mPartitions) > 0 and len(self.mDisks) > 0 and len(self.mCtrls) > 0:
+                    return True
+            elif self.mParam['tgt_type'] in ['disp']:
+                self.__gatherDisplay()
+                if len(self.mDisplays) > 0:
+                    return True
         else:
             return False
 
     def _mainAction(self):
         # check the actparams against the udev info
-        # find self.mParam['tgt_type'] from ctrller's attributes('type') or driver()
-        for o in self.mCtrls:
-            _logger.debug('{} tgt_type: {}, attributes: {}, driver: {}'.format(type(self).__name__, self.mParam['tgt_type'], self.__getDevAttributes(o).values(), o.driver))
-            if (self.mParam['tgt_type'] in self.__getDevAttributes(o).values() \
-                or self.mParam['tgt_type'] == o.driver):
-                _logger.debug('{} found controller: {}'.format(type(self).__name__, o))
+        if self.mParam['tgt_type'] in ['mmc', 'sd']:
+            # find self.mParam['tgt_type'] from ctrller's attributes('type') or driver()
+            for o in self.mCtrls:
+                _logger.debug('{} tgt_type: {}, attributes: {}, driver: {}'.format(type(self).__name__, self.mParam['tgt_type'], self.__getDevAttributes(o).values(), o.driver))
+                if (self.mParam['tgt_type'] in self.__getDevAttributes(o).values() \
+                    or self.mParam['tgt_type'] == o.driver):
+                    # if found any controllers that match the target type, record it
+                    _logger.debug('{} found controller: {}'.format(type(self).__name__, o))
+                    self.mFound.append(o)
+        elif self.mParam['tgt_type'] in ['disp']:
+            # find graphics related info into self.mFound
+            for o in self.mDisplays:
+                _logger.debug('{} tgt_type: {}, attributes: {}, driver: {}'.format(type(self).__name__, self.mParam['tgt_type'], self.__getDevAttributes(o).values(), o.driver))
+                # subsystem='drm' expect a parent with uevent attributes(DEVTYPE=drm_minor),
+                # the child node has mode/enabled/status setting.
+                # subsystem='mipi-dsi, cec' expect uevent attributes
+                if o.subsystem == 'drm' and o.device_type == 'drm_minor':
+                    continue
                 self.mFound.append(o)
-        # if found any controllers that match the target type, record it
         if len(self.mFound) > 0:
             return True
         else:
             return False
 
     def _postAction(self):
-        # set results to found controller and its children disk/partitions
         if len(self.mFound) > 0:
-            for o in self.mFound if (len(self.mFound) > 0) else self.mCtrls:
-                if (not self.__extract_info(o)):
+            if self.mParam['tgt_type'] in ['mmc', 'sd']:
+                # set results to found controller and its children disk/partitions
+                for o in self.mFound if (len(self.mFound) > 0) else self.mCtrls:
+                    if (not self.__extract_info(o)):
+                        return False
+                # only set the required output from mParam['dst_pos']
+                if (self.mParam['dst_pos'] == 'c'):
+                    self.mResult = self.mResult.pop('controllers')
+                elif (self.mParam['dst_pos'] == 'd'):
+                    self.mResult = self.mResult.pop('disks')
+                elif (self.mParam['dst_pos'] == 'p'):
+                    self.mResult = self.mResult.pop('partitions')
+            elif self.mParam['tgt_type'] in ['disp']:
+                # extract captured display information
+                if (not self.__extract_display()):
                     return False
-            # only set the required output from mParam['dst_pos']
-            if (self.mParam['dst_pos'] == 'c'):
-                self.mResult = self.mResult.pop('controllers')
-            elif (self.mParam['dst_pos'] == 'd'):
-                self.mResult = self.mResult.pop('disks')
-            elif (self.mParam['dst_pos'] == 'p'):
-                self.mResult = self.mResult.pop('partitions')
+                if (self.mParam['dst_pos'] == 'm'):
+                    # keep mode only
+                    self.mResult = self.mResult.pop('mode')
+                elif (self.mParam['dst_pos'] == 'i'):
+                    # keep interface driver only
+                    self.mResult = self.mResult.pop('interface')
         return True
 
     def __getDevAttributes(self, dev):
@@ -598,6 +628,29 @@ class QueryBlockDevActionModeller(BaseActionModeller):
                 data = dev.attributes.get(att)
                 ret.update({att:data.decode('utf-8', 'ignore').replace('\n', ' ') if data is not None else ''})
         return ret
+
+    def __gatherDisplay(self):
+        self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='drm')))
+        self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='mipi-dsi')))
+        self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='cec')))
+
+    def __extract_display(self):
+        # loop mFound to figure out display info
+        # subsystem='drm' expect a parent with uevent attributes(DEVTYPE=drm_minor), should be removed here
+        # The subsystem='drm' child node has mode/enabled/status setting.
+        # subsystem='mipi-dsi, cec' also expects simple uevent attributes
+        if self.mFound != {}:
+            for o in self.mFound:
+                atts = self.__getDevAttributes(o)
+                if o.subsystem == 'drm' and 'status' in atts and atts['status'] == 'connected' \
+                   and 'modes' in atts:
+                    self.mResult['mode'] = atts['modes']
+                elif o.subsystem == 'mipi-dsi' and o.driver:
+                    self.mResult['interface'] = o.driver
+                elif o.subsystem == 'cec' and o.parent.driver:
+                    self.mResult['interface'] = o.parent.driver
+            return True
+        return False
 
     def __gatherStorage(self):
         self.__gatherPartitions()
@@ -1607,8 +1660,17 @@ if __name__ == "__main__":
             query.performAction()
             print(query.getResult())
         elif sys.argv[1] == 'qmmc':
-            blk = QueryBlockDevActionModeller()
+            blk = QueryUDevActionModeller()
             blkparam = {'tgt_type': 'mmc'}
+            blk.setActionParam(blkparam)
+            blk.performAction()
+            info = {}
+            info.update(__flatten(blk.getResult()))
+            for i in sorted(info):
+                print('{0} ===> {1}'.format(i, info[i]))
+        elif sys.argv[1] == 'qdisplay':
+            blk = QueryUDevActionModeller()
+            blkparam = {'tgt_type': 'disp', 'dst_pos': 'a'}
             blk.setActionParam(blkparam)
             blk.performAction()
             info = {}

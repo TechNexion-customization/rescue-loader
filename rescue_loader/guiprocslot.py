@@ -691,6 +691,7 @@ class detectDeviceSlot(QProcessSlot):
         self.mCpu = None
         self.mForm = None
         self.mBaseboard = None
+        self.mDisplay = None
         self.mSentFlag = False
 
     def process(self, inputs = None):
@@ -699,63 +700,88 @@ class detectDeviceSlot(QProcessSlot):
         """
         if self.sender().objectName() == 'mountStorage':
             self.sendCommand({'cmd': 'info', 'target': 'som'})
+            self.sendCommand({'cmd': 'info', 'target': 'display'})
 
     def parseResult(self, results):
         """
         Handle returned SOM info from DBus or Serial messenger
         """
-        if 'cmd' in results and results['cmd'] == 'info' and \
-           'target' in results and results['target'] == 'som' and \
-           'status' in results and results['status'] == 'success':
-            if 'file_content' in results:
-                panel=None
-                # fall through to parse file content from /proc/device-tree/model returned from installerd
-                # they are returned as array of strings, but dbus message turns them in to string withs ""
-                lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
-                for i, w in enumerate(lstWords):
-                    # get CPU and FORM
-                    if '-' in w and 'imx' in w.lower():
-                        self.mCpu = w.split('-')[1]
-                        self.mForm = w.split('-')[0]
-                    # get PANEL
-                    if '-' in w and 'inch' in w.lower():
-                        panel = '{}'.format(w)
-                    elif 'inch' == w.lower():
-                        panel = '{}-{}'.format(lstWords[i-1], w.lower())
-                    # get BOARD
-                    if 'board' == w.lower():
-                        # for most edm system boards without baseboards
-                        if any(bd in self.mForm for bd in ['TEP', 'TEK']):
-                            self.mBaseboard = self.mForm
-                            if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
-                                self.mBaseboard += '_{}'.format(panel)
-                    elif 'baseboard' == w.lower():
-                        self.mBaseboard = lstWords[i-1]
-            if 'found_match' in results:
-                # This is just to double confirm
-                frm, cpu, brd = results['found_match'].split(',')
-                if '-' in cpu and self.mCpu != cpu.split('-',1)[0]:
-                    self.mCpu = cpu.split('-',1)[0]
-                if self.mForm != frm:
-                    self.mForm = frm
+        if 'cmd' in results and results['cmd'] == 'info' and 'status' in results and results['status'] == 'success':
+            if 'target' in results and results['target'] == 'som':
+                if 'file_content' in results:
+                    panel=None
+                    # fall through to parse file content from /proc/device-tree/model returned from installerd
+                    # they are returned as array of strings, but dbus message turns them in to string withs ""
+                    lstWords = results['file_content'].lstrip("['").rstrip("']").rsplit('\\',1)[0].split()
+                    for i, w in enumerate(lstWords):
+                        # get CPU and FORM
+                        if '-' in w and 'imx' in w.lower():
+                            self.mCpu = w.split('-')[1]
+                            self.mForm = w.split('-')[0]
+                        # get PANEL
+                        if '-' in w and 'inch' in w.lower():
+                            panel = '{}'.format(w)
+                        elif 'inch' == w.lower():
+                            panel = '{}-{}'.format(lstWords[i-1], w.lower())
+                        # get BOARD
+                        if 'board' == w.lower():
+                            # for most edm system boards without baseboards
+                            if any(bd in self.mForm for bd in ['TEP', 'TEK']):
+                                self.mBaseboard = self.mForm
+                                if (panel is not None and 'inch' in panel and 'inch' not in self.mBaseboard):
+                                    self.mBaseboard += '_{}'.format(panel)
+                        elif 'baseboard' == w.lower():
+                            self.mBaseboard = lstWords[i-1]
+                if 'found_match' in results:
+                    # This is just to double confirm
+                    frm, cpu, brd = results['found_match'].split(',')
+                    if '-' in cpu and self.mCpu != cpu.split('-',1)[0]:
+                        self.mCpu = cpu.split('-',1)[0]
+                    if self.mForm != frm:
+                        self.mForm = frm
+            if 'target' in results and results['target'] == 'display':
+                if 'interface' in results and 'mode' in results:
+                    # Figure out the display from udev subsystem:drm/mipi-dsi
+                    # results['mode'] is the modes supported in subsystem='drm' udev
+                    # e.g. 720x1280, or 1920x1080\n1920x1080\n1280x720\n1280x720\n1440x576\n1440x480\n720x576\n720x480
+                    # results['interface'] is the driver supported in subsystem='mipi-dsi/cec' udev
+                    # e.g. ili9881c-dsi, i.mx8-hdp (hdmi),
+                    mfg, iface = results['interface'].split('-')
+                    if 'hdp' in iface and 'i.mx8' in mfg:
+                        iface = 'hdmi'
+                    resoln = results['mode'].split(' ')[0]
+                    if 'ili9881c' in mfg:
+                        inch = '5'
+                    elif 'hj070na' in mfg:
+                        inch = '7'
+                    elif 'g080uan01' in mfg:
+                        inch = '8'
+                    elif 'm101nwwb' in mfg:
+                        inch = '10'
+                    elif 'g156xw01' in mfg:
+                        inch = '15'
+                    else:
+                        inch = '0'
+                    self.mDisplay = '{}-{}-{}'.format(iface, inch, resoln)
 
     def validateResult(self):
-        _logger.warn('{} validate result: cpu:{} form:{} baseboard:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))
+        _logger.warn('{} validate result: cpu:{} form:{} baseboard:{} display:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
         # flow comes here (gets called) after self.finish.emit()
         # Check for available cpu, form factor, and baseboard
         # if found matching CPU form and Board, emit success to scanStorage/scanPartition
         # before any remote host can be connected, this reduces time waiting for
         # rescue server checks
-        if self.mCpu and self.mForm and self.mBaseboard:
+        if self.mCpu and self.mForm and self.mBaseboard and self.mDisplay:
             # update GUI
             _logger.info('{}: cpu:{} form:{} board:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
+            self._findChildWidget('lblDispConf').setText(self.mDisplay)
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
                 _logger.warn('{}: Success and emit: {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))
-                self.success.emit({'cpu': self.mCpu, 'form': self.mForm, 'board':self.mBaseboard})
+                self.success.emit({'cpu': self.mCpu, 'form': self.mForm, 'board':self.mBaseboard, 'display': self.mDisplay})
                 self.mSentFlag = True
                 # successfully detect a technexion rescue server
         else:
@@ -1254,6 +1280,7 @@ class crawlWebSlot(QProcessSlot):
         self.mCpu = None
         self.mForm = None
         self.mBoard = None
+        self.mDisplay = None
         self.mHosts = []
         self.mHostName = None
         self.mRemoteDir = None
@@ -1503,6 +1530,8 @@ class crawlWebSlot(QProcessSlot):
             self.mForm = self._findChildWidget('lblForm').text().lower()
         if self.mBoard is None:
             self.mBoard = self._findChildWidget('lblBaseboard').text().lower()
+        if self.mDisplay is None:
+            self.mDisplay = self._findChildWidget('lblDispConf').text().lower()
 
         _logger.debug('{}: matching xzfile: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
 
@@ -1683,20 +1712,15 @@ class QChooseSlot(QProcessSlot):
         self._findChildWidget('tabInstall').hide()
         if self.mPick['os'] is None:
             self._findChildWidget('tabOS').show()
-            self._findChildWidget('lblInstruction').setText('Choose an OS')
         elif self.mPick['board'] is None:
             self._findChildWidget('tabBoard').show()
-            self._findChildWidget('lblInstruction').setText('Choose your baseboard type')
         elif self.mPick['display'] is None:
             self._findChildWidget('tabDisplay').show()
-            self._findChildWidget('lblInstruction').setText('Choose your panel type')
         elif self.mPick['storage'] is None:
             self._findChildWidget('tabStorage').show()
-            self._findChildWidget('lblInstruction').setText('Choose a storage device to program')
         else:
             self._findChildWidget('btnFlash').show()
             self._findChildWidget('tabInstall').show()
-            self._findChildWidget('lblInstruction').setText('Click on selection (top right) icons to choose again')
 
 
 
@@ -1787,7 +1811,6 @@ class chooseOSSlot(QChooseSlot):
         #self.mOSNames = list(set(dlfile['os'] for dlfile in self.mResults if ('os' in dlfile)))
         uilist = [{'os':dlfile['os'], 'ver':dlfile['ver']} for dlfile in self.mResults if ('os' in dlfile and 'ver' in dlfile)]
         self.mOSNames = list({(v['os'], v['ver']):v for v in uilist}.values())
-        _logger.debug('{}: extract os uilist: {} os names: {}'.format(self.objectName(), uilist, self.mOSNames))
         self.mVerList = []
         for d in [{'os':dlfile['os'], 'ver':dlfile['ver']} for dlfile in self.mResults if ('os' in dlfile and 'ver' in dlfile)]:
             if all(not (d == n) for n in self.mVerList):
@@ -1795,6 +1818,7 @@ class chooseOSSlot(QChooseSlot):
         # come up with a new list to send to GUI container, i.e. QListWidget
         #self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
         self.mOSUIList = list({'name': '{}-{}'.format(item['os'], item['ver']), 'os': item['os'], 'ver': item['ver'], 'disable': False} for item in self.mOSNames)
+        _logger.info('{}: extracted os ui list: {} '.format(self.objectName(), self.mOSUIList))
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
@@ -1912,6 +1936,7 @@ class chooseBoardSlot(QChooseSlot):
         self.mBoardNames = set(dlfile['board'] for dlfile in self.mResults if ('board' in dlfile))
         # come up with a new list to send to GUI container, i.e. QListWidget
         self.mBoardUIList = list({'name': name, 'board': name, 'disable': False} for name in self.mBoardNames)
+        _logger.info('{}: extracted board ui list: {}'.format(self.objectName(), self.mBoardUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
@@ -2034,6 +2059,7 @@ class chooseDisplaySlot(QChooseSlot):
             disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
             if len(disps) > 0:
                 self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
+        _logger.info('{}: extracted diplay ui list: {}'.format(self.objectName(), self.mDisplayUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
@@ -2312,7 +2338,6 @@ class chooseSelectionSlot(QChooseSlot):
                         _logger.info('{}: {}: Start: {}, Size: {}, Partition: {}'.format(self.objectName(), k, int(v['attributes']['start']), int(v['attributes']['size']), self.mPartitions))
 
     def _backupRescue(self):
-        self._findChildWidget('lblInstruction').setText('Backing up Rescue System...')
         chunks = '64'
         if '{}p1'.format(self.mPick['storage']) in self.mPartitions:
             # dd first partition (size extract from self.mPartitions of /dev/mmcblkXp1 to target storage
@@ -2354,7 +2379,6 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabDisplay').hide()
             self._findChildWidget('tabStorage').hide()
             self._findChildWidget('tabOS').show()
-            self._findChildWidget('lblInstruction').setText('Choose an OS')
         elif 'board' in self.mUserData:
             self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
@@ -2362,7 +2386,6 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabDisplay').hide()
             self._findChildWidget('tabStorage').hide()
             self._findChildWidget('tabBoard').show()
-            self._findChildWidget('lblInstruction').setText('Choose your baseboard type')
         elif 'display' in self.mUserData:
             self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
@@ -2370,7 +2393,6 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabBoard').hide()
             self._findChildWidget('tabStorage').hide()
             self._findChildWidget('tabDisplay').show()
-            self._findChildWidget('lblInstruction').setText('Choose your panel type')
         elif 'storage' in self.mUserData:
             self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
@@ -2378,7 +2400,6 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabBoard').hide()
             self._findChildWidget('tabDisplay').hide()
             self._findChildWidget('tabStorage').show()
-            self._findChildWidget('lblInstruction').setText('Choose a storage device to program')
         self.window().setFocus()
 
     def _updateOutputLabel(self):
@@ -2743,7 +2764,6 @@ class downloadImageSlot(QProcessSlot):
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
         self.mLblDownloadFlash.show()
-        self._findChildWidget('lblInstruction').setText('Downloading and flashing...')
 
     def timerEvent(self, event):
         # query the processing result from server
@@ -2901,7 +2921,6 @@ class postDownloadSlot(QProcessSlot):
         if results['cmd'] == 'qrcode' and results['msger_type'] == 'dbus' and results['status'] == 'success':
             self.mQRIcon = True if 'svg_buffer' in results else False
             # do checksum
-            self._findChildWidget('lblInstruction').setText('Perform md5 checksum on {}...'.format(self.mPick['storage']))
             _logger.warn('{}: qrcode success: do checksum for mPick: {}'.format(self.objectName(), self.mPick))
             self.sendCommand({'cmd': 'check', 'tgt_filename': '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')), 'src_filename': self.mPick['storage'], 'total_sectors': str(int(self.mPick['bytes_written']/512))})
 
@@ -2929,7 +2948,6 @@ class postDownloadSlot(QProcessSlot):
             if results['status'] == 'success' or results['status'] == 'failure':
                 _logger.info('{}: check whether target storage {} is emmc after flash/download'.format(self.objectName(), self.mPick['storage']))
                 if self._isTargetEMMC(self.mPick['storage']):
-                    self._findChildWidget('lblInstruction').setText('{} target emmc boot partition...'.format('Flash' if 'androidthings' in self.mPick['os'] else 'Clear'))
                     # 1. disable mmc boot partition 1 boot option
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
                     _logger.warn('{}: issue command to enable emmc:{} boot partition with write access'.format(self.objectName(), self.mPick['storage']))
@@ -3059,7 +3077,7 @@ class processErrorSlot(QProcessSlot):
         super().__init__(parent)
         self.mErrors = {}
         self.mAsk = None
-        self.mDisplay = None
+        self.mDisplayConf = None
         self.mModal = None
         self.mMsgBox = None
 
@@ -3072,7 +3090,7 @@ class processErrorSlot(QProcessSlot):
         self.mErrors.update(inputs)
         self.mAsk = inputs['ask'] if 'ask' in inputs else None
         self.mErrors.pop('ask', None)
-        self.mDisplay = inputs['Show'] if 'Show' in inputs else True
+        self.mDisplayConf = inputs['Show'] if 'Show' in inputs else True
         self.mErrors.pop('Show', None)
         self.__handleError()
         self.mErrors.clear()
@@ -3253,7 +3271,7 @@ class processErrorSlot(QProcessSlot):
                 ret = self.mMsgBox.display(True)
         else:
             self.mMsgBox.setModal(False)
-            self.mMsgBox.display(self.mDisplay) # non modal dialog
+            self.mMsgBox.display(self.mDisplayConf) # non modal dialog
 
     def __returnResponse(self, response):
         try:
@@ -3331,7 +3349,6 @@ class QWaitingIndicator(QtGui.QWidget):
 
     def hideEvent(self, event):
         self.killTimer(self.timer)
-        self.window().findChild(QtGui.QWidget, 'lblInstruction').setText('Choose an OS')
 
     def timerEvent(self, event):
         self.mCounter += 1
