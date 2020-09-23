@@ -919,6 +919,7 @@ class scanNetworkSlot(QProcessSlot):
         self.mRepeatTimerId = None
         self.mRepeatFlag = False
         self.mConnectCounter = 0
+        self.mTimeStamp = 0
 
     # overridden
     def sendError(self, err):
@@ -1092,7 +1093,9 @@ class scanNetworkSlot(QProcessSlot):
             self.success.emit(self.mHosts)
             self.sendError(self.mNetErr)
             # finish all network checks, set repeat check flag for checking
-            # nic/net every 2 minutes to update the alive list
+            # server check every 10s to update the cloud lbl
+            QtCore.QTimer.singleShot(10000, self.__checkTNServer) # 10s
+            # nic/net check every 2 minutes to update the alive list
             if self.mRepeatTimerId is None:
                 _logger.warn('{}: start timer at 2m interval'.format(self.objectName()))
                 self.mRepeatTimerId = self.startTimer(120000)
@@ -1189,6 +1192,7 @@ class scanNetworkSlot(QProcessSlot):
     def __checkTNServer(self):
         # check connectivity to TechNexion server
         _logger.warn('{}: 5. __checkTNServer: check servers alive: servers:{} sockets:{}'.format(self.objectName(), self.mHosts, self.mSockets))
+        self.mTimeStamp = QtCore.QDateTime.currentMSecsSinceEpoch()
         for host in self.mHosts:
             if host['name'] not in self.mSockets:
                 self.mSockets.update({host['name']: QtNetwork.QTcpSocket()})
@@ -1210,6 +1214,7 @@ class scanNetworkSlot(QProcessSlot):
         self.mNetErr.update({'Repeat': True} if self.mRepeatFlag else {})
         self.mConnectCounter += 1
         if self.mConnectCounter == len(self.mSockets):
+            self._findChildWidget('lblCloud').setText('Cloud: XXXXms')
             self.finish.emit()
 
     def _socketConnected(self):
@@ -1219,6 +1224,7 @@ class scanNetworkSlot(QProcessSlot):
             if self.sender().peerName() in host['name']:
                 host.update({'alive': True})
         self.sender().disconnectFromHost()
+        self._findChildWidget('lblCloud').setText('Cloud: {:04d}ms'.format(int(QtCore.QDateTime.currentMSecsSinceEpoch() - self.mTimeStamp)))
 
     def _socketDisconnected(self):
         _logger.warn('{}: QTcpSocket Disconnected from: {}'.format(self.objectName(), self.sender().peerName()))
