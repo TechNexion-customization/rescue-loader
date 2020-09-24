@@ -909,7 +909,7 @@ class scanNetworkSlot(QProcessSlot):
 
     def __init__(self, parent = None):
         super().__init__(parent)
-        self.mNetErr = {'NoNIC': True, 'NoIface': True, 'NoCable': True, 'NoIP': True, 'NoDNS': True, 'NoServer': True, 'Show': True}
+        self.mNetErr = {'NoNIC': None, 'NoIface': None, 'NoCable': None, 'NoIP': None, 'NoDNS': None, 'NoServer': None, 'Show': True}
         self.mTgtNICs = {}
         self.mHosts = []
         self.mLocalIPs = {}
@@ -1159,7 +1159,7 @@ class scanNetworkSlot(QProcessSlot):
                     self.mNetErr.update({'NoIface': True})
                 elif any(v['NoIface'] is False for v in self.mNICNames.values()):
                     self.mNetErr.update({'NoIface': False})
-                elif all(v['NoCable'] is True for v in self.mNICNames.values()):
+                if all(v['NoCable'] is True for v in self.mNICNames.values()):
                     self.mNetErr.update({'NoCable': True})
                 # retry check 3. for NIC if failed
                 _logger.warn('{}: __checkDNS: 3c. check all states with some iface/cable, re-check NICs...'.format(self.objectName()))
@@ -3590,31 +3590,31 @@ class QMessageDialog(QtGui.QDialog):
                 elif key == 'NoCable':
                     #self.setStatus('Please connect a network cable.') # NoCable
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox1') # 'msgItem2_OL'
-                    self.setErrorMessages("Make sure your network\nLAN cable is connected\ncorrectly to your wired\nnetwork (for example your\nWi-Fi router or switch")
+                    if flag is None and self.mCheckFlags['NoIface'] is False:
+                        self.setErrorMessages("Checking your network LAN hardware")
+                    elif flag:
+                        self.setErrorMessages("Make sure your network\nLAN cable is connected\ncorrectly to your wired\nnetwork (for example your\nWi-Fi router or switch")
                 elif key == 'NoIP':
                     #self.setStatus('No IP address assigned')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox2') # 'msgItem0_OL'
-                    if flag:
-                        if self.mCheckFlags['NoCable']:
-                            flag = None
-                        else:
-                            self.setErrorMessages("Your network didn't automatically\nassign an IP address.\nPlease contact your IT\ndepartment for help")
+                    if flag is None and self.mCheckFlags['NoCable'] is False:
+                        self.setErrorMessages("Checking your IP")
+                    elif flag:
+                        self.setErrorMessages("Your network didn't automatically\nassign an IP address.\nPlease contact your IT\ndepartment for help")
                 elif key == 'NoDNS':
                     #self.setStatus('Cannot resolve domain name')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox3') # 'msgItem0_OL'
-                    if flag:
-                        if self.mCheckFlags['NoIP']:
-                            flag = None
-                        else:
-                            self.setErrorMessages("We are offline.\nCheck your Internet connection")
+                    if flag is None and self.mCheckFlags['NoIP'] is False:
+                        self.setErrorMessages("Checking server IP")
+                    elif flag:
+                        self.setErrorMessages("We are offline.\nCheck your Internet connection")
                 elif key == 'NoServer':
                     #self.setStatus('TechNexion server is temporary unavailable, try again later.')
                     lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox4') # 'msgItem3_OL'
-                    if flag:
-                        if self.mCheckFlags['NoDNS']:
-                            flag = None
-                        else:
-                            self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee (or beer)\nand try again later")
+                    if flag is None and self.mCheckFlags['NoDNS'] is False:
+                        self.setErrorMessages("Checking connectivity to server")
+                    elif flag:
+                        self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee (or beer)\nand try again later")
                 else:
                     lbl = self.window().findChild(QtGui.QLabel, 'msgErrorQRcode')
 
