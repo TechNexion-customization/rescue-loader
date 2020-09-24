@@ -2233,7 +2233,8 @@ class chooseSelectionSlot(QChooseSlot):
                 # process can be restarted from where it is disgarded
                 self.success.emit(self.mPick)
 
-        if self.sender() == self.mBtnSelOS or self.sender() == self._findChildWidget('btnSelOS'):
+        if self.sender() == self.mBtnSelOS or self.sender() == self._findChildWidget('btnSelOS') \
+            or self.sender() == self._findChildWidget('lblOS'):
             # btnSelOS or btnSelOSIcon clicked
             # remove selection from lstWgtSelection
             self.mPick['os'] = None
@@ -2255,7 +2256,8 @@ class chooseSelectionSlot(QChooseSlot):
             # process can be restarted from where it is disgarded
             self.success.emit(self.mPick)
 
-        if self.sender() == self.mBtnSelBoard or self.sender() == self._findChildWidget('btnSelBaseboard'):
+        if self.sender() == self.mBtnSelBoard or self.sender() == self._findChildWidget('btnSelBaseboard') \
+            or self.sender() == self._findChildWidget('lblBoard'):
             # btnSelOS or btnSelOSIcon clicked
             # remove selection from lstWgtSelection
             self.mPick['board'] = None
@@ -2276,7 +2278,8 @@ class chooseSelectionSlot(QChooseSlot):
             # process can be restarted from where it is disgarded
             self.success.emit(self.mPick)
 
-        if self.sender() == self.mBtnSelDisplay or self.sender() == self._findChildWidget('btnSelDisplay'):
+        if self.sender() == self.mBtnSelDisplay or self.sender() == self._findChildWidget('btnSelDisplay') \
+            or self.sender() == self._findChildWidget('lblDisplay'):
             # btnSelOS or btnSelOSIcon clicked
             # remove selection from lstWgtSelection
             self.mPick['display'] = None
@@ -2378,20 +2381,26 @@ class chooseSelectionSlot(QChooseSlot):
             data = item.data(QtCore.Qt.UserRole)
             if 'os' in self.mPick and self.mPick['os'] is not None and 'os' in data and data['os'] is not None and self.mPick['os'] == data['os']:
                 # update text/icon on lblOS with chosen OS name and version number
-                self._findChildWidget('lblOS').setPixmap(item.icon().pixmap(self._findChildWidget('lblOS').size()))
+                #self._findChildWidget('lblOS').setPixmap(item.icon().pixmap(self._findChildWidget('lblOS').size()))
+                self._findChildWidget('lblOS').setIcon(QtGui.QIcon(item.icon()))
+                self._findChildWidget('lblOS').setIconSize(self._findChildWidget('lblStorage').size())
                 self._findChildWidget('lblOSTxt').setText('{}\n{}'.format(self.mPick['os'], self.mPick['ver'] if self.mPick['ver'] is not None else ''))
                 self.mBtnSelOS.setIcon(QtGui.QIcon(item.icon()))
                 self.mBtnSelOS.setIconSize(self.mBtnSelOS.size())
             elif 'board' in self.mPick and self.mPick['board'] is not None and 'board' in data and data['board'] is not None and self.mPick['board'] == data['board']:
                 # update text/icon on lblBoard with chosen board
-                self._findChildWidget('lblBoard').setPixmap(item.icon().pixmap(self._findChildWidget('lblBoard').size()))
+                #self._findChildWidget('lblBoard').setPixmap(item.icon().pixmap(self._findChildWidget('lblBoard').size()))
+                self._findChildWidget('lblBoard').setIcon(QtGui.QIcon(item.icon()))
+                self._findChildWidget('lblBoard').setIconSize(self._findChildWidget('lblStorage').size())
                 self._findChildWidget('lblBoardTxt').setText('{}'.format(self.mPick['board']))
                 self.mBtnSelBoard.setIcon(QtGui.QIcon(item.icon()))
                 self.mBtnSelBoard.setIconSize(self.mBtnSelBoard.size())
             elif 'display' in self.mPick and self.mPick['display'] is not None and 'display' in data and data['display'] is not None and self.mPick['display'] == data['display']:
                 # self.mPick['display'] could be a list of '050', '070' etc
                 # update text/icon on lblDisplay with chosen display
-                self._findChildWidget('lblDisplay').setPixmap(item.icon().pixmap(self._findChildWidget('lblDisplay').size()))
+                #self._findChildWidget('lblDisplay').setPixmap(item.icon().pixmap(self._findChildWidget('lblDisplay').size()))
+                self._findChildWidget('lblDisplay').setIcon(QtGui.QIcon(item.icon()))
+                self._findChildWidget('lblDisplay').setIconSize(self._findChildWidget('lblStorage').size())
                 self._findChildWidget('lblDisplayTxt').setText('{}'.format('/\n'.join(self.mPick['display'])))
                 self.mBtnSelDisplay.setIcon(QtGui.QIcon(item.icon()))
                 self.mBtnSelDisplay.setIconSize(self.mBtnSelDisplay.size())

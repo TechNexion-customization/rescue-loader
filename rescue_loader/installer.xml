@@ -290,9 +290,17 @@
                                   <widget class="QWidget" name="vbOS" native="true">
                                     <layout class="QVBoxLayout" name="vboxLayoutOS">
                                       <item>
-                                        <widget class="QLabel" name="lblOS">
-                                          <property name="alignment">
-                                            <set>Qt::AlignCenter</set>
+                                        <widget class="QPushButton" name="lblOS">
+                                          <property name="sizePolicy">
+                                            <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                              <horstretch>0</horstretch>
+                                              <verstretch>0</verstretch>
+                                            </sizepolicy>
+                                          </property>
+                                          <property name="styleSheet">
+                                            <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
                                           </property>
                                         </widget>
                                       </item>
@@ -310,9 +318,17 @@
                                   <widget class="QWidget" name="vbBoard" native="true">
                                     <layout class="QVBoxLayout" name="vboxLayoutBoard">
                                       <item>
-                                        <widget class="QLabel" name="lblBoard">
-                                          <property name="alignment">
-                                            <set>Qt::AlignCenter</set>
+                                        <widget class="QPushButton" name="lblBoard">
+                                          <property name="sizePolicy">
+                                            <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                              <horstretch>0</horstretch>
+                                              <verstretch>0</verstretch>
+                                            </sizepolicy>
+                                          </property>
+                                          <property name="styleSheet">
+                                            <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
                                           </property>
                                         </widget>
                                       </item>
@@ -330,9 +346,17 @@
                                   <widget class="QWidget" name="vbDisplay" native="true">
                                     <layout class="QVBoxLayout" name="vboxLayoutDisplay">
                                       <item>
-                                        <widget class="QLabel" name="lblDisplay">
-                                          <property name="alignment">
-                                            <set>Qt::AlignCenter</set>
+                                        <widget class="QPushButton" name="lblDisplay">
+                                          <property name="sizePolicy">
+                                            <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                              <horstretch>0</horstretch>
+                                              <verstretch>0</verstretch>
+                                            </sizepolicy>
+                                          </property>
+                                          <property name="styleSheet">
+                                            <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
                                           </property>
                                         </widget>
                                       </item>
@@ -2282,6 +2306,54 @@
             </connection>
             <connection>
               <sender>btnSelDisplayIcon</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>lblOS</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>lblBoard</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>lblDisplay</sender>
               <signal>clicked()</signal>
               <receiver>chooseSelection</receiver>
               <slot>processSlot()</slot>
