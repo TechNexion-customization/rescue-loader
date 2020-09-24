@@ -2200,7 +2200,7 @@ class chooseSelectionSlot(QChooseSlot):
                 self.mPick.update(inputs)
                 self._updateOutputLabel()
 
-        if self.sender().objectName() == 'btnFlash':
+        if self.sender().objectName() == 'btnFlash' or self.sender() == self._findChildWidget('lblStorageTxt'):
             # receive the btnFlash click signal
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
                 ret = self._backupRescue()

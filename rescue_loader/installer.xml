@@ -384,15 +384,15 @@
                                   </widget>
                                 </item>
                                 <item>
-                                  <widget class="QLabel" name="lblStorageTxt">
+                                  <widget class="QPushButton" name="lblStorageTxt">
                                     <property name="styleSheet">
-                                      <string notr="true">background: transparent; color: white; padding: 5px</string>
+                                      <string notr="true">background: transparent; color: white; border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding: 5px</string>
                                     </property>
-                                    <property name="alignment">
-                                      <set>Qt::AlignCenter</set>
-                                    </property>
-                                    <property name="wordWrap">
-                                      <bool>true</bool>
+                                    <property name="sizePolicy">
+                                      <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                                        <horstretch>0</horstretch>
+                                        <verstretch>0</verstretch>
+                                      </sizepolicy>
                                     </property>
                                   </widget>
                                 </item>
@@ -2354,6 +2354,22 @@
             </connection>
             <connection>
               <sender>lblDisplay</sender>
+              <signal>clicked()</signal>
+              <receiver>chooseSelection</receiver>
+              <slot>processSlot()</slot>
+              <hints>
+                <hint type="sourcelabel">
+                  <x>790</x>
+                  <y>470</y>
+                </hint>
+                <hint type="destinationlabel">
+                  <x>49</x>
+                  <y>14</y>
+                </hint>
+              </hints>
+            </connection>
+            <connection>
+              <sender>lblStorageTxt</sender>
               <signal>clicked()</signal>
               <receiver>chooseSelection</receiver>
               <slot>processSlot()</slot>
