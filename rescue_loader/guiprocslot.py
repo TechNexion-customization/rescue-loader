@@ -2846,7 +2846,7 @@ class postDownloadSlot(QProcessSlot):
 
     def _recoverRescue(self):
         self._findChildWidget('wgtProgress').show()
-        self.mLblProgramming.setText("It's not you, it's us.\n\nSomething went wrong\n\nWe are now reconditioning your evaluation kit automatically\n")
+        self.mLblProgramming.setText("It's not you, it's us.\nSomething went wrong\nWe are now reconditioning your evaluation kit automatically\n")
         self.mLblRemain.setText('--:--(s) remaining')
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
@@ -2975,6 +2975,7 @@ class postDownloadSlot(QProcessSlot):
                 self.mFlashFlag = True
             elif (results['status'] == 'success' or results['status'] == 'failure'):
                 # flash job either success or failure, stop the timer
+                self.mLblDownloadFlash.setText('')
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
                 # do one last query result before killing the timer
@@ -3613,7 +3614,7 @@ class QMessageDialog(QtGui.QDialog):
                         if self.mCheckFlags['NoDNS']:
                             flag = None
                         else:
-                            self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee\nand try again later")
+                            self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee (or beer)\nand try again later")
                 else:
                     lbl = self.window().findChild(QtGui.QLabel, 'msgErrorQRcode')
 
@@ -3734,14 +3735,14 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
-            self.setContent('Please remove power from your evaluation key and reboot.\n\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent('Please remove power from your evaluation key and reboot.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
-            self.setContent("Congratulations. You makde it.\n\nNow it's time to reboot your system.\n\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)")
+            self.setContent("Congratulations. You makde it.\nNow it's time to reboot your system.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)")
         elif msgtype == 'Interrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
