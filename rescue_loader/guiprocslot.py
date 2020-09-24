@@ -1694,6 +1694,7 @@ class QChooseSlot(QProcessSlot):
             self._findChildWidget('tabStorage').show()
             self._findChildWidget('lblInstruction').setText('Choose a storage device to program')
         else:
+            self._findChildWidget('btnFlash').show()
             self._findChildWidget('tabInstall').show()
             self._findChildWidget('lblInstruction').setText('Click on selection (top right) icons to choose again')
 
@@ -2347,6 +2348,7 @@ class chooseSelectionSlot(QChooseSlot):
     def _updateDisplay(self):
         self._findChildWidget('tabFooter').show()
         if 'os' in self.mUserData:
+            self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
             self._findChildWidget('tabBoard').hide()
             self._findChildWidget('tabDisplay').hide()
@@ -2354,6 +2356,7 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabOS').show()
             self._findChildWidget('lblInstruction').setText('Choose an OS')
         elif 'board' in self.mUserData:
+            self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
             self._findChildWidget('tabOS').hide()
             self._findChildWidget('tabDisplay').hide()
@@ -2361,6 +2364,7 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabBoard').show()
             self._findChildWidget('lblInstruction').setText('Choose your baseboard type')
         elif 'display' in self.mUserData:
+            self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
             self._findChildWidget('tabOS').hide()
             self._findChildWidget('tabBoard').hide()
@@ -2368,6 +2372,7 @@ class chooseSelectionSlot(QChooseSlot):
             self._findChildWidget('tabDisplay').show()
             self._findChildWidget('lblInstruction').setText('Choose your panel type')
         elif 'storage' in self.mUserData:
+            self._findChildWidget('btnFlash').hide()
             self._findChildWidget('tabInstall').hide()
             self._findChildWidget('tabOS').hide()
             self._findChildWidget('tabBoard').hide()
