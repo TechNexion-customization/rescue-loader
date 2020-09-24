@@ -156,7 +156,9 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 item.setFlags((item.flags() & ~QtCore.Qt.ItemIsEnabled) if (row['disable'] == True) else (item.flags() | QtCore.Qt.ItemIsEnabled))
                 item.setData(QtCore.Qt.UserRole, row)
 
-            if qSignal: qSignal.emit(item)
+            if qSignal:
+                if 'chosen' in row and row['chosen']:
+                    qSignal.emit(item)
 
     elif isinstance(qContainer, QtGui.QTableWidget) and lstResult is not None:
         # insert into a tableWidget
@@ -177,7 +179,9 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                     item.setData(QtCore.Qt.UserRole, row['path'])
                 elif 'url' in row.keys():
                     item.setData(QtCore.Qt.UserRole, row['url'])
-                if qSignal: qSignal.emit(r, i, item)
+                if qSignal:
+                    if 'chosen' in row and row['chosen']:
+                        qSignal.emit(r, i, item)
 
     elif isinstance(qContainer, QtGui.QTreeWidget) and lstResult is not None:
         # TODO: Add support for insert into a treeWidget
@@ -1750,9 +1754,11 @@ class chooseOSSlot(QChooseSlot):
             self._extractUIList()
             if self.mOSUIList is not None and len(self.mOSUIList) == 1:
                 # if crawlWeb only send 1 item in the inputs, automatically select it.
-                for item in self.mOSUIList:
+                singlelist = list(ui for ui in self.mOSUIList)
+                for item in self.singlelist:
                     item['disable'] = False
-                _insertToContainer(self.mOSUIList, self.mLstWgtOS, self.mLstWgtOS.itemClicked)
+                    item['chosen'] = True
+                _insertToContainer(singlelist, self.mLstWgtOS, self.mLstWgtOS.itemClicked)
             else:
                 _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
 
@@ -1885,11 +1891,21 @@ class chooseBoardSlot(QChooseSlot):
             # parse the download files into selectable options, i.e. board, OS, ver, display
             self._parseResultList(inputs)
             self._extractUIList()
-            if self.mBoardUIList is not None and len(self.mBoardUIList) == 1:
-                # if crawlWeb only send 1 item in the inputs, automatically select it.
-                for item in self.mBoardUIList:
-                    item['disable'] = False
-                _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, self.mLstWgtBoard.itemClicked)
+            if self.mBoardUIList is not None:
+                singlelist = list(ui for ui in self.mBoardUIList)
+                if len(singlelist) > 1:
+                    # automatically select the one with matching baseboard.
+                    baseboard = self._findChildWidget('lblBaseboard').text().lower()
+                    for item in singlelist:
+                        item['disable'] = False
+                        if baseboard in item['board']:
+                            item['chosen'] = True
+                elif len(singlelist) == 1:
+                    # if crawlWeb only send 1 item in the inputs, automatically select it.
+                    for item in singlelist:
+                        item['disable'] = False
+                        item['chosen'] = True
+                _insertToContainer(singlelist, self.mLstWgtBoard, self.mLstWgtBoard.itemClicked)
             else:
                 _insertToContainer(self.mBoardUIList, self.mLstWgtBoard, None)
 
@@ -1985,11 +2001,22 @@ class chooseDisplaySlot(QChooseSlot):
             # parse the download files into selectable options, i.e. board, OS, ver, display
             self._parseResultList(inputs)
             self._extractUIList()
-            if self.mDisplayUIList is not None and len(self.mDisplayUIList) == 1:
-                # if crawlWeb only send 1 item in the inputs, automatically select it.
-                for item in self.mDisplayUIList:
-                    item['disable'] = False
-                _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, self.mLstWgtDisplay.itemClicked)
+            if self.mDisplayUIList is not None:
+                singlelist = list(ui for ui in self.mDisplayUIList)
+                if len(singlelist) > 1:
+                    # automatically select the one with matching baseboard.
+                    dispconf = self._findChildWidget('lblDispConf').text().lower()
+                    iface, inch, resol = dispconf.split('-')
+                    for item in singlelist:
+                        item['disable'] = False
+                        if iface in item['ifce_type'] and any(resol in d for d in item['display']):
+                            item['chosen'] = True
+                elif len(singlelist) == 1:
+                    # if crawlWeb only send 1 item in the inputs, automatically select it.
+                    for item in singlelist:
+                        item['disable'] = False
+                        item['chosen'] = True
+                _insertToContainer(singlelist, self.mLstWgtDisplay, self.mLstWgtDisplay.itemClicked)
             else:
                 _insertToContainer(self.mDisplayUIList, self.mLstWgtDisplay, None)
 
@@ -2124,6 +2151,7 @@ class chooseStorageSlot(QChooseSlot):
                 # if scanStorage only send 1 item in the inputs, automatically select it.
                 for item in self.mStorageUIList:
                     item['disable'] = False
+                    item['chosen'] = True
                 _insertToContainer(self.mStorageUIList, self.mLstWgtStorage, self.mLstWgtStorage.itemClicked)
 
         if self.sender() == self.mLstWgtStorage:
