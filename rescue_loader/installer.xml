@@ -386,7 +386,8 @@
                                 <item>
                                   <widget class="QPushButton" name="lblStorageTxt">
                                     <property name="styleSheet">
-                                      <string notr="true">background: transparent; color: white; border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding: 5px</string>
+                                      <string notr="true">background: transparent; color: white; border-style:solid;
+                                        border-width:1px; border-color:rgb(16, 55, 112); padding: 5px</string>
                                     </property>
                                     <property name="sizePolicy">
                                       <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
@@ -408,7 +409,8 @@
                           <item row="0" column="0" rowspan="2">
                             <widget class="QLabel" name="lblProgramming">
                               <property name="text">
-                                <string>Retrieving selected software image from the TechNexion Cloud and configuring your evaluation kit.</string>
+                                <string>Retrieving selected software image from the TechNexion Cloud and configuring
+                                  your evaluation kit.</string>
                               </property>
                               <property name="alignment">
                                 <set>Qt::AlignCenter</set>
@@ -920,7 +922,8 @@
                             <item row="0" column="5" rowspan="4" colspan="4">
                               <widget class="QLabel" name="lblErrorMessages">
                                 <property name="styleSheet">
-                                  <string notr="true">background: transparent; border: 5px solid white; color: white; padding: 5px
+                                  <string notr="true">background: transparent; border: 5px solid white; color: white;
+                                    padding: 5px
                                   </string>
                                 </property>
                                 <property name="frameShape">
