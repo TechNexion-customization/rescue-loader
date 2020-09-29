@@ -2950,7 +2950,7 @@ class postDownloadSlot(QProcessSlot):
             self.mQRIcon = True if 'svg_buffer' in results else False
             # do checksum
             _logger.warn('{}: qrcode success: do checksum for mPick: {}'.format(self.objectName(), self.mPick))
-            self.sendCommand({'cmd': 'check', 'tgt_filename': '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')), 'src_filename': self.mPick['storage'], 'total_sectors': str(int(self.mPick['bytes_written']/512))})
+            self.sendCommand({'cmd': 'check', 'src_filename': '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')), 'tgt_filename': self.mPick['storage'], 'total_sectors': str(int(self.mPick['bytes_written']/512))})
 
         # for target board
         if results['cmd'] == 'check' and results['msger_type'] == 'dbus':
@@ -2970,7 +2970,8 @@ class postDownloadSlot(QProcessSlot):
             elif results['status'] == 'failure':
                 # if checksum failed due to HTTP Error 404: Not Found, just fail and continue
                 self.mCheckSumFlag = False
-                self.sendError({'NoChecksum': True, 'ask': 'continue'}) # 'ask': 'reboot' if IsATargetBoard() else 'quit'
+                #self.sendError({'NoChecksum': True, 'ask': 'continue'}) # 'ask': 'reboot' if IsATargetBoard() else 'quit'
+
             # check for sdcard or emmc
             # NOTE: on PC-version, need to know storage device path of the target board
             if results['status'] == 'success' or results['status'] == 'failure':
