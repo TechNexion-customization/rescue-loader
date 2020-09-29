@@ -750,19 +750,24 @@ class detectDeviceSlot(QProcessSlot):
                     # e.g. 720x1280, or 1920x1080\n1920x1080\n1280x720\n1280x720\n1440x576\n1440x480\n720x576\n720x480
                     # results['interface'] is the driver supported in subsystem='mipi-dsi/cec' udev
                     # e.g. ili9881c-dsi, i.mx8-hdp (hdmi),
-                    mfg, iface = results['interface'].split('-')
-                    if 'hdp' in iface and 'i.mx8' in mfg:
+                    if 'panel-simple-dsi' in results['interface'] and 'uevent' in results:
+                        iface = results['uevent']
+                    elif 'hdp' in results['interface'] and 'i.mx8' in results['interface']:
                         iface = 'hdmi'
+                    else:
+                        iface = results['interface']
                     resoln = results['mode'].split(' ')[0]
-                    if 'ili9881c' in mfg:
+
+                    # figure out the size from panel interface name
+                    if 'ili9881c' in iface:
                         inch = '5'
-                    elif 'hj070na' in mfg:
+                    elif 'hj070na' in iface:
                         inch = '7'
-                    elif 'g080uan01' in mfg:
+                    elif 'g080uan01' in iface:
                         inch = '8'
-                    elif 'm101nwwb' in mfg:
+                    elif 'm101nwwb' in iface:
                         inch = '10'
-                    elif 'g156xw01' in mfg:
+                    elif 'g156xw01' in iface:
                         inch = '15'
                     else:
                         inch = '0'

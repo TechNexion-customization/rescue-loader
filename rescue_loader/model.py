@@ -647,6 +647,7 @@ class QueryUDevActionModeller(BaseActionModeller):
                     self.mResult['mode'] = atts['modes']
                 elif o.subsystem == 'mipi-dsi' and o.driver:
                     self.mResult['interface'] = o.driver
+                    self.mResult['uevent'] = atts['uevent']
                 elif o.subsystem == 'cec' and o.parent.driver:
                     self.mResult['interface'] = o.parent.driver
             return True
