@@ -2511,6 +2511,7 @@ class downloadImageSlot(QProcessSlot):
         self.mTotalMem = None
         self.mHosts = []
         self.mAlternativeFlag = False
+        self.mAbortFlag = False
         self.mDefaultPorts = {'http': 80, 'https': 443, 'ftp': 21}
 
     def _queryResult(self, percent = 0):
@@ -2665,6 +2666,7 @@ class downloadImageSlot(QProcessSlot):
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
                 self.sendCommand({'cmd': 'stop', 'type': 'job'})
+                self.mAbortFlag = True
 
         if not self.mFlashFlag:
             # keep the available file list for lookup with a signalled self.mPick later
@@ -2778,10 +2780,13 @@ class downloadImageSlot(QProcessSlot):
                 self.mLblRemain.setText('--:--(s) remaining')
                 self.mLblDownloadFlash.setText('')
                 self.mPick.update({'url': self.mFileUrl, 'flashed': False, 'total_uncompressed': int(self.mResults['total_uncompressed']), 'bytes_written': int(self.mResults['bytes_written'])})
-                _logger.debug('{}: emit signal: {}'.format(self.objectName(), self.mPick))
-                self.sendError({'NoDownload': True, 'ask': 'alternative'})
-                if not self.mAlternativeFlag:
+                _logger.debug('{}: Abort:{}, Alternative:{}, emit signal: {}'.format(self.objectName(), self.mAbortFlag, self.mAlternativeFlag, self.mPick))
+                if self.mAbortFlag:
                     self.success.emit(self.mPick)
+                else:
+                    self.sendError({'NoDownload': True, 'ask': 'alternative'})
+                    if not self.mAlternativeFlag:
+                        self.success.emit(self.mPick)
 
     def _updateDisplay(self):
         # show and hide some Gui elements
@@ -2899,7 +2904,7 @@ class postDownloadSlot(QProcessSlot):
 
     def _recoverRescue(self):
         self._findChildWidget('wgtProgress').show()
-        self.mLblProgramming.setText("It's not you, it's us.\nSomething went wrong\nWe are now reconditioning your evaluation kit automatically\n")
+        self.mLblProgramming.setText("Recovering technexion software loader\n")
         self.mLblRemain.setText('--:--(s) remaining')
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
@@ -3068,7 +3073,7 @@ class postDownloadSlot(QProcessSlot):
         if results['cmd'] == 'config' and results['subcmd'] == 'mmc' and results['config_id'] == 'bootpart':
             if self.mResults['status'] == 'success':
                 # Final notification, all successful, reboot
-                self.sendError({'Complete': True, 'QRCode': self.mQRIcon, 'ask': 'poweroff' if IsATargetBoard() else 'quit'})
+                self.sendError({'Complete': True, 'QRCode': self.mQRIcon}) #, 'ask': 'poweroff' if IsATargetBoard() else 'quit'})
             elif self.mResults['status'] == 'failure':
                 if IsATargetBoard():
                     # failed to set emmc boot option, still reboot or quit for PC-host
@@ -3778,7 +3783,7 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'NoEmmcBoot':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
-            self.setContent("Cannot set emmc boot options.")
+            self.setContent("Cannot set emmc boot partition options.")
         elif msgtype == 'Update':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("System Update")
@@ -3786,18 +3791,18 @@ class QMessageDialog(QtGui.QDialog):
         elif msgtype == 'Restore':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
-            self.setContent('Please remove power from your evaluation key and reboot.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)')
+            self.setContent('Restore technexion software loader complete. Please reboot')
         elif msgtype == 'Complete':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
-            self.setContent("Congratulations. You makde it.\nNow it's time to reboot your system.\n(For boards with a boot jumper, set it to eMMC BOOT MODE first.)")
+            self.setContent("Congratulations, Installation Complete.\nPlease power cycle the unit")
         elif msgtype == 'Interrupt':
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
-            self.setContent("Do you want to stop?")
+            self.setContent("Abort Installation and return to the TechNexion Software Loader?")
         elif msgtype == 'SerialMode':
             # special serialmode setting
             self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
@@ -3829,7 +3834,7 @@ class QMessageDialog(QtGui.QDialog):
         elif asktype == 'quit':
             self.setButtons({'accept': 'QUIT'})
         elif asktype == 'interrupt':
-            self.setButtons({'accept': 'CONTINUE', 'reject': 'STOP'})
+            self.setButtons({'accept': 'No', 'reject': 'Yes'})
         elif asktype == 'serial':
             self.setButtons({'accept': 'SERIALCOMM', 'reject': 'CONTINUE'})
         elif asktype == 'alternative':
