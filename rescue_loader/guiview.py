@@ -1181,7 +1181,7 @@ def guiview():
     geo = app.desktop().screenGeometry()
     _logger.warn('Desktop Geometry: {}'.format(geo))
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
-    if 'touch' in sys.argv[-1]:
+    if len(sys.argv) > 0 and 'touch' in sys.argv[-1]:
         app.setOverrideCursor(QtCore.Qt.BlankCursor)
         _logger.warn('Hide Cursor: {}'.format(geo))
     view = GuiViewer(conf, orient)
