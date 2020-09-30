@@ -408,8 +408,7 @@ class CopyBlockActionModeller(BaseActionModeller):
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
         # breaks up data into blocks, with source/target sector addresses
-        chunks, remainder = divmod(totalbytes, chunksize)
-        parts = chunks + (0 if remainder == 0 else 1)
+        parts = -(-totalbytes // chunksize) # int ceiling division
         if stat.S_ISCHR(os.stat(self.mParam['src_filename']).st_mode):
             return [(0, tgtstart + i*chunksize) for i in range(parts)]
         else:
@@ -750,14 +749,20 @@ class WebDownloadActionModeller(BaseActionModeller):
     def __init__(self):
         super().__init__()
         self.mIOs = []
+        self.mData = bytearray()
+        self.mPartRead = 0
+        self.mPartWritten = 0
         self.mUseDD = True
+        self.mWGETcmd = None
+        self.mDECOMPcmd = None
+        self.mDDcmd = None
 
     def _preAction(self):
         self.mResult['bytes_read'] = 0
         self.mResult['bytes_written'] = 0
         self.mUseDD = self.mParam['use_dd'] if 'use_dd' in self.mParam else True
 
-        # setup options, chunk_size in bytes default 64KB, i.e. 65535
+        # setup options, chunk_size in bytes default 64KB, i.e. 65536
         chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
         srcPath = '{}/{}'.format(self.mParam['src_directory'].strip('/'), self.mParam['src_filename'].lstrip('/'))
         host = self.mParam['host_name'] if ('host_name' in self.mParam) else 'rescue.technexion.net'
@@ -776,12 +781,14 @@ class WebDownloadActionModeller(BaseActionModeller):
             if 'tgt_filename' in self.mParam:
                 self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost, username=username, password=password))
                 self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
+                if self.mParam['src_start_sector'] > 0:
+                    self.mIOs.append(FileInputOutput('/tmp/p1.img', 'wb+'))
             else:
                 raise ValueError('preAction: No tgt file specified')
         else:
-            raise IOError('preAction: {} does not existed'.format(self.mParam['tgt_filename']))
+            raise IOError('preAction: {} does not exist'.format(self.mParam['tgt_filename']))
 
-        if len(self.mIOs) == 2:
+        if len(self.mIOs) >= 2:
             return True
         return False
 
@@ -791,56 +798,87 @@ class WebDownloadActionModeller(BaseActionModeller):
         try:
             self.mResult['total_uncompressed'] = self.mIOs[0].getUncompressedSize()
 
-            # shell subprocess Popen
-            DecompCmd = {'tar': 'tar xvf', 'zip':'zip -d', 'xz':'xz -d', 'bz':'bzip2 -d', 'gz':'gzip -d'}
-            decompcmd = 'xz -d'
-            for k, v in DecompCmd.items():
-                if k in self.mIOs[0].getFileType():
-                    decompcmd = v
-
-            if 'host_username' in self.mParam and 'host_password' in self.mParam:
-                login = '{}:{}'.format(self.mParam['host_username'], self.mParam['host_password'])
-                strAuth = base64.urlsafe_b64encode(login.encode('utf-8'))
-                header = "--header='Accept-Encoding: identity' --header='Authorization: Basic {}'".format(strAuth.decode())
-            else:
-                header = ''
-            wgetcmd = 'wget {} -q -O - {}'.format(header, self.mIOs[0].mUrl)
-            ddcmd = 'dd of={} bs=4096 conv=notrunc,fsync'.format(self.mIOs[1].mFilename)
-
-            # python lzma method
-            chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65535 # 64K
-            srcstart = 0
-            tgtstart = self.mParam['tgt_start_sector']
-            totalbytes = self.mIOs[0].getFileSize()
-            # sector addresses of a very large file for looping
-            if totalbytes > 0:
-                address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-            else:
-                raise IOError('There is 0 Total Bytes to download')
-
             # if free mem available > 671088640: # 640 * 1024 * 1024 bytes
-            if not self.mUseDD: # dd-able (plenty of free memory)
+            if not self.mUseDD: # not dd-able (plenty of free memory)
+                # python lzma method
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65536 # 64K
+                srcstart = self.mParam['src_start_sector'] * 512
+                tgtstart = srcstart
+                totalbytes = self.mIOs[0].getFileSize()
+                # sector addresses of a very large file for looping
+                if totalbytes > 0:
+                    address = self.__chunks(0, 0, totalbytes, chunksize)
+                else:
+                    raise IOError('There is 0 Total Bytes to download')
                 _logger.debug('list of addresses {} to copy: {}'.format(len(address), address))
-                if len(address) > 1:
-                    for count, (srcaddr, tgtaddr) in enumerate(address):
+                if len(address) > 0:
+                    # copy the target image
+                    for (srcaddr, tgtaddr) in address:
                         if not self.checkInterruptAndExit():
-                            self.__copyChunk(srcaddr, tgtaddr, 1)
+                            self.__copyChunk(srcaddr, tgtaddr, 1, skip=True)
                         else:
                             raise InterruptedError('User Interrupt to cancel running process')
-                else:
-                    self.__copyChunk(srcstart, tgtstart, totalbytes)
+                    ret = True
             else:
-                # otherwise use subprocess's Popen to dd
-                self.__ddChunk(wgetcmd, decompcmd, ddcmd)
+                # otherwise use shell subprocess Popen to dd
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 4096 # 4K
+                skipstart = (self.mParam['src_start_sector'] * 512) // chunksize
+                seekstart = skipstart
+                if 'src_total_sectors' in self.mParam and self.mParam['src_total_sectors'] > 0:
+                    srccount = (self.mParam['src_total_sectors'] * 512) // chunksize
+                else:
+                    srccount = self.mResult['total_uncompressed'] // chunksize
+                # setup decompress command
+                DecompCmd = {'tar': 'tar xvf', 'zip':'zip -d', 'xz':'xz -d', 'bz':'bzip2 -d', 'gz':'gzip -d'}
+                self.mDECOMPcmd = 'xz -d' # default
+                for k, v in DecompCmd.items():
+                    if k in self.mIOs[0].getFileType():
+                        self.mDECOMPcmd = v
+                # setup wget command with html header with basicc login info
+                if 'host_username' in self.mParam and 'host_password' in self.mParam:
+                    login = '{}:{}'.format(self.mParam['host_username'], self.mParam['host_password'])
+                    strAuth = base64.urlsafe_b64encode(login.encode('utf-8'))
+                    header = "--header='Accept-Encoding: identity' --header='Authorization: Basic {}'".format(strAuth.decode())
+                else:
+                    header = ''
+                self.mWGETcmd = 'wget {} -q -O - {}'.format(header, self.mIOs[0].mUrl)
+
+                # setup dd command, chunksize at a time
+                ddcmd = 'dd of={} bs={} skip={} seek={} count={} conv=notrunc,fsync'.format(self.mIOs[1].mFilename, chunksize, skipstart, seekstart, srccount)
+                ret = self.__ddChunk(self.mWGETcmd, self.mDECOMPcmd, ddcmd)
+                if ret:
+                    self.mPartRead = self.mResult['bytes_read']
+                    self.mPartWritten = self.mResult['bytes_written']
+                self.mDDcmd = 'dd of={} bs={} count={} conv=notrunc,fsync'.format(self.mIOs[1].mFilename, chunksize, skipstart)
+
             ret = True
         except Exception as ex:
             _logger.error('WebDownload main-action exception: {}'.format(ex))
+        return ret
 
+    def _postAction(self):
+        ret = False
+        # write back the first partition to eMMC from /tmp/mmcblk2p1
+        if self.mParam['src_start_sector'] > 0:
+            if not self.mUseDD:
+                # copy the target image
+                data = self.mIOs[2].Read(0)
+                written = self.mIOs[1].Write(data, 0)
+                _logger.debug('Write over 1st boot partition: copied size {}, written: {}'.format(self.mPartWritten, written))
+                if written == self.mPartWritten:
+                    ret = True
+            else:
+                # dd to overwrite the first partition
+                self.__ddChunk(self.mWGETcmd, self.mDECOMPcmd, self.mDDcmd)
+                ret = True
+        else:
+            ret = True
         # close the block device
         for ioobj in self.mIOs:
             _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
+
         return ret
 
     def __chunks(self, srcstart, tgtstart, totalbytes, chunksize):
@@ -850,30 +888,37 @@ class WebDownloadActionModeller(BaseActionModeller):
 
     def __parseProgress(self, pid, line, rex):
         # extract percentage and size downloaded from web
-        _logger.debug('parseProgress: regex: {} on {}'.format(rex, line))
         p = re.compile(rex, re.IGNORECASE)
         m = p.match(line)
         if m:
-            _logger.debug('matched: {}'.format(m.groups()))
+            _logger.debug('parseProgress: i/o records: {}'.format(m.groups()))
             if pid == self.__pddpid:
                 recin, partin, recout, partout = m.groups()
-                self.mResult['bytes_read'] = int(recin) * 4096
-                self.mResult['bytes_written'] = int(recout) * 4096
+                self.mResult['bytes_read'] = int(recin) * 4096 + self.mPartRead
+                self.mResult['bytes_written'] = int(recout) * 4096 + self.mPartWritten
             else:
                 percent, read, eta = m.groups()
                 self.mResult['bytes_read'] = read
                 self.mResult['bytes_written'] = self.mResult['total_uncompressed'] * int(percent) // 100
                 self.mResult['eta'] = eta
 
-    def __copyChunk(self, srcaddr, tgtaddr, numChunks):
+    def __copyChunk(self, srcaddr, tgtaddr, numChunks, skip=False):
         try:
+            written = 0
             # read src and write to the target
             data = self.mIOs[0].Read(srcaddr, numChunks)
             self.mResult['bytes_read'] += len(data)
-            written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
+            if skip and self.mResult['bytes_written'] <= (self.mParam['src_start_sector'] * 512):
+                # skip writing 1st boot partition until the end, since urllib.request.urlopen()
+                # does not support seek to go back to beginning of file. we need to
+                # dump the data to a file using FileInputOutput
+                written = self.mIOs[2].Write(data, self.mResult['bytes_written'])
+                self.mPartWritten += written
+            else:
+                written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
+                _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
             # write should return number of bytes written
-            if (written > 0):
+            if (written) > 0:
                 self.mResult['bytes_written'] += written
             del data # hopefully this would clear the write data buffer
 
@@ -898,6 +943,7 @@ class WebDownloadActionModeller(BaseActionModeller):
                 return False
             return True
 
+        ret = False
         try:
             timeout_counter = 0
             last_written =  0
@@ -933,6 +979,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             while True:
                 try:
                     out, err = ptee.communicate(timeout=1)
+                    ret = True
                     break
                 except subprocess.TimeoutExpired as ex:
                     self.__signal_subproc(pdd)
@@ -959,6 +1006,8 @@ class WebDownloadActionModeller(BaseActionModeller):
 
         except Exception:
             raise
+
+        return ret
 
     def __signal_subproc(self, proc):
         proc.send_signal(signal.SIGUSR1)

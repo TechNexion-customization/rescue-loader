@@ -532,15 +532,15 @@ class DownloadOperationHandler(BaseOperationHandler):
             if 'tgt_filename' in OpParams:
                 self.mActionParam['tgt_filename'] = '{}'.format(OpParams['tgt_filename'])
             else:
-                self.mActionParam['tgr_filename'] = '/tmp/download.tmp'
-            if 'tgt_start_sector' in OpParams:
-                self.mActionParam['tgt_start_sector'] = int(OpParams['tgt_start_sector'])
+                self.mActionParam['tgr_filename'] = '/tmp/download.img'
+            if 'src_start_sector' in OpParams:
+                self.mActionParam['src_start_sector'] = int(OpParams['src_start_sector'])
             else:
-                self.mActionParam['tgt_start_sector'] = 0
+                self.mActionParam['src_start_sector'] = 0  # default to the beginning of src file
             if 'src_total_sectors' in OpParams:
                 self.mActionParam['src_total_sectors'] = int(OpParams['src_total_sectors'])
             else:
-                self.mActionParam['src_total_sectors'] = -1
+                self.mActionParam['src_total_sectors'] = -1 # default to the whole src file size
             if 'chunk_size' in OpParams:
                 self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
             if 'dl_username' in OpParams and len(OpParams['dl_username']) > 0:

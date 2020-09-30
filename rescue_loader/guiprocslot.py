@@ -831,8 +831,7 @@ class scanPartitionSlot(QProcessSlot):
            'status' in results and results['status'] == "success":
             for k, v in results.items():
                 _logger.debug('{} result item: {}, {}'.format(self.objectName(), k, v))
-                if isinstance(v, dict) and 'device_type' in v and v['device_type'] == 'partition' and \
-                   'mount_point' in v and v['mount_point'].startswith('/'):
+                if isinstance(v, dict) and 'device_type' in v and v['device_type'] == 'partition':
                     self.mResults.update({k: v})
 
     def validateResult(self):
@@ -2270,6 +2269,9 @@ class chooseSelectionSlot(QChooseSlot):
             if 'storage' in self.mPick and self.mPick['storage'] is not None:
                 ret = self._backupRescue()
                 if ret == 0:
+                    # add partition size to self.mPick
+                    if self.mPartitions and '{}p1'.format(self.mPick['storage']) in self.mPartitions:
+                        self.mPick.update({'{}p1'.format(self.mPick['storage']): self.mPartitions['{}p1'.format(self.mPick['storage'])]})
                     self.mResults.update(self.mPick)
                     self.mResults.update({'status': 'success', 'cmd': 'dd'})
                     self.finish.emit()
@@ -2373,17 +2375,17 @@ class chooseSelectionSlot(QChooseSlot):
                    'sys_name' in v and 'mmcblk' in v['sys_name'] and \
                    'attributes' in v and isinstance(v['attributes'], dict) and \
                    'size' in v['attributes'] and 'start' in v['attributes']:
-                        self.mPartitions.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size'])})
-                        _logger.info('{}: {}: Start: {}, Size: {}, Partition: {}'.format(self.objectName(), k, int(v['attributes']['start']), int(v['attributes']['size']), self.mPartitions))
+                        self.mPartitions.update({v['device_node']: int(v['attributes']['start']) + int(v['attributes']['size']) - 1})
+                        _logger.info('{}: {}: Start: {}, Size: {}, Partition: {} (sectors)'.format(self.objectName(), k, int(v['attributes']['start']), int(v['attributes']['size']), self.mPartitions))
 
     def _backupRescue(self):
-        chunks = '64'
+        chunks = '512'
         if '{}p1'.format(self.mPick['storage']) in self.mPartitions:
             # dd first partition (size extract from self.mPartitions of /dev/mmcblkXp1 to target storage
-            bsize = int(self.mPartitions['{}p1'.format(self.mPick['storage'])] * 8) # 512/64 = 8
+            bsize = int(self.mPartitions['{}p1'.format(self.mPick['storage'])]) # 512
         else:
             # dd the first 139264 sectors(71,303,168 bytes, i.e. mbr boot sector + SPL), NOTE: bs = 1114112 = 71,303,168 * 512 / 64
-            bsize = 1114112
+            bsize = 139264
         try:
             _logger.info('{}: dd if={} of=/tmp/rescue.img bs={} count={} conv=notrunc'.format(self.objectName(), self.mPick['storage'], bsize, chunks))
             ret = subprocess.check_call(['dd', 'if={}'.format(self.mPick['storage']), 'of=/tmp/rescue.img', 'bs={}'.format(bsize), 'count={}'.format(chunks), 'conv=notrunc'])
@@ -2503,8 +2505,8 @@ class downloadImageSlot(QProcessSlot):
         self.mResults = {}
         self.mFileUrl = None
         self.mTgtStorage = None
-        self.mUsername = None
-        self.mPassword = None
+        self.mUsername = ''
+        self.mPassword = ''
         self.mFlashFlag = False
         self.mAvSpeed = 0
         self.mLastWritten = 0
@@ -2517,6 +2519,7 @@ class downloadImageSlot(QProcessSlot):
         self.mProgressBar = None
         self.mPick = {'board': None, 'os': None, 'ver': None, 'display': None, 'storage': None}
         self.mMemFree = None
+        self.mPartSize = None
         self.mHosts = []
         self.mAlternativeFlag = False
         self.mAbortFlag = False
@@ -2592,9 +2595,15 @@ class downloadImageSlot(QProcessSlot):
     def __parseUserPassFromHosts(self):
         for host in self.mHosts:
             if host['name'] in self.mFileUrl or host['ip'] in self.mFileUrl:
-                self.mUsername = host['username'] if 'username' in host else None
-                self.mPassword = host['password'] if 'password' in host else None
+                self.mUsername = host['username'] if 'username' in host else ''
+                self.mPassword = host['password'] if 'password' in host else ''
                 break
+
+    def __parsePartSize(self):
+        if any(self.mTgtStorage in k for k in self.mPick.keys()):
+            self.mPartSize = int(self.mPick['{}p1'.format(self.mTgtStorage)])
+        else:
+            self.mPartSize = 0
 
     def __checkNetworkError(self):
         _logger.debug('{}: check NIC/NET error... mDetects:{}'.format(self.objectName(), self.mDetects))
@@ -2614,12 +2623,13 @@ class downloadImageSlot(QProcessSlot):
             self.sendError({'NoResource': True, 'ask': 'continue'})
         else:
             self.__parseUserPassFromHosts()
-            if self.mUsername is not None and self.mPassword is not None:
-                _logger.info('{}: download from {} with {}:{} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mUsername, self.mPassword, self.mTgtStorage))
-                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'dl_username': self.mUsername, 'dl_password': self.mPassword})
+            self.__parsePartSize()
+            _logger.info('{}: download from {} (login {}:{}) of {} sectors and flash to {} using {} free memory'.format(self.objectName(), self.mFileUrl, self.mUsername, self.mPassword, self.mPartSize, self.mTgtStorage, self.mMemFree))
+            if self.mPartSize > 0:
+                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'src_start_sector': '{}'.format(self.mPartSize), 'dl_username': self.mUsername, 'dl_password': self.mPassword})
             else:
-                _logger.info('{}: download from {} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
-                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree})
+                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'dl_username': self.mUsername, 'dl_password': self.mPassword})
+
             # Start a timer to query results every 1 second and set flash flag
             if self.mTimerId is None:
                 self.mTimerId = self.startTimer(1000) # 1000 ms
@@ -2728,7 +2738,7 @@ class downloadImageSlot(QProcessSlot):
         for disp in pick['display']:
             filteredAttr.clear()
             filteredAttr.append(disp)
-            filteredAttr.extend(v for k, v in pick.items() if (v is not None and k != 'storage' and k != 'display'))
+            filteredAttr.extend(v for k, v in pick.items() if (v is not None and k != 'storage' and k != 'display' and not k.startswith('/dev/')))
             filteredList = self._findSubset(filteredAttr, self.mFileList)
             # remove duplicate urls from filteredList
             for f in filteredList:
