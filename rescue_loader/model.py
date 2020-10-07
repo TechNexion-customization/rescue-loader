@@ -761,6 +761,8 @@ class WebDownloadActionModeller(BaseActionModeller):
         host = self.mParam['host_name'] if ('host_name' in self.mParam) else 'rescue.technexion.net'
         port = self.mParam['host_port'] if ('host_port' in self.mParam) else None
         protocol = self.mParam['host_protocol'] if ('host_protocol' in self.mParam) else 'http'
+        username = self.mParam['host_username'] if 'host_username' in self.mParam else None
+        password = self.mParam['host_password'] if 'host_password' in self.mParam else None
         if port is not None:
             dlhost = '{}://{}:{}'.format(protocol.rstrip('://'), host.rstrip('/'), port)
         else:
@@ -770,7 +772,7 @@ class WebDownloadActionModeller(BaseActionModeller):
         if os.path.exists(self.mParam['tgt_filename']):
             # ensure target path exists, and then setup the input/output objects
             if 'tgt_filename' in self.mParam:
-                self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost))
+                self.mIOs.append(WebInputOutput(chunksize, srcPath, host=dlhost, username=username, password=password))
                 self.mIOs.append(BlockInputOutput(chunksize, self.mParam['tgt_filename'], 'wb+'))
             else:
                 raise ValueError('preAction: No tgt file specified')
@@ -793,7 +795,14 @@ class WebDownloadActionModeller(BaseActionModeller):
             for k, v in DecompCmd.items():
                 if k in self.mIOs[0].getFileType():
                     decompcmd = v
-            wgetcmd = 'wget -q -O - {}'.format(self.mIOs[0].mUrl)
+
+            if 'host_username' in self.mParam and 'host_password' in self.mParam:
+                login = '{}:{}'.format(self.mParam['host_username'], self.mParam['host_password'])
+                strAuth = base64.urlsafe_b64encode(login.encode('utf-8'))
+                header = "--header='Accept-Encoding: identity' --header='Authorization: Basic {}'".format(strAuth.decode())
+            else:
+                header = ''
+            wgetcmd = 'wget {} -q -O - {}'.format(header, self.mIOs[0].mUrl)
             ddcmd = 'dd of={} bs=4096 conv=notrunc,fsync'.format(self.mIOs[1].mFilename)
 
             # python lzma method
@@ -983,6 +992,8 @@ class QueryWebFileActionModeller(BaseActionModeller):
                         self.mSrcPath = '/rescue/{}/'.format(self.mParam['src_directory'].strip('/'))
                     else:
                         self.mSrcPath = '/rescue/{}'.format(self.mParam['src_directory'].lstrip('/'))
+            self.mUsername = self.mParam['host_username'] if 'host_username' in self.mParam else None
+            self.mPassword = self.mParam['host_password'] if 'host_password' in self.mParam else None
             if self.mWebHost and self.mSrcPath:
                 return True
         return False
@@ -992,7 +1003,7 @@ class QueryWebFileActionModeller(BaseActionModeller):
         # setup the web input output
         ret = False
         try:
-            webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost)
+            webIO = WebInputOutput(0, self.mSrcPath, host=self.mWebHost, username=self.mUsername, password=self.mPassword)
             if webIO:
                 _logger.debug('{} Host: {} Path: {} File Type: {}'.format(type(self).__name__, self.mWebHost, self.mSrcPath, webIO.getFileType()))
                 if 'html' in webIO.getFileType():

@@ -460,11 +460,19 @@ class InfoOperationHandler(BaseOperationHandler):
                     for host in self.mHosts:
                         if host['name'] in OpParams['target']:
                             self.mActionParam['host_dir'] = host['path']
+                        if 'username' in host:
+                            self.mActionParam['host_username'] = host['username']
+                        if 'password' in host:
+                            self.mActionParam['host_password'] = host['password']
                 elif k==self.mArgs[1] and v.startswith('/') and v.endswith('xz'):
                     self.mActionParam['src_directory'] = v # directory/folder
                     for host in self.mHosts:
                         if host['name'] in OpParams['target']:
                             self.mActionParam['host_dir'] = host['path']
+                        if 'username' in host:
+                            self.mActionParam['host_username'] = host['username']
+                        if 'password' in host:
+                            self.mActionParam['host_password'] = host['password']
                 elif k==self.mArgs[1] and v.endswith('/'):
                     self.mActionParam['src_directory'] = v # local directory
                 elif k==self.mArgs[1] and v in ['total', 'available', 'percent', 'used', \
@@ -522,7 +530,7 @@ class DownloadOperationHandler(BaseOperationHandler):
         # Parse the OpParams and Setup mActionParams
         if isinstance(OpParams, dict):
             if 'tgt_filename' in OpParams:
-                self.mActionParam['tgt_filename'] = str(OpParams['tgt_filename'])
+                self.mActionParam['tgt_filename'] = '{}'.format(OpParams['tgt_filename'])
             else:
                 self.mActionParam['tgr_filename'] = '/tmp/download.tmp'
             if 'tgt_start_sector' in OpParams:
@@ -535,6 +543,10 @@ class DownloadOperationHandler(BaseOperationHandler):
                 self.mActionParam['src_total_sectors'] = -1
             if 'chunk_size' in OpParams:
                 self.mActionParam['chunk_size'] = int(OpParams['chunk_size'])
+            if 'dl_username' in OpParams and len(OpParams['dl_username']) > 0:
+                self.mActionParam['host_username'] = '{}'.format(OpParams['dl_username'])
+            if 'dl_password' in OpParams and len(OpParams['dl_password']) > 0:
+                self.mActionParam['host_password'] = '{}'.format(OpParams['dl_password'])
 
             if all(s in OpParams for s in self.mArgs):
                 # check for download from web and flash to target file
@@ -544,12 +556,8 @@ class DownloadOperationHandler(BaseOperationHandler):
                 # 'host_protocol': 'http', 'tgt_filename': 'ubuntu-16.04.img', 'tgt_start_sector': 0
                 self.mActionParam['host_protocol'] = OpParams['dl_protocol']
                 self.mActionParam['host_name'] = OpParams['dl_host']
-                self.mActionParam['src_filename'] = str(OpParams['dl_os']) + '-' + \
-                                                str(OpParams['dl_version']) + '.' + \
-                                                str(OpParams['dl_filetype'])
-                self.mActionParam['src_directory'] = str(OpParams['dl_module']) + '/' + \
-                                                 str(OpParams['dl_baseboard']) + '-' + \
-                                                 str(OpParams['dl_display'])
+                self.mActionParam['src_filename'] = '{}-{}.{}'.format(OpParams['dl_os'], OpParams['dl_version'], OpParams['dl_filetype'])
+                self.mActionParam['src_directory'] = '{}/{}-{}'.format(OpParams['dl_module'], OpParams['dl_baseboard'], OpParams['dl_display'])
                 _logger.debug('{}: __parseParam: mActionParam: {}'.format(type(self).__name__, self.mActionParam))
                 return True
             elif 'dl_url' in OpParams:
@@ -755,7 +763,7 @@ if __name__ == "__main__":
         param = {'cmd': 'info', 'target': 'mem', 'location': 'free'}
     elif sys.argv[1] == 'web':
         hdlr = InfoOperationHandler(opcb)
-        param = {'cmd': 'info', 'target': 'http://rescue.technexion.net', 'location': '/pico-imx6/'} #dwarf-hdmi/'}
+        param = {'cmd': 'info', 'target': 'http://10.88.88.93', 'location': '/images/pico-imx7/'} #dwarf-hdmi/'}
     elif sys.argv[1] == 'fs':
         hdlr = InfoOperationHandler(opcb)
         param = {'cmd': 'info', 'target': 'PoMachine', 'location': '/home/po/Downloads/'} #dwarf-hdmi/'}

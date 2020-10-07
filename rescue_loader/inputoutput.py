@@ -579,10 +579,14 @@ class WebInputOutput(BaseInputOutput):
     """
     WebInputOutput
     """
-    def __init__(self, chunksize, filename, mode='dl', host='http://rescue.technexion.net/'):
+    def __init__(self, chunksize, filename, mode='dl', host='http://rescue.technexion.net/', username=None, password=None):
         self.mChunkSize = chunksize if (chunksize > 0) else 65536
         self.mHost = host
         self.mUrl = self.mHost.rstrip('/') + '/' + filename.lstrip('/')
+        self.mAuthFlag = False
+        self.mUsername = username
+        self.mPassword = password
+        self.mAuthMgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
         # will call to the overridden _open() which
         # handles our own web input(download, 'dl') output(upload, 'ul')
         super().__init__(filename, mode)
@@ -640,31 +644,50 @@ class WebInputOutput(BaseInputOutput):
         """
         Overrides _open()
         """
-        try:
-            if 'dl' in self.mMode:
-                # For HTTP and HTTPS URLs, setup request
-                # req = urllib.request.Request(self.mUrl) # no cgi data, no timeout
-                # self.mHandle = urllib.request.urlopen(req)
-                self.mHandle = urllib.request.urlopen(self.mUrl, None, 30) # timeout 30s
-                if self.mHandle:
-                    self.mWebHdrInfo = self.mHandle.info()
-                    _logger.debug('{} Hdr Info: {}'.format(type(self).__name__, self.mWebHdrInfo))
-                    if 'content-length' in self.mWebHdrInfo:
-                        self.mFileSize = int(self.mWebHdrInfo['content-length'])
+        while True:
+            try:
+                if 'dl' in self.mMode:
+                    # For HTTP and HTTPS URLs, setup request
+                    # req = urllib.request.Request(self.mUrl) # no cgi data, no timeout
+                    # self.mHandle = urllib.request.urlopen(req)
+                    if not self.mAuthFlag:
+                        self.mHandle = urllib.request.urlopen(self.mUrl, None, 30) # timeout 30s
                     else:
-                        self.mFileSize = 0
-                    if 'content-type' in self.mWebHdrInfo:
-                        self.mFileType = self.mWebHdrInfo['content-type']
-            else:
-                # For HTTP and HTTPS URLs, setup response to remote requester
-                raise ConnectionError('Upload not supported yet')
-#             if self.mCFHandle is None:
-#                 raise IOError('Cannot open compressed file')
-        except TypeError as err:
-            _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
-        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as err:
-            _logger.error('{} _open error: {}'.format(type(self).__name__, err))
-            raise
+                        self.mHandle = self.mAuthOpener.open(self.mUrl)
+
+                    if self.mHandle:
+                        self.mWebHdrInfo = self.mHandle.info()
+                        _logger.debug('{} Hdr Info: {}'.format(type(self).__name__, self.mWebHdrInfo))
+                        if 'content-length' in self.mWebHdrInfo:
+                            self.mFileSize = int(self.mWebHdrInfo['content-length'])
+                        else:
+                            self.mFileSize = 0
+                        if 'content-type' in self.mWebHdrInfo:
+                            self.mFileType = self.mWebHdrInfo['content-type']
+                        break
+                else:
+                    # For HTTP and HTTPS URLs, setup response to remote requester
+                    raise ConnectionError('Upload not supported yet')
+    #             if self.mCFHandle is None:
+    #                 raise IOError('Cannot open compressed file')
+            except TypeError as err:
+                _logger.error('{} _open ignore type error: {}'.format(type(self).__name__, err))
+                raise
+            except urllib.error.HTTPError as err:
+                _logger.error('{} _open http error: {}'.format(type(self).__name__, err))
+                if hasattr(err, 'code') and err.code == 401:
+                    if self.mUsername and self.mPassword:
+                        self.mAuthMgr.add_password(None, self.mUrl, self.mUsername, self.mPassword)
+                        self.mAuthHdlr = urllib.request.HTTPBasicAuthHandler(self.mAuthMgr)
+                        self.mAuthOpener = urllib.request.build_opener(self.mAuthHdlr)
+                        urllib.request.install_opener(self.mAuthOpener)
+                        self.mAuthFlag = True
+                        continue
+                else:
+                    raise
+            except (urllib.error.URLError, socket.timeout) as err:
+                _logger.error('{} _open error: {}'.format(type(self).__name__, err))
+                raise
 
     def _close(self):
         """

@@ -983,8 +983,11 @@ class scanNetworkSlot(QProcessSlot):
                 url = urlparse('{}://{}'.format(host['protocol'], host['name']))
                 if all([url.scheme, url.netloc]):
                     self.mHosts.append({'protocol': '{}'.format(host['protocol'].lower()), 'name': '{}'.format(host['name']), 'port': int(host['port']), 'path': '{}'.format(host['path'])})
+                    if 'username' in host and 'password' in host:
+                        self.mHosts[-1].update({'username': '{}'.format(host['username']), 'password': '{}'.format(host['password'])})
             if self.mHosts == {}:
                 self.mHosts.append({'protocol': 'http', 'name': 'rescue.technexion.net', 'port': 80, 'path': 'images'})
+            _logger.info('{}: self.mHosts: {}'.format(self.objectName(), self.mHosts))
 
         if self.sender().objectName() == 'detectDevice':
             # check 1: the NIC interface
@@ -1494,16 +1497,19 @@ class crawlWebSlot(QProcessSlot):
                 parsedList = self.__parseWebList(results)
                 if len(parsedList) > 0 and isinstance(parsedList, list):
                     for item in parsedList:
-                        if item[1].endswith('/'):
-                            pobj = self.__checkUrl(item[2])
-                            if pobj is not None:
-                                _logger.debug('internet item path: {}'.format(pobj.path))
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
-                        elif item[1].endswith('.xz'):
-                            # match against the target device, and send request to obtain uncompressed size
-                            _logger.debug('internet xzfile {} path: {}'.format(item[1], item[2]))
-                            if self.__matchDevice(item[2].split(self.mHostName, 1)[1]):
-                                self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '{}'.format(item[2].split(self.mHostName, 1)[1])})
+                        if '..' in item[1] or 'parent' in item[1].lower():
+                            pass
+                        else:
+                            if item[2].endswith('/'):
+                                pobj = self.__checkUrl(item[2])
+                                if pobj is not None:
+                                    _logger.debug('internet item path: {}'.format(pobj.path))
+                                    self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
+                            elif item[2].endswith('.xz'):
+                                # match against the target device, and send request to obtain uncompressed size
+                                _logger.debug('internet xzfile {} path: {}'.format(item[1], item[2]))
+                                if self.__matchDevice(item[2].split(self.mHostName, 1)[1]):
+                                    self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location': '{}'.format(item[2].split(self.mHostName, 1)[1])})
 
             if results['status'] == 'failure' and \
                results['target'] == self.mInputs['target'] and \
@@ -2497,6 +2503,8 @@ class downloadImageSlot(QProcessSlot):
         self.mResults = {}
         self.mFileUrl = None
         self.mTgtStorage = None
+        self.mUsername = None
+        self.mPassword = None
         self.mFlashFlag = False
         self.mAvSpeed = 0
         self.mLastWritten = 0
@@ -2581,6 +2589,13 @@ class downloadImageSlot(QProcessSlot):
                                 host['alive'] = h['alive']
             _logger.info('{} hosts updated to:{}'.format(self.objectName(), self.mHosts))
 
+    def __parseUserPassFromHosts(self):
+        for host in self.mHosts:
+            if host['name'] in self.mFileUrl or host['ip'] in self.mFileUrl:
+                self.mUsername = host['username'] if 'username' in host else None
+                self.mPassword = host['password'] if 'password' in host else None
+                break
+
     def __checkNetworkError(self):
         _logger.debug('{}: check NIC/NET error... mDetects:{}'.format(self.objectName(), self.mDetects))
         if self.mFlashFlag:
@@ -2598,8 +2613,13 @@ class downloadImageSlot(QProcessSlot):
         if self.mPick['os'] == 'android' and 'imx7' in cpu:
             self.sendError({'NoResource': True, 'ask': 'continue'})
         else:
-            _logger.info('{}: download from {} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
-            self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage})
+            self.__parseUserPassFromHosts()
+            if self.mUsername is not None and self.mPassword is not None:
+                _logger.info('{}: download from {} with {}:{} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mUsername, self.mPassword, self.mTgtStorage))
+                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'dl_username': self.mUsername, 'dl_password': self.mPassword})
+            else:
+                _logger.info('{}: download from {} and flash to {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
+                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree})
             # show/hide GUI components
             self._updateDisplay()
 
