@@ -758,7 +758,7 @@ class detectDeviceSlot(QProcessSlot):
                         iface = results['interface']
                     resoln = results['mode'].split(' ')[0]
 
-                    # figure out the size from panel interface name
+                    # figure out the screen size from panel interface name
                     if 'ili9881c' in iface:
                         inch = '5'
                     elif 'hj070na' in iface:
@@ -772,6 +772,35 @@ class detectDeviceSlot(QProcessSlot):
                     else:
                         inch = '0'
                     self.mDisplay = '{}-{}-{}'.format(iface, inch, resoln)
+                elif 'input' in results and 'interface' in results and 'virtual_size' in results:
+                    # imx6/7/6ul with multiple displays
+                    dictDisp = dict(zip(results['interface'].split('|'), results['virtual_size'].split('|')))
+                    touch = results['input'].lower()
+                    _logger.warn('{}: dictDisp:{} touch:{}'.format(self.objectName(), dictDisp, touch))
+                    for k, v in dictDisp.items():
+                        if 'lcd' in k:
+                            iface = 'ttl'
+                            resoln = v.split(',')
+                            break
+                        elif 'ldb' in k:
+                            iface = 'lvds'
+                            resoln = v.split(',')
+                            break
+                        elif 'hdmi' in k:
+                            iface = 'hdmi'
+                            resoln = v.split(',')
+
+                    # figure out the screen size from touch panel model name
+                    if any(t in touch for t in ['ep082', 'ep085']):
+                        inch = '5'
+                    elif 'exc3146-31' in touch:
+                        inch = '7'
+                    elif any(t in touch for t in ['exc3146-10', 'exc3000-08']):
+                        inch = '10'
+                    elif 'p80h60' in touch:
+                        inch = '15'
+                    self.mDisplay = '{}-{}-{}x{}'.format(iface, inch, resoln[0], resoln[1])
+                _logger.warn('{}: display: {}'.format(self.objectName(), self.mDisplay))
 
     def validateResult(self):
         _logger.warn('{} validate result: cpu:{} form:{} baseboard:{} display:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
@@ -782,14 +811,14 @@ class detectDeviceSlot(QProcessSlot):
         # rescue server checks
         if self.mCpu and self.mForm and self.mBaseboard and self.mDisplay:
             # update GUI
-            _logger.info('{}: cpu:{} form:{} board:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))
+            _logger.info('{}: cpu:{} form:{} board:{} display:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
             self._findChildWidget('lblCpu').setText(self.mCpu)
             self._findChildWidget('lblForm').setText(self.mForm)
             self._findChildWidget('lblBaseboard').setText(self.mBaseboard)
             self._findChildWidget('lblDispConf').setText(self.mDisplay)
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
-                _logger.warn('{}: Success and emit: {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard))
+                _logger.warn('{}: Success and emit: {} {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
                 self.success.emit({'cpu': self.mCpu, 'form': self.mForm, 'board':self.mBaseboard, 'display': self.mDisplay})
                 self.mSentFlag = True
                 # successfully detect a technexion rescue server

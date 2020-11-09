@@ -631,26 +631,55 @@ class QueryUDevActionModeller(BaseActionModeller):
         return ret
 
     def __gatherDisplay(self):
+        self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='input'))) # touch panel model
         self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='drm')))
         self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='mipi-dsi')))
         self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='cec')))
+        self.mDisplays.extend(list(d for d in self.mContext.list_devices(subsystem='graphics'))) # for imx6/7
 
     def __extract_display(self):
         # loop mFound to figure out display info
         # subsystem='drm' expect a parent with uevent attributes(DEVTYPE=drm_minor), should be removed here
+        # for IMX8M/MM/MP
         # The subsystem='drm' child node has mode/enabled/status setting.
         # subsystem='mipi-dsi, cec' also expects simple uevent attributes
+        # for IMX6/7/6UL
+        # The only the subsystem='graphics' provides useful information
+        # imx7: name: mxs-lcdif, virtual_size: 800,480
+        # imx6: fsl_disp_dev_property v:b'lcd', virtual_size: 800,480
         if self.mFound != {}:
             for o in self.mFound:
                 atts = self.__getDevAttributes(o)
-                if o.subsystem == 'drm' and 'status' in atts and atts['status'] == 'connected' \
-                   and 'modes' in atts:
+                # input subsystem for touch panel model
+                if o.subsystem == 'input' and 'name' in atts and 'powerkey' not in atts['name']:
+                    self.mResult['input'] = atts['name']
+                # drm/mipidsi/cec/graphics subsystems
+                elif o.subsystem == 'drm' and 'status' in atts and atts['status'] == 'connected' and 'modes' in atts:
                     self.mResult['mode'] = atts['modes']
                 elif o.subsystem == 'mipi-dsi' and o.driver:
                     self.mResult['interface'] = o.driver
                     self.mResult['uevent'] = atts['uevent']
                 elif o.subsystem == 'cec' and o.parent.driver:
                     self.mResult['interface'] = o.parent.driver
+                elif o.subsystem == 'graphics' and 'virtual_size' in atts:
+                    if 'fsl_disp_dev_property' in atts and atts['fsl_disp_dev_property'] != 'overlay':
+                        if 'interface' not in self.mResult:
+                            self.mResult['interface'] = atts['fsl_disp_dev_property']
+                        else:
+                            self.mResult['interface'] += "|{}".format(atts['fsl_disp_dev_property'])
+                        if 'virtual_size' not in self.mResult:
+                            self.mResult['virtual_size'] = atts['virtual_size']
+                        else:
+                            self.mResult['virtual_size'] += "|{}".format(atts['virtual_size'])
+                    elif 'name' in atts and 'lcd' in atts['name']:
+                        if 'interface' not in self.mResult:
+                            self.mResult['interface'] = atts['name']
+                        else:
+                            self.mResult['interface'] += "|{}".format(atts['name'])
+                        if 'virtual_size' not in self.mResult:
+                            self.mResult['virtual_size'] = atts['virtual_size']
+                        else:
+                            self.mResult['virtual_size'] += "|{}".format(atts['virtual_size'])
             return True
         return False
 
