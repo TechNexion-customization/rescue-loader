@@ -1533,7 +1533,9 @@ class crawlWebSlot(QProcessSlot):
                                 pobj = self.__checkUrl(item[2])
                                 if pobj is not None:
                                     _logger.debug('internet item path: {}'.format(pobj.path))
-                                    self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
+                                    # match against the CPU and FORM to improve crawling speed
+                                    if self.__matchDevice(pobj.path):
+                                        self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
                             elif item[2].endswith('.xz'):
                                 # match against the target device, and send request to obtain uncompressed size
                                 _logger.debug('internet xzfile {} path: {}'.format(item[1], item[2]))
@@ -1577,7 +1579,7 @@ class crawlWebSlot(QProcessSlot):
         if self.mDisplay is None:
             self.mDisplay = self._findChildWidget('lblDispConf').text().lower()
 
-        _logger.debug('{}: matching xzfile: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
+        _logger.debug('{}: matching url: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
 
         # step 2: find menu items that matches as cpu, form, but not baseboard
         if self.mCpu in filename.lower() and self.mForm in filename.lower():
@@ -1587,10 +1589,11 @@ class crawlWebSlot(QProcessSlot):
             else:
                 return True
         else:
-            if self.mCpu.lower() == 'imx6ul' or self.mCpu.lower() == 'imx6ull' or self.mCpu[0:4].lower() == 'imx8':
-                return False
-            if self.mCpu[0:4] in filename.lower():
-                if self.mForm.lower() in filename.lower():
+            if any(cpu == self.mCpu for cpu in ['imx6ul', 'imx6ull']) and 'imx6ul' in filename.lower():
+                if self.mForm in filename.lower():
+                    return True
+            if self.mCpu == 'imx7d' and 'imx7' in filename.lower():
+                if self.mForm in filename.lower():
                     return True
         return False
 
