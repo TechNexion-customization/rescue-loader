@@ -651,8 +651,9 @@ class QueryUDevActionModeller(BaseActionModeller):
             for o in self.mFound:
                 atts = self.__getDevAttributes(o)
                 # input subsystem for touch panel model
-                if o.subsystem == 'input' and 'name' in atts and 'powerkey' not in atts['name']:
-                    self.mResult['input'] = atts['name']
+                if o.subsystem == 'input' and 'name' in atts and any(n in atts['name'].lower() for n in ['ep000','ep079','ep082','ep085','ep0510','ep0512','exc3146','exc3160','p80h60','p80h100', 'mouse']) and \
+                                 'modalias' in atts and any(bus in atts['modalias'] for bus in ['b0018', 'b0003', 'b0000']):
+                    self.mResult['input'] = '{}|{}'.format(atts['name'], atts['modalias'])
                 # drm/mipidsi/cec/graphics subsystems
                 elif o.subsystem == 'drm' and 'status' in atts and atts['status'] == 'connected' and 'modes' in atts:
                     self.mResult['mode'] = atts['modes']

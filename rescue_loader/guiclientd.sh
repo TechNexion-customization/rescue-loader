@@ -5,22 +5,25 @@ for i in /sys/class/input/input?
 do
   if ( grep -qEi "powerkey" ${i}/name ); then
     continue
-  elif ( grep -qE "EP000|EP079|EP082|EP085|EP0510|EP0512|EXC3146|EXC3160|P80H60|P80H100" ${i}/name ); then
-    export QWS_MOUSE_PROTO="linuxinput:/dev/input/event${i: -1}"
+  elif ( grep -qE "EP000|EP079|EP082|EP085|EP0510|EP0512" ${i}/name ) && ( grep -qE "18" ${i}/id/bustype ); then
+    eventid=$(ls ${i} | grep event[0-9])
+    export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
     export QWS="-touch -qws"
     return
-  elif ( grep -qE "P80H60" ${i}/name ); then
-    export QWS_MOUSE_PROTO="linuxinput:/dev/input/event${i: -1}"
+  elif ( grep -qE "EXC3146|EXC3160|P80H60|P80H100" ${i}/name ) && ( grep -qE "3" ${i}/id/bustype ); then
+    eventid=$(ls ${i} | grep event[0-9])
+    export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
     export QWS="-touch -qws"
     return
-  elif ( grep -qE "ADS7846" ${i}/name ); then
-    export QWS_MOUSE_PROTO="linuxinput:/dev/input/event${i: -1}"
-    export QWS="-touch -qws"
-    return
+  elif ( grep -qEi "USB.*MOUSE" ${i}/name ) && ( grep -qE "3" ${i}/id/bustype ); then
+    eventid=$(ls ${i} | grep event[0-9])
+    export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
+    export QWS="-qws"
   else
     export QWS="-qws"
   fi
 done
+
 }
 
 detect_screen_size () {

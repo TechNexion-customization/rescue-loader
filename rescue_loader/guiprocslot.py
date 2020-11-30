@@ -791,15 +791,17 @@ class detectDeviceSlot(QProcessSlot):
                             iface = 'hdmi'
                             resoln = v.split(',')
 
+                    inch = 0
                     # figure out the screen size from touch panel model name
-                    if any(t in touch for t in ['ep082', 'ep085']):
-                        inch = '5'
-                    elif 'exc3146-31' in touch:
-                        inch = '7'
-                    elif any(t in touch for t in ['exc3146-10', 'exc3000-08']):
-                        inch = '10'
-                    elif 'p80h60' in touch:
-                        inch = '15'
+                    if iface != 'hdmi':
+                        if any(t in touch for t in ['ep082', 'ep085']):
+                            inch = '5'
+                        elif 'exc3146-31' in touch:
+                            inch = '7'
+                        elif any(t in touch for t in ['exc3146-10', 'exc3000-08']):
+                            inch = '10'
+                        elif 'p80h60' in touch:
+                            inch = '15'
                     self.mDisplay = '{}-{}-{}x{}'.format(iface, inch, resoln[0], resoln[1])
                 _logger.warn('{}: display: {}'.format(self.objectName(), self.mDisplay))
 
@@ -1576,6 +1578,8 @@ class crawlWebSlot(QProcessSlot):
             self.mForm = self._findChildWidget('lblForm').text().lower()
         if self.mBoard is None:
             self.mBoard = self._findChildWidget('lblBaseboard').text().lower()
+            if self.mBoard in ['tc0700', 'tc1000']:
+                self.mBoard = 'toucan'
         if self.mDisplay is None:
             self.mDisplay = self._findChildWidget('lblDispConf').text().lower()
 
@@ -1939,6 +1943,8 @@ class chooseBoardSlot(QChooseSlot):
                 if len(singlelist) > 1:
                     # automatically select the one with matching baseboard.
                     baseboard = self._findChildWidget('lblBaseboard').text().lower()
+                    if baseboard in ['tc0700', 'tc1000']:
+                        baseboard = 'toucan'
                     for item in singlelist:
                         item['disable'] = False
                         if baseboard in item['board']:
@@ -2052,7 +2058,7 @@ class chooseDisplaySlot(QChooseSlot):
                     iface, inch, resol = dispconf.split('-')
                     for item in singlelist:
                         item['disable'] = False
-                        if iface in item['ifce_type'] and any(resol in d for d in item['display']):
+                        if iface in item['ifce_type'] and (any(resol in d for d in item['display']) or (iface == 'lvds' and any(inch in d for d in item['display']))):
                             item['chosen'] = True
                 elif len(singlelist) == 1:
                     # if crawlWeb only send 1 item in the inputs, automatically select it.
@@ -2129,7 +2135,7 @@ class chooseDisplaySlot(QChooseSlot):
             disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
             if len(disps) > 0:
                 self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
-        _logger.info('{}: extracted diplay ui list: {}'.format(self.objectName(), self.mDisplayUIList))
+        _logger.info('{}: extracted display ui list: {}'.format(self.objectName(), self.mDisplayUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
