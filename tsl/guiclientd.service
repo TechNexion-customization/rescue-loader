@@ -1,0 +1,10 @@
+[Unit]
+Description=TechNexion Gui Client
+After=dbus.service dbus-sess.service installerd.service network-online.target systemd-networkd-wait-online.service systemd-resolved.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/guiclientd.sh
+
+[Install]
+WantedBy=multi-user.target
