@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="rescue_loader",
-    version="2020.06.30.1",
+    name="tsl",
+    version="2021.01.30.1",
     author="Po Yen Cheng",
     author_email="po.cheng@technexion.com",
     description="Rescue Loader Python Scripts Package",
