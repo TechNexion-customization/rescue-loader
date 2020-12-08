@@ -883,6 +883,11 @@ class WebDownloadActionModeller(BaseActionModeller):
 
             ret = True
         except Exception as ex:
+            # close the block device
+            for ioobj in self.mIOs:
+                _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+                ioobj._close()
+            del self.mIOs
             _logger.error('WebDownload main-action exception: {}'.format(ex))
         return ret
 
