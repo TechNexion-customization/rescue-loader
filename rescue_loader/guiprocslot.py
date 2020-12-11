@@ -766,13 +766,15 @@ class detectDeviceSlot(QProcessSlot):
                         inch = '7'
                     elif 'g080uan01' in iface:
                         inch = '8'
+                    elif 'g101uan02' in iface:
+                        inch = '10'
                     elif 'm101nwwb' in iface:
                         inch = '10'
                     elif 'g156xw01' in iface:
                         inch = '15'
                     else:
                         inch = '0'
-                    self.mDisplay = '{}-{}-{}'.format(iface, inch, resoln)
+                    self.mDisplay = '{}-{}-{}'.format(iface if 'panel-simple-dsi' not in results['interface'] else 'dsi', inch, resoln)
                 elif 'input' in results and 'interface' in results and 'virtual_size' in results:
                     # imx6/7/6ul with multiple displays
                     dictDisp = dict(zip(results['interface'].split('|'), results['virtual_size'].split('|')))

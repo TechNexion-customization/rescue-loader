@@ -29,6 +29,61 @@ do
 done
 }
 
+detect_panel () {
+inch=""
+panelwidth=""
+panelheight=""
+if [ -d /sys/bus/mipi-dsi/devices ]; then
+  for i in /sys/bus/mipi-dsi/devices/*
+  do
+    panel=$(cat ${i}/uevent)
+    case "$panel" in
+    *ili9881c*)
+      # directly connected mipi-dsi panel
+      inch="5"
+      return
+      ;;
+    *g080uan01*)
+      # directly connected mipi-dsi panel
+      inch="8"
+      return
+      ;;
+    *g101uan02*)
+      # directly connected mipi-dsi panel
+      inch="10"
+      return
+      ;;
+    *m101nwwb*)
+      # connected lvds panel
+      inch="10"
+      return
+      ;;
+    *g156xw01*)
+      # connected lvds panel
+      inch="15"
+      return
+      ;;
+    *g215hvn01*)
+      # connected lvds panel
+      inch="21"
+      return
+      ;;
+    *dsi2lvds*)
+      # handles lvds panels via sn65dsi84 MIPI-LVDS bridge.
+      if [ -r ${i}/of_node/panel-width-mm -a -r ${i}/of_node/panel-height-mm ]; then
+        panelwidth="$(( 16#$(hexdump -s2 -e '/1 "%02x"' ${i}/of_node/panel-width-mm | sed s,^0*,,g) ))"
+        panelheight="$(( 16#$(hexdump -s2 -e '/1 "%02x"' ${i}/of_node/panel-height-mm | sed s,^0*,,g) ))"
+        echo "WxH: $panelwidth x $panelheight"
+        return
+      fi
+      ;;
+    *)
+      ;;
+    esac
+  done
+fi
+}
+
 detect_screen_size () {
   fbcount=$(ls -l /sys/class/graphics/fb? | wc -l)
   # filter out overlays and figure out the virtual_size for each fb?
@@ -54,7 +109,7 @@ detect_screen_size () {
   done
 }
 
-detect_multi () {
+setup_multi () {
   # e.g. QWS_DISPLAY="Multi: LinuxFb:/dev/fb0 LinuxFb:/dev/fb2"
   if [ ${#FBS[@]} -gt 1 ]; then
     fbsetting="Multi: "
@@ -63,42 +118,68 @@ detect_multi () {
   fi
 }
 
-detect_transform () {
+setup_transform () {
   # e.g. QWS_DISPLAY="Transformed:rot270:LinuxFb:mmWidth140:mmHeight68:/dev/fb0"
   dimension=""
   for fb in ${FBS[@]}
   do
+    # portraight or landscape
     W=$(cat "/sys/class/graphics/fb${fb}/virtual_size" | cut -d"," -f1)
     H=$(cat "/sys/class/graphics/fb${fb}/virtual_size" | cut -d"," -f2)
     if [ $W -lt $H ]; then
       fbsetting="${fbsetting}Transformed:rot270:"
-      if grep -qE "EP000|EP079|EP082|EP085|EP0510|EP0512" <<< $inputname; then
-        dimension="mmWidth140:mmHeight68:"
-        portraight=${fb}
-      fi
+      portraight=${fb}
+    fi
+
+    #
+    # workout the dimensions for smaller panels for default font size calculation by Qt
+    # W:H ratio are usually 1.6:1 ===> 1.5:1
+    #
+    if [ "$inch" != "" ]; then
+      case "$inch" in
+      5)
+        dimension="mmWidth195:mmHeight110:" # 720x1280
+        ;;
+      8)
+        dimension="mmWidth275:mmHeight172:" # 1200,1920
+        ;;
+      10)
+        dimension="mmWidth347:mmHeight217:" # 1920x1200
+        ;;
+      15)
+        dimension="mmWidth550:mmHeight344:" # 1920x1200
+        ;;
+      21)
+        dimension="mmWidth762:mmHeight476:" # 1920x1200
+        ;;
+      esac
+      return
+    fi
+    if [ "${panelwidth}" != "" -a "${panelheight}" != "" ]; then
+      # 5' : 110(mm)x62(mm)
+      # 7' : 163(mm)x95(mm)
+      # 8' : 172(mm)x107(mm)
+      # 10': 217(mm)x135(mm)
+      # 15': 344(mm)x193(mm)
+      # 21': 476(mm)x268(mm)
+      hh=$panelwidth
+      ww=$(( $panelwidth * $panelwidth / $panelheight ))
+      dimension="mmWidth${ww}:mmHeight${hh}:"
       return
     fi
   done
 }
 
-display_setting () {
+setup_display () {
   if [ -n $fbmain ]; then
-    if [ "$fbmain" = "$portraight" ]; then
-        fbsetting="${fbsetting}LinuxFb:${dimension}/dev/fb${fbmain} "
-    else
-        fbsetting="${fbsetting}LinuxFb:/dev/fb${fbmain} "
-    fi
+    fbsetting="${fbsetting}LinuxFb:${dimension}/dev/fb${fbmain} "
   fi
   for fb in ${FBS[@]}
   do
     if [ "$fb" = "$fbmain" ]; then
       continue
     fi
-    if [ "$fb" = "$portraight" ]; then
-        fbsetting="${fbsetting}LinuxFb:${dimension}/dev/fb${fb} "
-    else
-        fbsetting="${fbsetting}LinuxFb:/dev/fb${fb} "
-    fi
+    fbsetting="${fbsetting}LinuxFb:${dimension}/dev/fb${fb} "
   done
 }
 
@@ -107,10 +188,11 @@ display_setting () {
 #
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/dbus/session_bus_socket"
 detect_touch
+detect_panel
 detect_screen_size
-detect_multi
-detect_transform
-display_setting
+setup_multi
+setup_transform
+setup_display
 
 qwsdisp=$(echo "${fbsetting}" | xargs)
 export QWS_DISPLAY="$qwsdisp"
