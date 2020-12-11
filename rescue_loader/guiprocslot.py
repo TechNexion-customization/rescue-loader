@@ -760,6 +760,7 @@ class detectDeviceSlot(QProcessSlot):
 
                     # figure out the screen size from panel interface name
                     if 'ili9881c' in iface:
+                        iface = iface.replace('ili9881c', '').strip('-')
                         inch = '5'
                     elif 'hj070na' in iface:
                         inch = '7'
