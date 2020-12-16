@@ -79,8 +79,8 @@ def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
 def _insertToContainer(lstResult, qContainer, qSignal):
     def match_data(data):
         for item in qContainer.findItems('.*', QtCore.Qt.MatchRegExp):
-            _logger.debug('match row: {} => item: {} qContainer: {}'.format(data, item.data(QtCore.Qt.UserRole), qContainer.objectName()))
             if item.data(QtCore.Qt.UserRole)['name'] == data['name']:
+                _logger.debug('matched row: {} => item: {} qContainer: {}'.format(data, item.data(QtCore.Qt.UserRole), qContainer.objectName()))
                 return item
         return None
     """
@@ -1730,7 +1730,6 @@ class QChooseSlot(QProcessSlot):
     def _filterList(self, key, pick, parsedUIList, origList):
 
         def enableList(key, parsedUIList, enabledSet):
-            _logger.info('{}: Enable following ui: {}'.format(self.objectName(), enabledSet))
             if parsedUIList is not None:
                 for ui in parsedUIList:
                     if ui[key] is not None:
@@ -1759,6 +1758,7 @@ class QChooseSlot(QProcessSlot):
         enabledSet = list(set(enabled))
         _logger.debug('{}: Enabled set: {}'.format(self.objectName(), enabledSet))
         enableList(key, parsedUIList, enabledSet)
+        _logger.info('{}: Enable following ui: {}'.format(self.objectName(), list(item for item in parsedUIList if item['disable'] == False)))
 
     def _updateDisplay(self):
         self._findChildWidget('tabFooter').show()
@@ -1808,7 +1808,7 @@ class chooseOSSlot(QChooseSlot):
             if self.mOSUIList is not None and len(self.mOSUIList) == 1:
                 # if crawlWeb only send 1 item in the inputs, automatically select it.
                 singlelist = list(ui for ui in self.mOSUIList)
-                for item in self.singlelist:
+                for item in singlelist:
                     item['disable'] = False
                     item['chosen'] = True
                 _insertToContainer(singlelist, self.mLstWgtOS, self.mLstWgtOS.itemClicked)
@@ -1823,6 +1823,7 @@ class chooseOSSlot(QChooseSlot):
                 _logger.info('self:{} sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 self._filterList('os', self.mPick, self.mOSUIList, self.mResults)
+                self._filterList('ver', self.mPick, self.mOSUIList, self.mResults)
                 _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
                 if 'edm' in self._findChildWidget('lblForm').text().lower() and self.mOSUIList is not None and len(self.mOSUIList) == 1 and inputs['os'] is None:
                     self.finish.emit()
@@ -1877,7 +1878,7 @@ class chooseOSSlot(QChooseSlot):
         # come up with a new list to send to GUI container, i.e. QListWidget
         #self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
         self.mOSUIList = list({'name': '{}-{}'.format(item['os'], item['ver']), 'os': item['os'], 'ver': item['ver'], 'disable': False} for item in self.mOSNames)
-        _logger.info('{}: extracted os ui list: {} '.format(self.objectName(), self.mOSUIList))
+        _logger.info('{}: extracted ui list: {} '.format(self.objectName(), self.mOSUIList))
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
@@ -2007,7 +2008,7 @@ class chooseBoardSlot(QChooseSlot):
         self.mBoardNames = set(dlfile['board'] for dlfile in self.mResults if ('board' in dlfile))
         # come up with a new list to send to GUI container, i.e. QListWidget
         self.mBoardUIList = list({'name': name, 'board': name, 'disable': False} for name in self.mBoardNames)
-        _logger.info('{}: extracted board ui list: {}'.format(self.objectName(), self.mBoardUIList))
+        _logger.info('{}: extracted ui list: {}'.format(self.objectName(), self.mBoardUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
@@ -2141,7 +2142,7 @@ class chooseDisplaySlot(QChooseSlot):
             disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
             if len(disps) > 0:
                 self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
-        _logger.info('{}: extracted display ui list: {}'.format(self.objectName(), self.mDisplayUIList))
+        _logger.info('{}: extracted ui list: {}'.format(self.objectName(), self.mDisplayUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
