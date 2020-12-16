@@ -744,7 +744,7 @@ class detectDeviceSlot(QProcessSlot):
                     if self.mForm != frm:
                         self.mForm = frm
             if 'target' in results and results['target'] == 'display':
-                if 'interface' in results and 'mode' in results:
+                if 'interface' in results:
                     # Figure out the display from udev subsystem:drm/mipi-dsi
                     # results['mode'] is the modes supported in subsystem='drm' udev
                     # e.g. 720x1280, or 1920x1080\n1920x1080\n1280x720\n1280x720\n1440x576\n1440x480\n720x576\n720x480
@@ -756,7 +756,11 @@ class detectDeviceSlot(QProcessSlot):
                         iface = 'hdmi'
                     else:
                         iface = results['interface']
-                    resoln = results['mode'].split(' ')[0]
+
+                    if 'mode' in results:
+                        resoln = results['mode'].split(' ')[0]
+                    elif 'virtual_size' in results:
+                        resoln = results['virtual_size'].replace(',', 'x')
 
                     # figure out the screen size from panel interface name
                     if 'ili9881c' in iface:
@@ -2978,7 +2982,7 @@ class postDownloadSlot(QProcessSlot):
     def _recoverRescue(self):
         # copy back the backed up /tmp/rescue.img to target eMMC
         self._findChildWidget('wgtProgress').show()
-        self.mLblProgramming.setText("Recovering technexion software loader\n")
+        self.mLblProgramming.setText("Recovering TechNexion software loader\n")
         self.mLblRemain.setText('--:--(s) remaining')
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
