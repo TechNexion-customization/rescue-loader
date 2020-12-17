@@ -847,7 +847,7 @@ class WebDownloadActionModeller(BaseActionModeller):
                         if not self.checkInterruptAndExit():
                             self.__copyChunk(srcaddr, tgtaddr, 1, skip=True)
                         else:
-                            raise InterruptedError('User Interrupt to cancel running process')
+                            raise InterruptedError('User Interrupt to cancel copy chunk process')
                     ret = True
             else:
                 # otherwise use shell subprocess Popen to dd
@@ -938,27 +938,23 @@ class WebDownloadActionModeller(BaseActionModeller):
                 self.mResult['eta'] = eta
 
     def __copyChunk(self, srcaddr, tgtaddr, numChunks, skip=False):
-        try:
-            written = 0
-            # read src and write to the target
-            data = self.mIOs[0].Read(srcaddr, numChunks)
-            self.mResult['bytes_read'] += len(data)
-            if skip and self.mResult['bytes_written'] <= (self.mParam['src_start_sector'] * 512):
-                # skip writing 1st boot partition until the end, since urllib.request.urlopen()
-                # does not support seek to go back to beginning of file. we need to
-                # dump the data to a file using FileInputOutput
-                written = self.mIOs[2].Write(data, self.mResult['bytes_written'])
-                self.mPartWritten += written
-            else:
-                written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
-                _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
-            # write should return number of bytes written
-            if (written) > 0:
-                self.mResult['bytes_written'] += written
-            del data # hopefully this would clear the write data buffer
-
-        except Exception:
-            raise
+        written = 0
+        # read src and write to the target
+        data = self.mIOs[0].Read(srcaddr, numChunks)
+        self.mResult['bytes_read'] += len(data)
+        if skip and self.mResult['bytes_written'] <= (self.mParam['src_start_sector'] * 512):
+            # skip writing 1st boot partition until the end, since urllib.request.urlopen()
+            # does not support seek to go back to beginning of file. we need to
+            # dump the data to a file using FileInputOutput
+            written = self.mIOs[2].Write(data, self.mResult['bytes_written'])
+            self.mPartWritten += written
+        else:
+            written = self.mIOs[1].Write(data, self.mResult['bytes_written'])
+            _logger.debug('read: @{} size:{}, written: @{} size:{}'.format(hex(srcaddr), len(data), hex(self.mResult['bytes_written']), written))
+        # write should return number of bytes written
+        if (written) > 0:
+            self.mResult['bytes_written'] += written
+        del data # hopefully this would clear the write data buffer
 
     def __ddChunk(self, wgetcmd, decompcmd, ddcmd):
         def read_stream(fd):
@@ -979,68 +975,67 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
 
         ret = False
-        try:
-            timeout_counter = 0
-            last_written =  0
-            fd = open('/tmp/progress.log', 'w+')
-            _logger.info('ddChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
-            pwget = subprocess.Popen(
-                [wgetcmd],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-            )
-            pxz = subprocess.Popen(
-                [decompcmd],
-                stdin=pwget.stdout,
-                stdout=subprocess.PIPE,
-                shell=True,
-            )
-            pdd = subprocess.Popen(
-                [ddcmd],
-                stdin=pxz.stdout,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-            )
-            fd.flush()
-            ptee = subprocess.Popen(
-                ['tee'],
-                stdin=pdd.stderr,
-                stdout=fd,
-                shell=True,
-            )
-            self.__pddpid = pdd.pid
-            while True:
-                try:
-                    out, err = ptee.communicate(timeout=1)
-                    ret = True
-                    break
-                except subprocess.TimeoutExpired as ex:
-                    self.__signal_subproc(pdd)
-                    if self.checkInterruptAndExit():
-                        self.__kill_subproc([pwget, pxz, pdd, ptee])
-                        raise InterruptedError('User Interrupt to cancel running process')
-                    elif timeout_counter > 180: # timed out after 3 minutes
-                        self.__kill_subproc([pwget, pxz, pdd, ptee])
-                        raise ex
+        timeout_counter = 0
+        last_written =  0
+        fd = open('/tmp/progress.log', 'w+')
+        _logger.info('ddChunk: {}, {}, {}'.format(wgetcmd, decompcmd, ddcmd))
+        pwget = subprocess.Popen(
+            [wgetcmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
+        pxz = subprocess.Popen(
+            [decompcmd],
+            stdin=pwget.stdout,
+            stdout=subprocess.PIPE,
+            shell=True,
+        )
+        pdd = subprocess.Popen(
+            [ddcmd],
+            stdin=pxz.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
+        fd.flush()
+        ptee = subprocess.Popen(
+            ['tee'],
+            stdin=pdd.stderr,
+            stdout=fd,
+            shell=True,
+        )
+        self.__pddpid = pdd.pid
+        while True:
+            try:
+                out, err = ptee.communicate(timeout=1)
+                ret = True
+                break
+            except subprocess.TimeoutExpired as ex:
+                self.__signal_subproc(pdd)
+                if self.checkInterruptAndExit():
+                    self.__kill_subproc([pwget, pxz, pdd, ptee])
+                    # Work around for failing to catch exception at _mainAction when flashing android images
+                    for ioobj in self.mIOs:
+                        ioobj._close()
+                    raise InterruptedError('User Interrupt to cancel dd chunk process')
+                elif timeout_counter > 180: # timed out after 3 minutes
+                    self.__kill_subproc([pwget, pxz, pdd, ptee])
+                    raise ex
+                else:
+                    _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
+                    if read_stream(fd) and last_written != self.mResult['bytes_written']:
+                        last_written = self.mResult['bytes_written']
+                        timeout_counter = 0
                     else:
-                        _logger.info('last written:{} bytes_written: {} timeout_counter: {}'.format(last_written, self.mResult['bytes_written'], timeout_counter))
-                        if read_stream(fd) and last_written != self.mResult['bytes_written']:
-                            last_written = self.mResult['bytes_written']
-                            timeout_counter = 0
-                        else:
-                            timeout_counter += 1
-                        continue
-                except:
-                    read_stream(fd)
-                    fd.close()
-                    raise BlockingIOError('Subprocess Popen failed')
-            read_stream(fd)
-            fd.close()
-
-        except Exception:
-            raise
+                        timeout_counter += 1
+                    continue
+            except:
+                read_stream(fd)
+                fd.close()
+                raise BlockingIOError('Subprocess Popen failed')
+        read_stream(fd)
+        fd.close()
 
         return ret
 
