@@ -754,6 +754,8 @@ class detectDeviceSlot(QProcessSlot):
                         iface = results['uevent']
                     elif 'hdp' in results['interface'] and 'i.mx8' in results['interface']:
                         iface = 'hdmi'
+                    elif 'lcd' in results['interface']:
+                        iface = 'ttl'
                     else:
                         iface = results['interface']
 
@@ -2067,6 +2069,8 @@ class chooseDisplaySlot(QChooseSlot):
                         item['disable'] = False
                         if iface in item['ifce_type'] and (any(resol in d for d in item['display']) or (iface == 'lvds' and any(inch in d for d in item['display']))):
                             item['chosen'] = True
+                        elif iface in item['ifce_type'] and iface == 'hdmi':
+                            item['chosen'] = True
                 elif len(singlelist) == 1:
                     # if crawlWeb only send 1 item in the inputs, automatically select it.
                     for item in singlelist:
@@ -2127,12 +2131,16 @@ class chooseDisplaySlot(QChooseSlot):
                 iftype = 'lvds' if any (sz in self._findChildWidget('lblForm').text().lower() for sz in ['edm']) else 'ttl'
             elif any(sz in name for sz in ['101', '150']):
                 iftype = 'lvds'
+            elif any(sz in name for sz in ['lvds']):
+                iftype = 'lvds'
             elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
                 iftype = 'dpi' if 'dpi' in name else 'dsi'
             elif any(sz in name for sz in ['hdmi']):
                 iftype = 'hdmi'
-            else:
+            elif any(sz in name for sz in ['vga']):
                 iftype = 'vga'
+            else:
+                iftype = 'ttl'
 
             if iftype is not None:
                 lstTemp.append({'name': name, 'display': name, 'ifce_type': iftype, 'disable': False})
