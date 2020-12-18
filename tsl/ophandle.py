@@ -551,7 +551,7 @@ class DownloadOperationHandler(BaseOperationHandler):
             if 'mem_free' in OpParams and int(OpParams['mem_free']) < (700 * 1024 * 1024):
                 self.mActionParam['use_dd'] = True
             else:
-                self.mActionParam['use_dd'] = False
+                self.mActionParam['use_dd'] = True
 
             if all(s in OpParams for s in self.mArgs):
                 # check for download from web and flash to target file

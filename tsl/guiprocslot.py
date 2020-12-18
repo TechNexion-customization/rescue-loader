@@ -79,8 +79,8 @@ def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
 def _insertToContainer(lstResult, qContainer, qSignal):
     def match_data(data):
         for item in qContainer.findItems('.*', QtCore.Qt.MatchRegExp):
-            _logger.debug('match row: {} => item: {} qContainer: {}'.format(data, item.data(QtCore.Qt.UserRole), qContainer.objectName()))
             if item.data(QtCore.Qt.UserRole)['name'] == data['name']:
+                _logger.debug('matched row: {} => item: {} qContainer: {}'.format(data, item.data(QtCore.Qt.UserRole), qContainer.objectName()))
                 return item
         return None
     """
@@ -744,7 +744,7 @@ class detectDeviceSlot(QProcessSlot):
                     if self.mForm != frm:
                         self.mForm = frm
             if 'target' in results and results['target'] == 'display':
-                if 'interface' in results and 'mode' in results:
+                if 'interface' in results:
                     # Figure out the display from udev subsystem:drm/mipi-dsi
                     # results['mode'] is the modes supported in subsystem='drm' udev
                     # e.g. 720x1280, or 1920x1080\n1920x1080\n1280x720\n1280x720\n1440x576\n1440x480\n720x576\n720x480
@@ -758,22 +758,29 @@ class detectDeviceSlot(QProcessSlot):
                         iface = 'ttl'
                     else:
                         iface = results['interface']
-                    resoln = results['mode'].split(' ')[0]
+
+                    if 'mode' in results:
+                        resoln = results['mode'].split(' ')[0]
+                    elif 'virtual_size' in results:
+                        resoln = results['virtual_size'].replace(',', 'x')
 
                     # figure out the screen size from panel interface name
                     if 'ili9881c' in iface:
+                        iface = iface.replace('ili9881c', '').strip('-')
                         inch = '5'
                     elif 'hj070na' in iface:
                         inch = '7'
                     elif 'g080uan01' in iface:
                         inch = '8'
+                    elif 'g101uan02' in iface:
+                        inch = '10'
                     elif 'm101nwwb' in iface:
                         inch = '10'
                     elif 'g156xw01' in iface:
                         inch = '15'
                     else:
                         inch = '0'
-                    self.mDisplay = '{}-{}-{}'.format(iface, inch, resoln)
+                    self.mDisplay = '{}-{}-{}'.format(iface if 'panel-simple-dsi' not in results['interface'] else 'dsi', inch, resoln)
                 elif 'input' in results and 'interface' in results and 'virtual_size' in results:
                     # imx6/7/6ul with multiple displays
                     dictDisp = dict(zip(results['interface'].split('|'), results['virtual_size'].split('|')))
@@ -1537,7 +1544,7 @@ class crawlWebSlot(QProcessSlot):
                                 if pobj is not None:
                                     _logger.debug('internet item path: {}'.format(pobj.path))
                                     # match against the CPU and FORM to improve crawling speed
-                                    if self.__matchSOM(pobj.path):
+                                    if self.__matchDevice(pobj.path):
                                         self.__crawlUrl({'cmd': results['cmd'], 'target':self.mHostName, 'location':pobj.path})
                             elif item[2].endswith('.xz'):
                                 # match against the target device, and send request to obtain uncompressed size
@@ -1571,17 +1578,6 @@ class crawlWebSlot(QProcessSlot):
         except:
             return None
 
-    def __matchSOM(self, urlpath):
-        if self.mCpu is None:
-            self.mCpu = self._findChildWidget('lblCpu').text().lower()
-        if self.mForm is None:
-            self.mForm = self._findChildWidget('lblForm').text().lower()
-        # step 2: find menu items that matches as cpu, form
-        if self.mCpu in urlpath.lower() and self.mForm in urlpath.lower():
-            # exact match of cpu and form in url path
-            return True
-        return False
-
     def __matchDevice(self, filename):
         # get the default cpu, form and board setting from detectDevice
         if self.mCpu is None:
@@ -1595,7 +1591,7 @@ class crawlWebSlot(QProcessSlot):
         if self.mDisplay is None:
             self.mDisplay = self._findChildWidget('lblDispConf').text().lower()
 
-        _logger.debug('{}: matching xzfile: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
+        _logger.debug('{}: matching url: {} to cpu: {} form: {}'.format(self.objectName(), filename, self.mCpu, self.mForm))
 
         # step 2: find menu items that matches as cpu, form, but not baseboard
         if self.mCpu in filename.lower() and self.mForm in filename.lower():
@@ -1605,10 +1601,11 @@ class crawlWebSlot(QProcessSlot):
             else:
                 return True
         else:
-            if self.mCpu.lower() == 'imx6ul' or self.mCpu.lower() == 'imx6ull' or self.mCpu[0:4].lower() == 'imx8':
-                return False
-            if self.mCpu[0:4] in filename.lower():
-                if self.mForm.lower() in filename.lower():
+            if any(cpu == self.mCpu for cpu in ['imx6ul', 'imx6ull']) and 'imx6ul' in filename.lower():
+                if self.mForm in filename.lower():
+                    return True
+            if self.mCpu == 'imx7d' and 'imx7' in filename.lower():
+                if self.mForm in filename.lower():
                     return True
         return False
 
@@ -1735,7 +1732,6 @@ class QChooseSlot(QProcessSlot):
     def _filterList(self, key, pick, parsedUIList, origList):
 
         def enableList(key, parsedUIList, enabledSet):
-            _logger.info('{}: Enable following ui: {}'.format(self.objectName(), enabledSet))
             if parsedUIList is not None:
                 for ui in parsedUIList:
                     if ui[key] is not None:
@@ -1764,6 +1760,7 @@ class QChooseSlot(QProcessSlot):
         enabledSet = list(set(enabled))
         _logger.debug('{}: Enabled set: {}'.format(self.objectName(), enabledSet))
         enableList(key, parsedUIList, enabledSet)
+        _logger.info('{}: Enable following ui: {}'.format(self.objectName(), list(item for item in parsedUIList if item['disable'] == False)))
 
     def _updateDisplay(self):
         self._findChildWidget('tabFooter').show()
@@ -1828,6 +1825,7 @@ class chooseOSSlot(QChooseSlot):
                 _logger.info('self:{} sender:{}, old pick:{}, new pick:{}'.format(self.objectName(), self.sender().objectName(), self.mPick, inputs))
                 self.mPick.update(inputs)
                 self._filterList('os', self.mPick, self.mOSUIList, self.mResults)
+                self._filterList('ver', self.mPick, self.mOSUIList, self.mResults)
                 _insertToContainer(self.mOSUIList, self.mLstWgtOS, None)
                 if 'edm' in self._findChildWidget('lblForm').text().lower() and self.mOSUIList is not None and len(self.mOSUIList) == 1 and inputs['os'] is None:
                     self.finish.emit()
@@ -1882,7 +1880,7 @@ class chooseOSSlot(QChooseSlot):
         # come up with a new list to send to GUI container, i.e. QListWidget
         #self.mOSUIList = list({'name': name, 'os': name, 'disable': False} for name in self.mOSNames)
         self.mOSUIList = list({'name': '{}-{}'.format(item['os'], item['ver']), 'os': item['os'], 'ver': item['ver'], 'disable': False} for item in self.mOSNames)
-        _logger.info('{}: extracted os ui list: {} '.format(self.objectName(), self.mOSUIList))
+        _logger.info('{}: extracted ui list: {} '.format(self.objectName(), self.mOSUIList))
 
     def __extractLatestVersion(self):
         def parseVersion(strVersion):
@@ -2012,7 +2010,7 @@ class chooseBoardSlot(QChooseSlot):
         self.mBoardNames = set(dlfile['board'] for dlfile in self.mResults if ('board' in dlfile))
         # come up with a new list to send to GUI container, i.e. QListWidget
         self.mBoardUIList = list({'name': name, 'board': name, 'disable': False} for name in self.mBoardNames)
-        _logger.info('{}: extracted board ui list: {}'.format(self.objectName(), self.mBoardUIList))
+        _logger.info('{}: extracted ui list: {}'.format(self.objectName(), self.mBoardUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
@@ -2070,6 +2068,8 @@ class chooseDisplaySlot(QChooseSlot):
                     for item in singlelist:
                         item['disable'] = False
                         if iface in item['ifce_type'] and (any(resol in d for d in item['display']) or (iface == 'lvds' and any(inch in d for d in item['display']))):
+                            item['chosen'] = True
+                        elif iface in item['ifce_type'] and iface == 'hdmi':
                             item['chosen'] = True
                 elif len(singlelist) == 1:
                     # if crawlWeb only send 1 item in the inputs, automatically select it.
@@ -2131,12 +2131,16 @@ class chooseDisplaySlot(QChooseSlot):
                 iftype = 'lvds' if any (sz in self._findChildWidget('lblForm').text().lower() for sz in ['edm']) else 'ttl'
             elif any(sz in name for sz in ['101', '150']):
                 iftype = 'lvds'
+            elif any(sz in name for sz in ['lvds']):
+                iftype = 'lvds'
             elif any(sz in name for sz in ['mipi', 'dsi', 'dpi']):
                 iftype = 'dpi' if 'dpi' in name else 'dsi'
             elif any(sz in name for sz in ['hdmi']):
                 iftype = 'hdmi'
-            else:
+            elif any(sz in name for sz in ['vga']):
                 iftype = 'vga'
+            else:
+                iftype = 'ttl'
 
             if iftype is not None:
                 lstTemp.append({'name': name, 'display': name, 'ifce_type': iftype, 'disable': False})
@@ -2146,7 +2150,7 @@ class chooseDisplaySlot(QChooseSlot):
             disps = list(l['name'] for l in lstTemp if (l['ifce_type'] == t))
             if len(disps) > 0:
                 self.mDisplayUIList.append({'name': t, 'display': disps, 'ifce_type': t, 'disable': False})
-        _logger.info('{}: extracted display ui list: {}'.format(self.objectName(), self.mDisplayUIList))
+        _logger.info('{}: extracted ui list: {}'.format(self.objectName(), self.mDisplayUIList))
 
     # NOTE: Not using the resultSlot() and in turn parseResult(), because we did not send a request via DBus
     # to get results from installerd
@@ -2991,7 +2995,7 @@ class postDownloadSlot(QProcessSlot):
     def _recoverRescue(self):
         # copy back the backed up /tmp/rescue.img to target eMMC
         self._findChildWidget('wgtProgress').show()
-        self.mLblProgramming.setText("Recovering technexion software loader\n")
+        self.mLblProgramming.setText("Recovering TechNexion software loader\n")
         self.mLblRemain.setText('--:--(s) remaining')
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
