@@ -932,8 +932,7 @@ class GuiViewer(QObject, BaseViewer):
     def show(self, scnRect):
         if isinstance(self.mGuiRootWidget, QtGui.QWidget):
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
-            pixmap = QtGui.QIcon(':res/images/tn_bg.svg').pixmap(QtCore.QSize(scnRect.width() * 4, scnRect.height() * 4)).scaled(QtCore.QSize(scnRect.width(), scnRect.height()), QtCore.Qt.IgnoreAspectRatio)
-            brush = QtGui.QBrush(pixmap)
+            brush = QtGui.QBrush(QtGui.QColor(16, 55, 112))
             palette.setBrush(QtGui.QPalette.Window, brush)
             txtbrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
             palette.setBrush(QtGui.QPalette.WindowText, txtbrush)
