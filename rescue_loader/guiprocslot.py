@@ -2673,23 +2673,20 @@ class downloadImageSlot(QProcessSlot):
 
     def __checkBeforeFlash(self):
         cpu = self._findChildWidget('lblCpu').text().lower()
-        if self.mPick['os'] == 'android' and 'imx7' in cpu:
-            self.sendError({'NoResource': True, 'ask': 'continue'})
+        self.__parseUserPassFromHosts()
+        self.__parsePartSize()
+        _logger.info('{}: download from {} (login {}:{}) of {} sectors and flash to {} using {} free memory'.format(self.objectName(), self.mFileUrl, self.mUsername, self.mPassword, self.mPartSize, self.mTgtStorage, self.mMemFree))
+        if self.mPartSize > 0:
+            self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'src_start_sector': '{}'.format(self.mPartSize), 'dl_username': self.mUsername, 'dl_password': self.mPassword})
         else:
-            self.__parseUserPassFromHosts()
-            self.__parsePartSize()
-            _logger.info('{}: download from {} (login {}:{}) of {} sectors and flash to {} using {} free memory'.format(self.objectName(), self.mFileUrl, self.mUsername, self.mPassword, self.mPartSize, self.mTgtStorage, self.mMemFree))
-            if self.mPartSize > 0:
-                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'src_start_sector': '{}'.format(self.mPartSize), 'dl_username': self.mUsername, 'dl_password': self.mPassword})
-            else:
-                self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'dl_username': self.mUsername, 'dl_password': self.mPassword})
+            self.sendCommand({'cmd': 'download', 'dl_url': self.mFileUrl, 'tgt_filename': self.mTgtStorage, 'mem_free': self.mMemFree, 'dl_username': self.mUsername, 'dl_password': self.mPassword})
 
-            # Start a timer to query results every 1 second and set flash flag
-            if self.mTimerId is None:
-                self.mTimerId = self.startTimer(1000) # 1000 ms
-            self.mFlashFlag = True
-            # show/hide GUI components
-            self._updateDisplay()
+        # Start a timer to query results every 1 second and set flash flag
+        if self.mTimerId is None:
+            self.mTimerId = self.startTimer(1000) # 1000 ms
+        self.mFlashFlag = True
+        # show/hide GUI components
+        self._updateDisplay()
 
     def __retryAlternativeServer(self):
         if self.mAlternativeFlag:
