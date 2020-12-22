@@ -102,6 +102,10 @@ detect_screen_size () {
         W=$dW
         H=$dH
         fbmain=$count
+      fi
+      if grep -q "BG" "/sys/class/graphics/fb${count}/name"; then
+        FBS+=( $count )
+      elif [ -d /sys/bus/mipi-dsi/devices ]; then
         FBS+=( $count )
       fi
     fi
