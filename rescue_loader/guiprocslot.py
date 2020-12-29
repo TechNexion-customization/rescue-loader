@@ -2885,6 +2885,13 @@ class downloadImageSlot(QProcessSlot):
         self.mLblDownloadFlash.setStyleSheet('color: red; font-weight: bold;')
         self.mLblDownloadFlash.setText('Do not power off the device')
         self.mLblDownloadFlash.show()
+        # disable footer buttons
+        self._findChildWidget('btnSelOS').setDisabled(True)
+        self._findChildWidget('btnSelOSIcon').setDisabled(True)
+        self._findChildWidget('btnSelBaseboard').setDisabled(True)
+        self._findChildWidget('btnSelBaseboardIcon').setDisabled(True)
+        self._findChildWidget('btnSelDisplay').setDisabled(True)
+        self._findChildWidget('btnSelDisplayIcon').setDisabled(True)
 
     def timerEvent(self, event):
         # query the processing result from server
