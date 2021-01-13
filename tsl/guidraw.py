@@ -49,7 +49,8 @@
 
 from view import CliViewer
 from guiprocslot import QProcessSlot, QWaitingIndicator, QMessageDialog
-from PyQt5 import QtGui, QtCore, QtSvg
+from PyQt5 import QtGui, QtCore, QtSvg, QtWidgets
+from PyQt5.QtWidgets import QDialog
 
 # import our resources.py with all the pretty images/icons
 import ui_res
@@ -65,12 +66,12 @@ except AttributeError:
         return s
 
 try:
-    _encoding = QtGui.QApplication.UnicodeUTF8
+    _encoding = QtWidgets.QApplication.UnicodeUTF8
     def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+        return QtWidgets.QApplication.translate(context, text, disambig, _encoding)
 except AttributeError:
     def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig)
+        return QtWidgets.QApplication.translate(context, text, disambig)
 
 def _convertList(prop):
     # turn properties dict into a list for looping
@@ -144,7 +145,7 @@ class GuiDraw(object):
             else:
                 # No existing mapping, create one
 
-                _logger.debug('class:{} parent:{} hasattr {}'.format(confdict['class'], parent, hasattr(QtGui, confdict['class'])))
+                _logger.debug('class:{} parent:{} hasattr {}'.format(confdict['class'], parent, hasattr(QtWidgets, confdict['class'])))
                 if confdict['class'] == 'QProcessSlot':
                     # Include additional custom slots/signals per widgets from QtDesigner
                     # create the QProcessSlot's sub class object
@@ -161,12 +162,12 @@ class GuiDraw(object):
                     _logger.debug('GenUI: create: ({}){} parent: {}'.format(confdict['class'], confdict['name'], parent.objectName() if parent is not None else 'None'))
                     cls.clsGuiDraws.update({confdict['name']: QMessageDialog(parent)})
 
-                elif hasattr(QtGui, confdict['class']) or hasattr(QtSvg, confdict['class']) or confdict['class'] == 'Line':
+                elif hasattr(QtWidgets, confdict['class']) or hasattr(QtSvg, confdict['class']) or confdict['class'] == 'Line':
                     # DIRTY HACK for drawing h/v line in QtDesigner with condition checking confdict['class'] == 'Line'
 
                     if parent is None:
                         # dynamically add additional class variable, 'initialised' to the root gui class using build-in type()
-                        subcls = type(confdict['class'], (getattr(QtGui, confdict['class']),), dict(initialised = QtCore.pyqtSignal([dict])))
+                        subcls = type(confdict['class'], (getattr(QtWidgets, confdict['class']),), dict(initialised = QtCore.pyqtSignal([dict])))
                     elif hasattr(QtSvg, confdict['class']):
                         subcls = getattr(QtSvg, confdict['class'])
                     else:
@@ -174,9 +175,9 @@ class GuiDraw(object):
                         if confdict['class'] == 'Line':
                             # DIRTY HACK!!! for drawing h/v line in QtDesigner
                             # we use QFrame to draw line
-                            subcls = getattr(QtGui, 'QFrame')
+                            subcls = getattr(QtWidgets, 'QFrame')
                         else:
-                            subcls = getattr(QtGui, confdict['class'])
+                            subcls = getattr(QtWidgets, confdict['class'])
 
                     if confdict['class'] == subcls.__name__:
                         _logger.info('GenUI: has subcls: {}'.format(subcls))
@@ -203,7 +204,7 @@ class GuiDraw(object):
                     # You can nest layouts using addLayout() on a layout (boxlayout/gridlayout);
                     # the inner layout then becomes a child of the layout it is inserted into.
                     #
-                    if isinstance(parent, QtGui.QLayout):
+                    if isinstance(parent, QtWidgets.QLayout):
                         _logger.debug('parent layout adding child layout/widget with config dict: {}'.format(confdict))
                         # create GUI subclass object references
                         _logger.debug('GenUI: create subclass({}) obj ref: {}'.format(confdict['class'], confdict['name']))
@@ -211,10 +212,10 @@ class GuiDraw(object):
                         # then add the child widgets to the layout, these widgets will be re-parent-ed
                         cls.clsGuiDraws.update({confdict['name']: subcls()})
 
-                        if isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QLayout):
+                        if isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QLayout):
                             # Add the newly created child layout to the parent layout
                             _logger.debug('GenUI: parent: {} adds {} layout'.format(parent.objectName(), confdict['name']))
-                            if isinstance(parent, QtGui.QGridLayout):
+                            if isinstance(parent, QtWidgets.QGridLayout):
                                 # For parent as grid layouts, addLayout() requires additional
                                 # row, column, rowspan, and colspan (and alignment)
                                 # e.g. parent.addLayout(r, c, rs, cs, l)
@@ -226,13 +227,13 @@ class GuiDraw(object):
                                     parent.addLayout(cls.clsGuiDraws[confdict['name']], r, c, rs, cs, _getAlignment(confdict['alignment']))
                                 else:
                                     parent.addLayout(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
-                            elif isinstance(parent, QtGui.QBoxLayout):
+                            elif isinstance(parent, QtWidgets.QBoxLayout):
                                 parent.addLayout(cls.clsGuiDraws[confdict['name']])
 
-                        elif isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QWidget):
+                        elif isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QWidget):
                             # Add the newly created child widget to the parent layout
                             _logger.debug('GenUI: parent: {} adds {} widget'.format(parent.objectName(), confdict['name']))
-                            if isinstance(parent, QtGui.QGridLayout):
+                            if isinstance(parent, QtWidgets.QGridLayout):
                                 # For parent as grid layouts, addWidget() requires additional
                                 # row, column, rowspan, and colspan (and alignment)
                                 # e.g. parent.addWidget(r, c, rs, cs, l)
@@ -244,7 +245,7 @@ class GuiDraw(object):
                                     parent.addWidget(cls.clsGuiDraws[confdict['name']], r, c, rs, cs, _getAlignment(confdict['alignment']))
                                 else:
                                     parent.addWidget(cls.clsGuiDraws[confdict['name']], r, c, rs, cs)
-                            elif isinstance(parent, QtGui.QBoxLayout):
+                            elif isinstance(parent, QtWidgets.QBoxLayout):
                                 parent.addWidget(cls.clsGuiDraws[confdict['name']])
 
                     else:
@@ -252,15 +253,15 @@ class GuiDraw(object):
                         # cls.clsGuiDraws.update({confdict['name']: subcls(confdict, parent)})
                         cls.clsGuiDraws.update({confdict['name']: subcls(parent)})
 
-                        if isinstance(parent, QtGui.QTabWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QWidget):
+                        if isinstance(parent, QtWidgets.QTabWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QWidget):
                             # add tab page widget to the parent TabWidget
                             _logger.debug('GenUI: parent: {} adds tab widget: {}'.format(parent.objectName(), confdict['name']))
                             parent.addTab(cls.clsGuiDraws[confdict['name']], _fromUtf8(confdict['name']))
-                        elif isinstance(parent, QtGui.QWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QLayout):
+                        elif isinstance(parent, QtWidgets.QWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QLayout):
                             # add layout to the parent widget
                             _logger.debug('GenUI: parent: {} sets layout: {}'.format(parent.objectName(), confdict['name']))
                             parent.setLayout(cls.clsGuiDraws[confdict['name']])
-                        elif isinstance(parent, QtGui.QWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QWidget):
+                        elif isinstance(parent, QtWidgets.QWidget) and isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QWidget):
                             # add widget to the parent widget
                             _logger.debug('GenUI: parent: {} adds child widget: {}'.format(confdict['name'], parent.objectName()))
                             parent.addWidget(cls.clsGuiDraws[confdict['name']])
@@ -273,7 +274,7 @@ class GuiDraw(object):
                 cls.setupConfig(cls.clsGuiDraws[confdict['name']], confdict, parent)
 
                 # setup additional items within the Gui Element, e.g. QListWidget, QTreeWidget
-                if 'item' in confdict.keys() and isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QAbstractItemView):
+                if 'item' in confdict.keys() and isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QAbstractItemView):
                     cls.setupItem(cls.clsGuiDraws[confdict['name']], confdict['item'], parent)
 
                 # attribute are for the parent class to set
@@ -281,7 +282,7 @@ class GuiDraw(object):
                     cls.setupAttribute(cls.clsGuiDraws[confdict['name']], _convertList(confdict['attribute']), parent)
 
                 # setup additional headers for the TableWidget qobj
-                if isinstance(cls.clsGuiDraws[confdict['name']], QtGui.QTableWidget):
+                if isinstance(cls.clsGuiDraws[confdict['name']], QtWidgets.QTableWidget):
                     cls.setupTableHeader(cls.clsGuiDraws[confdict['name']], confdict, parent)
 
                 return cls.clsGuiDraws[confdict['name']]
@@ -310,7 +311,7 @@ class GuiDraw(object):
                 # QWidget
                 if prop['name'] == 'sizePolicy':
                     # size policy
-                    sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
+                    sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
                     sizePolicy.setHorizontalStretch(0)
                     sizePolicy.setVerticalStretch(0)
                     #sizePolicy.setHeightForWidth(parent.sizePolicy().hasHeightForWidth())
@@ -456,79 +457,79 @@ class GuiDraw(object):
                     qobj.setColumnCount(int(prop['number']))
                 elif prop['name'] == 'selectionMode':
                     if 'SingleSelection' in prop['enum']:
-                        qobj.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+                        qobj.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
                     elif 'ContiguousSelection' in prop['enum']:
-                        qobj.setSelectionMode(QtGui.QAbstractItemView.ContiguousSelection)
+                        qobj.setSelectionMode(QtWidgets.QAbstractItemView.ContiguousSelection)
                     elif 'ExtendedSelection' in prop['enum']:
-                        qobj.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+                        qobj.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
                     elif 'MultiSelection' in prop['enum']:
-                        qobj.setSelectionMode(QtGui.QAbstractItemView.MultiSelection)
+                        qobj.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
                     elif 'NoSelection' in prop['enum']:
-                        qobj.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
+                        qobj.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
                 elif prop['name'] == 'selectionBehavior':
                     if 'SelectRows' in prop['enum']:
-                        qobj.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+                        qobj.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
                     elif 'SelectItems' in prop['enum']:
-                        qobj.setSelectionBehavior(QtGui.QAbstractItemView.SelectItems)
+                        qobj.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
                     elif 'SelectColumns' in prop['enum']:
-                        qobj.setSelectionBehavior(QtGui.QAbstractItemView.SelectColumns)
+                        qobj.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectColumns)
 
                 # QFrame
                 elif prop['name'] == 'frameShadow':
                     if 'Plain' in prop['enum']:
-                        qobj.setFrameShadow(QtGui.QFrame.Plain)
+                        qobj.setFrameShadow(QtWidgets.QFrame.Plain)
                     elif 'Raised' in prop['enum']:
-                        qobj.setFrameShadow(QtGui.QFrame.Raised)
+                        qobj.setFrameShadow(QtWidgets.QFrame.Raised)
                     elif 'Sunken' in prop['enum']:
-                        qobj.setFrameShadow(QtGui.QFrame.Sunken)
+                        qobj.setFrameShadow(QtWidgets.QFrame.Sunken)
                 elif prop['name'] == 'lineWidth':
                     qobj.setLineWidth(int(prop['number']))
                 elif prop['name'] == 'frameShape':
                     if 'NoFrame' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.NoFrame)
+                        qobj.setFrameShape(QtWidgets.QFrame.NoFrame)
                     elif 'Box' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.Box)
+                        qobj.setFrameShape(QtWidgets.QFrame.Box)
                     elif 'Panel' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.Panel)
+                        qobj.setFrameShape(QtWidgets.QFrame.Panel)
                     elif 'StyledPanel' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.StyledPanel)
+                        qobj.setFrameShape(QtWidgets.QFrame.StyledPanel)
                     elif 'HLine' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.HLine)
+                        qobj.setFrameShape(QtWidgets.QFrame.HLine)
                     elif 'VLine' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.VLine)
+                        qobj.setFrameShape(QtWidgets.QFrame.VLine)
                     elif 'WinPanel' in prop['enum']:
-                        qobj.setFrameShape(QtGui.QFrame.WinPanel)
+                        qobj.setFrameShape(QtWidgets.QFrame.WinPanel)
 
                 # QListView
                 elif prop['name'] == 'uniformItemSizes':
                     qobj.setUniformItemSizes(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'viewMode':
                     if 'IconMode' in prop['enum']:
-                        qobj.setViewMode(QtGui.QListView.IconMode)
+                        qobj.setViewMode(QtWidgets.QListView.IconMode)
                     elif 'ListMode' in prop['enum']:
-                        qobj.setViewMode(QtGui.QListView.ListMode)
+                        qobj.setViewMode(QtWidgets.QListView.ListMode)
                 elif prop['name'] == 'layoutMode':
                     if 'SinglePass' in prop['enum']:
-                        qobj.setLayoutMode(QtGui.QListView.SinglePass)
+                        qobj.setLayoutMode(QtWidgets.QListView.SinglePass)
                     elif 'Batched' in prop['enum']:
-                        qobj.setLayoutMode(QtGui.QListView.Batched)
+                        qobj.setLayoutMode(QtWidgets.QListView.Batched)
                 elif prop['name'] == 'movement':
                     if 'Static' in prop['enum']:
-                        qobj.setMovement(QtGui.QListView.Static)
+                        qobj.setMovement(QtWidgets.QListView.Static)
                     elif 'Free' in prop['enum']:
-                        qobj.setMovement(QtGui.QListView.Free)
+                        qobj.setMovement(QtWidgets.QListView.Free)
                     elif 'Snap' in prop['enum']:
-                        qobj.setMovement(QtGui.QListView.Snap)
+                        qobj.setMovement(QtWidgets.QListView.Snap)
                 elif prop['name'] == 'resizeMode':
                     if 'Fixed' in prop['enum']:
-                        qobj.setResizeMode(QtGui.QListView.Fixed)
+                        qobj.setResizeMode(QtWidgets.QListView.Fixed)
                     elif 'Adjust' in prop['enum']:
-                        qobj.setResizeMode(QtGui.QListView.Adjust)
+                        qobj.setResizeMode(QtWidgets.QListView.Adjust)
                 elif prop['name'] == 'flow':
                     if 'LeftToRight' in prop['enum']:
-                        qobj.setFlow(QtGui.QListView.LeftToRight)
+                        qobj.setFlow(QtWidgets.QListView.LeftToRight)
                     elif 'TopToBottom':
-                        qobj.setFlow(QtGui.QListView.TopToBottom)
+                        qobj.setFlow(QtWidgets.QListView.TopToBottom)
                 elif prop['name'] == 'iconSize':
                     qobj.setIconSize(QtCore.QSize(int(prop['size']['width']), int(prop['size']['height'])))
                 elif prop['name'] == 'flat':
@@ -537,31 +538,31 @@ class GuiDraw(object):
                 elif prop['name'] == 'gridSize':
                     qobj.setGridSize(QtCore.QSize(int(prop['size']['width']), int(prop['size']['height'])))
                 elif prop['name'] == 'editTriggers':
-                    trig = QtGui.QAbstractItemView.NoEditTriggers
+                    trig = QtWidgets.QAbstractItemView.NoEditTriggers
                     if 'CurrentChanged' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.CurrentChanged
+                        trig |= QtWidgets.QAbstractItemView.CurrentChanged
                     if 'DoubleClicked' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.DoubleClicked
+                        trig |= QtWidgets.QAbstractItemView.DoubleClicked
                     if 'SelectedClicked' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.SelectedClicked
+                        trig |= QtWidgets.QAbstractItemView.SelectedClicked
                     if 'EditKeyPressed' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.EditKeyPressed
+                        trig |= QtWidgets.QAbstractItemView.EditKeyPressed
                     if 'AnyKeyPressed' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.AnyKeyPressed
+                        trig |= QtWidgets.QAbstractItemView.AnyKeyPressed
                     if 'AllEditTriggers' in prop['set']:
-                        trig |= QtGui.QAbstractItemView.AllEditTriggers
+                        trig |= QtWidgets.QAbstractItemView.AllEditTriggers
                     qobj.setEditTriggers(trig)
                 elif prop['name'] == 'dragDropMode':
                     if 'NoDragDrop' in prop['enum']:
-                        qobj.setDragDropMode(QtGui.QAbstractItemView.NoDragDrop)
+                        qobj.setDragDropMode(QtWidgets.QAbstractItemView.NoDragDrop)
                     elif 'DragOnly' in prop['enum']:
-                        qobj.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
+                        qobj.setDragDropMode(QtWidgets.QAbstractItemView.DragOnly)
                     elif 'DropOnly' in prop['enum']:
-                        qobj.setDragDropMode(QtGui.QAbstractItemView.DropOnly)
+                        qobj.setDragDropMode(QtWidgets.QAbstractItemView.DropOnly)
                     elif 'DragDrop' in prop['enum']:
-                        qobj.setDragDropMode(QtGui.QAbstractItemView.DragDrop)
+                        qobj.setDragDropMode(QtWidgets.QAbstractItemView.DragDrop)
                     elif 'InternalMove' in prop['enum']:
-                        qobj.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+                        qobj.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
                 elif prop['name'] == 'showDropIndicator':
                     qobj.setDropIndicatorShown(True if prop['bool'] == 'true' else False)
                 elif prop['name'] == 'sortingEnabled':
@@ -594,7 +595,7 @@ class GuiDraw(object):
         Sets up items for Container, i.e. QListWidget, QTreeWidget, etc
         """
         for prop in confdict:
-            lstItem = QtGui.QListWidgetItem()
+            lstItem = QtWidgets.QListWidgetItem()
             for item in prop['property']:
                 if item['name'] == 'text':
                     if qobj.objectName() == 'lstWgtSelection':

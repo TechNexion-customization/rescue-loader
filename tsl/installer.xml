@@ -1156,7 +1156,7 @@
             </customwidget>
           </customwidgets>
           <resources>
-            <include location="resource.qrc" />
+            <include location="res_ui.qrc" />
           </resources>
           <connections>
             <connection>
@@ -2027,7 +2027,7 @@
               <sender>lstWgtOS</sender>
               <signal>itemClicked()</signal>
               <receiver>chooseOS</receiver>
-              <slot>processSlot()</slot>
+              <slot>processItem()</slot>
               <hints>
                 <hint type="sourcelabel">
                   <x>719</x>
@@ -2043,7 +2043,7 @@
               <sender>lstWgtBoard</sender>
               <signal>itemClicked()</signal>
               <receiver>chooseBoard</receiver>
-              <slot>processSlot()</slot>
+              <slot>processItem()</slot>
               <hints>
                 <hint type="sourcelabel">
                   <x>719</x>
@@ -2059,7 +2059,7 @@
               <sender>lstWgtDisplay</sender>
               <signal>itemClicked()</signal>
               <receiver>chooseDisplay</receiver>
-              <slot>processSlot()</slot>
+              <slot>processItem()</slot>
               <hints>
                 <hint type="sourcelabel">
                   <x>719</x>
@@ -2075,7 +2075,7 @@
               <sender>lstWgtStorage</sender>
               <signal>itemClicked()</signal>
               <receiver>chooseStorage</receiver>
-              <slot>processSlot()</slot>
+              <slot>processItem()</slot>
               <hints>
                 <hint type="sourcelabel">
                   <x>719</x>
@@ -2091,7 +2091,7 @@
               <sender>lstWgtSelection</sender>
               <signal>itemClicked()</signal>
               <receiver>chooseSelection</receiver>
-              <slot>processSlot()</slot>
+              <slot>processItem()</slot>
               <hints>
                 <hint type="sourcelabel">
                   <x>719</x>

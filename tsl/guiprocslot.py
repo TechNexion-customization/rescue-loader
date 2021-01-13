@@ -57,8 +57,9 @@ import math
 import socket
 import datetime
 from urllib.parse import urlparse
-from PyQt5 import QtGui, QtCore, QtSvg, QtNetwork
+from PyQt5 import QtGui, QtCore, QtSvg, QtNetwork, QtWidgets
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QListWidgetItem
 from threading import Event
 # import our resources.py with all the pretty images/icons
 import ui_res
@@ -87,7 +88,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
     Insert results to a container, e.g. QListWidget, QTableWidget, QTreeWidget
     parse the results in a list of dictionaries, and add them to container
     """
-    if isinstance(qContainer, QtGui.QListWidget) and lstResult is not None:
+    if isinstance(qContainer, QtWidgets.QListWidget) and lstResult is not None:
         # insert into a listWidget
 
         # setup widget items
@@ -96,7 +97,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
             # [{cpu, form, board, display, os, ver, size(uncompsize), url}, ...] for rescue images
             item = match_data(row)
             if item is None:
-                item = QtGui.QListWidgetItem()
+                item = QListWidgetItem()
                 # draw radioItem icon, depending on e.g. OS names, or storage device types
                 item.setData(QtCore.Qt.UserRole, row)
                 if 'device_type' in row and row['device_type'] == 'disk':
@@ -239,7 +240,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
             else:
                 resName = ":/res/images/NewTux.svg"
             # add the returned proxywidget from scene addItem to the layout
-            lbl = QtGui.QLabel(name)
+            lbl = QtWidgets.QLabel(name)
             lbl.setPixmap(QtGui.QPixmap(resName))
             layout.addItem(scene.addWidget(lbl))
 
@@ -260,7 +261,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
 # qtCore.pyqtSLOT(args_types)
 #
 ###############################################################################
-class QProcessSlot(QtGui.QWidget):
+class QProcessSlot(QtWidgets.QWidget):
     """
     Base Class for our customized Process Slots
     sub classess use the decorator to add its entry into cls.subclasses
@@ -296,7 +297,7 @@ class QProcessSlot(QtGui.QWidget):
         return cls.subclasses[confdict['name']](parent)
 
     def __init__(self, parent = None):
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         self.mTotalReq = 0
         self.mTotalRemove = 0
         self.mMsgs = []
@@ -329,6 +330,10 @@ class QProcessSlot(QtGui.QWidget):
             self.mViewer.setResponseSlot(self.resultSlot)
             _logger.debug('{}: setup GuiViewer.responseSignal() to connect to {}\n'.format(self.objectName(), self.resultSlot))
 
+    @pyqtSlot('QListWidgetItem*')
+    def processItem(self, inputs = None):
+        self.processSlot(inputs)
+
     @pyqtSlot()
     @pyqtSlot(bool)
     @pyqtSlot(int)
@@ -336,7 +341,6 @@ class QProcessSlot(QtGui.QWidget):
     @pyqtSlot(list)
     @pyqtSlot(dict)
     @pyqtSlot(object)
-    @pyqtSlot(QtGui.QListWidgetItem)
     def processSlot(self, inputs = None):
         """
         called by signals from other GUIObject components
@@ -394,7 +398,7 @@ class QProcessSlot(QtGui.QWidget):
             return list(self._findSubset(lstCriteria, list(find_match(v, lstFiles)))) if len(lstCriteria) else list(find_match(v, lstFiles))
 
     def _findChildWidget(self, widgetName):
-        return self.window().findChild(QtGui.QWidget, widgetName)
+        return self.window().findChild(QtWidgets.QWidget, widgetName)
 
     def _hasSameCommand(self, results):
         ret = False
@@ -1832,7 +1836,7 @@ class chooseOSSlot(QChooseSlot):
 
         if self.sender() == self.mLstWgtOS:
             # inputs is the item chosen from the OS list widget
-            if isinstance(inputs, QtGui.QListWidgetItem):
+            if isinstance(inputs, QListWidgetItem):
                 # extract clicked item's user data
                 self.mUserData = inputs.data(QtCore.Qt.UserRole)
                 # setup picked os
@@ -1850,7 +1854,7 @@ class chooseOSSlot(QChooseSlot):
 
                 # add to lstWgtSelection if not disabled
                 if not self.mUserData['disable']:
-                    item = QtGui.QListWidgetItem(inputs)
+                    item = QListWidgetItem(inputs)
                     self.mUserData['ver'] = self.mPick['ver']
                     item.setData(QtCore.Qt.UserRole, self.mUserData)
                     item.setText("")
@@ -1981,7 +1985,7 @@ class chooseBoardSlot(QChooseSlot):
 
         if self.sender() == self.mLstWgtBoard:
             # inputs is the item chosen from the OS list widget
-            if isinstance(inputs, QtGui.QListWidgetItem):
+            if isinstance(inputs, QListWidgetItem):
                 # add to lstWgtSelection
                 self.mUserData = inputs.data(QtCore.Qt.UserRole)
                 if (int(inputs.flags()) & QtCore.Qt.ItemIsEnabled):
@@ -1989,7 +1993,7 @@ class chooseBoardSlot(QChooseSlot):
                 else:
                     self.mPick['board'] = None
                 if not self.mUserData['disable']:
-                    item = QtGui.QListWidgetItem(inputs)
+                    item = QListWidgetItem(inputs)
                     item.setData(QtCore.Qt.UserRole, self.mUserData)
                     rowNum = self.mLstWgtSelection.count()
                     if rowNum:
@@ -2094,7 +2098,7 @@ class chooseDisplaySlot(QChooseSlot):
 
         if self.sender() == self.mLstWgtDisplay:
             # inputs is the item chosen from the OS list widget
-            if isinstance(inputs, QtGui.QListWidgetItem):
+            if isinstance(inputs, QListWidgetItem):
                 # add to lstWgtSelection
                 self.mUserData = inputs.data(QtCore.Qt.UserRole)
                 # setup the user display pick
@@ -2103,7 +2107,7 @@ class chooseDisplaySlot(QChooseSlot):
                 else:
                     self.mPick['display'] = None
                 if not self.mUserData['disable']:
-                    item = QtGui.QListWidgetItem(inputs)
+                    item = QListWidgetItem(inputs)
                     item.setData(QtCore.Qt.UserRole, self.mUserData)
                     rowNum = self.mLstWgtSelection.count()
                     if rowNum:
@@ -2220,7 +2224,7 @@ class chooseStorageSlot(QChooseSlot):
 
         if self.sender() == self.mLstWgtStorage:
             # parse the QListWidgetItem to get the chosen storage
-            if isinstance(inputs, QtGui.QListWidgetItem):
+            if isinstance(inputs, QListWidgetItem):
                 self.mUserData = inputs.data(QtCore.Qt.UserRole)
                 # setup the user storage pick
                 if (int(inputs.flags()) & QtCore.Qt.ItemIsEnabled):
@@ -2229,7 +2233,7 @@ class chooseStorageSlot(QChooseSlot):
                     self.mPick['storage'] = None
                 if not self.mUserData['disable']:
                     # add to lstWgtSelection
-                    item = QtGui.QListWidgetItem(inputs)
+                    item = QListWidgetItem(inputs)
                     item.setData(QtCore.Qt.UserRole, self.mUserData)
                     rowNum = self.mLstWgtSelection.count()
                     if rowNum:
@@ -2332,7 +2336,7 @@ class chooseSelectionSlot(QChooseSlot):
 
         if self.sender() == self.mLstWgtSelection:
             # parse the QListWidgetItem to get data that indicate which choice it came from
-            if isinstance(inputs, QtGui.QListWidgetItem):
+            if isinstance(inputs, QListWidgetItem):
                 # get the user data and update the pick
                 self.mUserData = inputs.data(QtCore.Qt.UserRole)
                 if 'os' in self.mUserData:
@@ -3372,16 +3376,16 @@ class processErrorSlot(QProcessSlot):
             elif self.mAsk == 'interrupt':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
-                if ret == QtGui.QDialog.Rejected:
+                if ret == QtWidgets.QDialog.Rejected:
                     self.mErrors.update({'reject': True, 'accept': False})
                     self.__returnResponse(self.mErrors)
             elif self.mAsk == 'serial':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
-                if ret == QtGui.QDialog.Accepted:
+                if ret == QtWidgets.QDialog.Accepted:
                     self.mErrors.update({'reject': False, 'accept': True})
                     self.__returnResponse(self.mErrors)
-                elif ret == QtGui.QDialog.Rejected:
+                elif ret == QtWidgets.QDialog.Rejected:
                     self.mErrors.update({'reject': True, 'accept': False})
                     self.__returnResponse(self.mErrors)
             elif self.mAsk == 'quit':
@@ -3393,7 +3397,7 @@ class processErrorSlot(QProcessSlot):
             elif self.mAsk == 'alternative':
                 self.mMsgBox.setAskButtons(self.mAsk)
                 ret = self.mMsgBox.display(True)
-                if ret == QtGui.QDialog.Rejected:
+                if ret == QtWidgets.QDialog.Rejected:
                     # signal with retry response to the sender process
                     self.__returnResponse({'alternative': True})
             elif self.mAsk == 'continue':
@@ -3418,9 +3422,9 @@ class processErrorSlot(QProcessSlot):
 
 
 
-class QWaitingIndicator(QtGui.QWidget):
+class QWaitingIndicator(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         palette = QtGui.QPalette(self.palette())
         palette.setColor(palette.Background, QtCore.Qt.transparent)
         self.setPalette(palette)
@@ -3486,12 +3490,12 @@ class QWaitingIndicator(QtGui.QWidget):
 
 
 
-class QMessageDialog(QtGui.QDialog):
+class QMessageDialog(QtWidgets.QDialog):
     """
     Our own customized Message Dialog to display messages in our own TN styles
     """
     def __init__(self, parent=None):
-        QtGui.QDialog.__init__(self, parent, QtCore.Qt.SplashScreen) # QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
+        QtWidgets.QDialog.__init__(self, parent, QtCore.Qt.SplashScreen) # QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
 
         # set background to transparent
         palette = QtGui.QPalette(self.palette())
@@ -3499,7 +3503,7 @@ class QMessageDialog(QtGui.QDialog):
         self.setPalette(palette)
 
         # sets fonts
-        #font = QtGui.QFont('Lato', QtGui.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
+        #font = QtGui.QFont('Lato', QtWidgets.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
         #self.setFont(font)
         self.mIcon = None
         self.mTitle = None
@@ -3516,8 +3520,8 @@ class QMessageDialog(QtGui.QDialog):
         self.mShowChecking = False
         self.mWgtButton = None
         self.mButtonLayout = None
-        self.mButtons = {'accept': QtGui.QPushButton('ok'), 'reject': QtGui.QPushButton('cancel')}
-        sizePolicy=QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.mButtons = {'accept': QtWidgets.QPushButton('ok'), 'reject': QtWidgets.QPushButton('cancel')}
+        sizePolicy=QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         self.mButtons['accept'].setSizePolicy(sizePolicy)
@@ -3531,7 +3535,7 @@ class QMessageDialog(QtGui.QDialog):
 
     def setButtons(self, buttons):
         if not self.mWgtButton:
-            self.mWgtButton = self.window().findChild(QtGui.QWidget, 'wgtMsgBoxFooterBar')
+            self.mWgtButton = self.window().findChild(QtWidgets.QWidget, 'wgtMsgBoxFooterBar')
         if self.mWgtButton and not self.mButtonLayout:
             self.mButtonLayout = self.mWgtButton.layout()
         if self.mButtonLayout:
@@ -3550,9 +3554,9 @@ class QMessageDialog(QtGui.QDialog):
 
     def setIcon(self, icon):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mIcon:
-            self.mIcon = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorIcon')
+            self.mIcon = self.mWgtErrorDialog.findChild(QtWidgets.QLabel, 'msgErrorIcon')
         if self.mIcon and isinstance(icon, QtGui.QIcon):
             d = self.rect().height() / 8 if self.rect().height() < self.rect().width() else self.rect().width() / 8
             iconsize = QtCore.QSize(d, d)
@@ -3562,33 +3566,33 @@ class QMessageDialog(QtGui.QDialog):
 
     def clearIcon(self):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mIcon:
-            self.mIcon = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorIcon')
+            self.mIcon = self.mWgtErrorDialog.findChild(QtWidgets.QLabel, 'msgErrorIcon')
         if self.mIcon:
             self.mIcon.clear()
 
     def setTitle(self, title):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mTitle:
-            self.mTitle = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorTitle')
+            self.mTitle = self.mWgtErrorDialog.findChild(QtWidgets.QLabel, 'msgErrorTitle')
         if self.mTitle and isinstance(title, str):
             self.mTitle.setText(title)
 
     def clearTitle(self):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mTitle:
-            self.mTitle = self.mWgtErrorDialog.findChild(QtGui.QLabel, 'msgErrorTitle')
+            self.mTitle = self.mWgtErrorDialog.findChild(QtWidgets.QLabel, 'msgErrorTitle')
         if self.mTitle:
             self.mTitle.clear()
 
     def setContent(self, content):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mContent:
-            self.mContent = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorContent')
+            self.mContent = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorContent')
         if self.mContent:
             if isinstance(content, str):
                 self.mContent.setText(content)
@@ -3606,17 +3610,17 @@ class QMessageDialog(QtGui.QDialog):
 
     def clearContent(self):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mContent:
-            self.mContent = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorContent')
+            self.mContent = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorContent')
         if self.mContent:
             self.mContent.clear()
 
     def setQrCode(self, icon):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mQRcode:
-            self.mQRcode = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorQRcode')
+            self.mQRcode = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorQRcode')
         if self.mQRcode:
             if isinstance(icon, QtGui.QIcon):
                 w1 = self.rect().height() / 4 if self.rect().height() < self.rect().width() else self.rect().width() / 4
@@ -3629,17 +3633,17 @@ class QMessageDialog(QtGui.QDialog):
 
     def clearQrCode(self):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mQRcode:
-            self.mQRcode = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorQRcode')
+            self.mQRcode = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorQRcode')
         if self.mQRcode:
             self.mQRcode.clear()
 
     def setStatus(self, status):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mStatus:
-            self.mStatus = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorStatus')
+            self.mStatus = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorStatus')
         if self.mStatus:
             if isinstance(status, str):
                 self.mStatus.setText(status)
@@ -3657,31 +3661,31 @@ class QMessageDialog(QtGui.QDialog):
 
     def clearStatus(self):
         if not self.mWgtErrorDialog:
-            self.mWgtErrorDialog = self.window().findChild(QtGui.QWidget, 'wgtErrorDialog')
+            self.mWgtErrorDialog = self.window().findChild(QtWidgets.QWidget, 'wgtErrorDialog')
         if self.mWgtErrorDialog and not self.mStatus:
-            self.mStatus = self.mWgtErrorDialog.findChild(QtGui.QWidget, 'msgErrorStatus')
+            self.mStatus = self.mWgtErrorDialog.findChild(QtWidgets.QWidget, 'msgErrorStatus')
         if self.mStatus:
             self.mStatus.clear()
 
     def setErrorMessages(self, messages):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mCheckingMsg:
-            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtGui.QWidget, 'lblErrorMessages')
+            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtWidgets.QWidget, 'lblErrorMessages')
         if self.mCheckingMsg:
             self.mCheckingMsg.setText(messages)
 
     def clearErrorMessages(self):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mCheckingMsg:
-            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtGui.QWidget, 'lblErrorMessages')
+            self.mCheckingMsg = self.mWgtErrorChecking.findChild(QtWidgets.QWidget, 'lblErrorMessages')
         if self.mCheckingMsg:
             self.mCheckingMsg.clear()
 
     def setBackgroundIcons(self, icons):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
             self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
 
@@ -3690,33 +3694,33 @@ class QMessageDialog(QtGui.QDialog):
             for key, res in icons.items():
                 lbl = None
                 if key in ['NoNic', 'NoIface', 'NoCable', 'NoIP', 'NoDNS', 'NoServer']:
-                    lbl1 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText1') # 'msgItem2'
-                    lbl2 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText2') # 'msgItem0'
-                    lbl3 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText3') # 'msgItem1'
-                    lbl4 = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorText4') # 'msgItem3'
+                    lbl1 = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorText1') # 'msgItem2'
+                    lbl2 = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorText2') # 'msgItem0'
+                    lbl3 = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorText3') # 'msgItem1'
+                    lbl4 = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorText4') # 'msgItem3'
                     if lbl1: lbl1.setText('Network Cable')
                     if lbl2: lbl2.setText('IP Configuration')
                     if lbl3: lbl3.setText('Internet Access')
                     if lbl4: lbl4.setText('TechNexion Cloud')
                 else:
-                    lbl = self.window().findChild(QtGui.QWidget, 'msgErrorQRcode')
+                    lbl = self.window().findChild(QtWidgets.QWidget, 'msgErrorQRcode')
 
                 if lbl:
                     lbl.setPixmap(QtGui.QIcon(res).pixmap(QtCore.QSize(d * 2, d * 2)).scaled(QtCore.QSize(d, d), QtCore.Qt.IgnoreAspectRatio))
 
     def clearBackgroundIcons(self):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
             self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
         if self.mWgtErrorCheckingLayout:
             for index in range(self.mWgtErrorCheckingLayout.count()):
                 self.mWgtErrorCheckingLayout.itemAt(index).widget().clear() # call QLabel 's clear
-        self.window().findChild(QtGui.QLabel, 'msgErrorQRcode').clear()
+        self.window().findChild(QtWidgets.QLabel, 'msgErrorQRcode').clear()
 
     def setCheckFlags(self, flags):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
             self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
 
@@ -3736,34 +3740,34 @@ class QMessageDialog(QtGui.QDialog):
                     pass
                 elif key == 'NoCable':
                     #self.setStatus('Please connect a network cable.') # NoCable
-                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox1') # 'msgItem2_OL'
+                    lbl = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorTickBox1') # 'msgItem2_OL'
                     if flag is None and self.mCheckFlags['NoIface'] is False:
                         self.setErrorMessages("Checking your network LAN hardware")
                     elif flag:
                         self.setErrorMessages("Make sure your network\nLAN cable is connected\ncorrectly to your wired\nnetwork (for example your\nWi-Fi router or switch")
                 elif key == 'NoIP':
                     #self.setStatus('No IP address assigned')
-                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox2') # 'msgItem0_OL'
+                    lbl = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorTickBox2') # 'msgItem0_OL'
                     if flag is None and self.mCheckFlags['NoCable'] is False:
                         self.setErrorMessages("Checking your IP")
                     elif flag:
                         self.setErrorMessages("Your network didn't automatically\nassign an IP address.\nPlease contact your IT\ndepartment for help")
                 elif key == 'NoDNS':
                     #self.setStatus('Cannot resolve domain name')
-                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox3') # 'msgItem0_OL'
+                    lbl = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorTickBox3') # 'msgItem0_OL'
                     if flag is None and self.mCheckFlags['NoIP'] is False:
                         self.setErrorMessages("Checking server IP")
                     elif flag:
                         self.setErrorMessages("We are offline.\nCheck your Internet connection")
                 elif key == 'NoServer':
                     #self.setStatus('TechNexion server is temporary unavailable, try again later.')
-                    lbl = self.mWgtErrorChecking.findChild(QtGui.QLabel, 'lblErrorTickBox4') # 'msgItem3_OL'
+                    lbl = self.mWgtErrorChecking.findChild(QtWidgets.QLabel, 'lblErrorTickBox4') # 'msgItem3_OL'
                     if flag is None and self.mCheckFlags['NoDNS'] is False:
                         self.setErrorMessages("Checking connectivity to server")
                     elif flag:
                         self.setErrorMessages("There is nothing wrong\nwith you. It's us.\nThe TechNexion cloud\nis currently unavailable.\nGrab a cup of coffee (or beer)\nand try again later")
                 else:
-                    lbl = self.window().findChild(QtGui.QLabel, 'msgErrorQRcode')
+                    lbl = self.window().findChild(QtWidgets.QLabel, 'msgErrorQRcode')
 
                 # setup which flag icon to use
                 if flag is None:
@@ -3782,14 +3786,14 @@ class QMessageDialog(QtGui.QDialog):
 
     def clearCheckFlags(self):
         if not self.mWgtErrorChecking:
-            self.mWgtErrorChecking = self.window().findChild(QtGui.QWidget, 'wgtErrorChecking')
+            self.mWgtErrorChecking = self.window().findChild(QtWidgets.QWidget, 'wgtErrorChecking')
         if self.mWgtErrorChecking and not self.mWgtErrorCheckingLayout:
             self.mWgtErrorCheckingLayout = self.mWgtErrorChecking.layout()
         if self.mWgtErrorCheckingLayout:
             for index in range(self.mWgtErrorCheckingLayout.count()):
                 # call QLabel 's clear
                 self.mWgtErrorCheckingLayout.itemAt(index).widget().clear()
-        self.window().findChild(QtGui.QLabel, 'msgErrorQRcode').clear()
+        self.window().findChild(QtWidgets.QLabel, 'msgErrorQRcode').clear()
         self.clearErrorMessages()
         self.mCheckFlags.clear()
 
@@ -3804,105 +3808,105 @@ class QMessageDialog(QtGui.QDialog):
                                      'NoServer': ':res/images/no_server.svg'})
             self.mShowChecking = True
         elif msgtype == 'NoCpuForm':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoCpuForm': ':res/images/no_cpuform.svg'})
         elif msgtype == 'NoDbus':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoDbus': ':res/images/no_dbus.svg'})
             self.setContent("Cannot connect to Dbus installerd.service.")
         elif msgtype in ['NoStorage', 'NoLocal', 'NoPartition']:
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("System Check")
             self.setBackgroundIcons({'NoStorage': ':res/images/no_storage.svg'})
         elif msgtype == 'NoNetwork':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("System Check")
             self.setContent("Could not connect to any servers or networks.")
             if IsATargetBoard():
                 self.setStatus("SERIALCOMM to start, CONTINUE to skip")
         elif msgtype == 'NoSerial':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("System Check")
             self.setContent("Cannot start serial communication.")
             self.setStatus("Make sure a USB data cable is connected")
         elif msgtype == 'NoDLFile':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Server Check")
             self.setContent("Cannot find suitable image file to download from TechNexion Rescue Server.")
         elif msgtype == 'NoCrawl':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Server Check")
             self.setContent("Exploring TechNexion rescue server failed. Check connectivity to TechNexion Rescue Server.")
             self.setStatus("CONTINUE to try alternative server.")
         elif msgtype == 'NoSelection':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
             self.setContent("Please choose a valid image file to download and an existing storage device to flash.")
         elif msgtype == 'NoResource':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
             self.setContent("Chosen image is not suitable due to limited resource, please contact TechNexion (sales@technexion.com) for advice.")
             self.setStatus("Or choose a different image file.")
         elif msgtype == 'NoInterrupt':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Input Error")
             self.setContent("Please do not interrupt the download and flash progress.")
         elif msgtype == 'NoDownload':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
             self.setContent("Download and flash failed. You could\n1. retry with another server,\n2. continue to restore rescue,\n3. program with uuu method.")
             self.setStatus("uuu info: https://www.technexion.com/support/\nknowledgebase/using-uuu-to-flash-emmc/")
         elif msgtype == 'NoAlternative':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("No alternative rescue servers available for download and flash.")
             self.setStatus("Click continue to restore rescue system.")
         elif msgtype == 'NoFlash':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxCritical')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
             self.setContent("Download and flash failed.\nPlease retry to flash the image again.")
         elif msgtype == 'NoChecksum':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Checksum")
             self.setContent("Checksum failed")
         elif msgtype == 'NoEmmcWrite':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("Cannot set writable to emmc boot partition.\nRestart rescue to try again.")
         elif msgtype == 'NoEmmcBoot':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
             self.setContent("Cannot set emmc boot partition options.")
         elif msgtype == 'Update':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("System Update")
             self.setContent("Please update to the latest release of rescue loader.")
         elif msgtype == 'Restore':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Restore Complete")
             self.setContent('Restore technexion software loader complete. Please reboot')
         elif msgtype == 'Complete':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Program Complete")
             # movie = QtGui.QMovie(':/res/images/error_edm-fairy_reset.gif')
             # movie.setScaledSize(QtCore.QSize(self.rect().width() / 2, self.rect().height() / 2))
             # self.setContent(movie)
             self.setContent("Congratulations, Installation Complete.\nPlease power cycle the unit")
         elif msgtype == 'Interrupt':
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxQuestion')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxQuestion')))
             self.setTitle("Flashing images.")
             self.setContent("Abort Installation and return to the TechNexion Software Loader?")
         elif msgtype == 'SerialMode':
             # special serialmode setting
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxInformation')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxInformation')))
             self.setTitle("Serial Communication Mode")
             self.setContent("You can run host version of rescue loader on your PC to program target board...\nMake sure to connect an USB data cable.")
             self.setStatus("SERIALCOMM to start, CONTINUE to skip")
         elif msgtype == 'SerialConnect':
             # special serial communication established
-            self.setIcon(self.style().standardIcon(getattr(QtGui.QStyle, 'SP_MessageBoxWarning')))
+            self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Serial Communication Mode")
             self.setContent("Please run host version of rescue loader on your PC...\nDo not reboot while programming.")
             self.setStatus("REBOOT to restart the target board.")

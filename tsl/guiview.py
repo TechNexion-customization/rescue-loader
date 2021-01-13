@@ -70,7 +70,7 @@ from defconfig import DefConfig, SetupLogging, IsATargetBoard
 from messenger import BaseMessenger, SerialMessenger
 from view import BaseViewer
 
-from PyQt5 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork
+from PyQt5 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork, QtWidgets
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from threading import Event
 
@@ -234,7 +234,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
         self.mCbResultHandler = cbResultHdl
         self.mCbInterruptHandler = CbInterruptHdl
 
-    @QtCore.pyqtSlot(QtDBus.QDBusMessage)
+    @pyqtSlot(QtDBus.QDBusMessage)
     def send(self, request):
         """
         provide sent request RPC call_method on the server
@@ -245,7 +245,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
             return True
         return False
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def status(self):
         """
         provide status() RPC call_method on Qt DBus server
@@ -268,7 +268,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
             self.mRetStatus.update(status)
         self.mStatusEvent.set()
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def result(self):
         """
         provide result() RPC call_method on Qt DBus server
@@ -290,7 +290,7 @@ class MsgerAdaptor(QtDBus.QDBusAbstractAdaptor):
             self.mRetResult.update(result)
         self.mResultEvent.set()
 
-    @QtCore.pyqtSlot(QtDBus.QDBusMessage)
+    @pyqtSlot(QtDBus.QDBusMessage)
     def interrupt(self, parameters):
         """
         provide interrupt() RPC call_method on Qt DBus server
@@ -348,7 +348,7 @@ class MsgerInterface(QtDBus.QDBusAbstractInterface):
 
 
 
-class QtDbusMessenger(QObject, BaseMessenger):
+class QtDbusMessenger(QObject):
     """
     Qt's own version of the DBus Messenger with signals and slots
     """
@@ -359,7 +359,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
 
     def __init__(self,  config, rootWidget, cbExecHdl = None, cbGetStatusHdl = None, cbGetResultHdl = None, cbIntrHdl = None):
         QObject.__init__(self, rootWidget)
-        BaseMessenger.__init__(self, config)
+        self.mConfig = config
         # setup the QtDBus messenger according to xml configuration
         self.mIsServer = self.mConfig['IS_SERVER'] if ('IS_SERVER' in self.mConfig.keys()) else False
         # Setup the Receive Slot Callback Function
@@ -425,7 +425,7 @@ class QtDbusMessenger(QObject, BaseMessenger):
         else:
             raise TypeError('Message has to be packaged in a dictionary.')
 
-    @QtCore.pyqtSlot(QtDBus.QDBusMessage)
+    @pyqtSlot(QtDBus.QDBusMessage)
     def receiveMsg(self, response):
         """
         signal handler for the receiving receive() signal from QtDBus Server
@@ -545,7 +545,7 @@ class MsgDispatcher(QObject):
         self.mDoneFlag = False
         try:
             if viewer is not None and isinstance(viewer, GuiViewer) and \
-                    isinstance(msger, BaseMessenger) and \
+                    isinstance(msger, QtDbusMessenger) and \
                     isinstance(sender, QProcessSlot) and \
                     isinstance(reqMsg, dict):
                 self.mViewer = viewer
@@ -737,7 +737,7 @@ class GuiViewer(QObject, BaseViewer):
                     all_subclasses.extend(get_all_subclasses(subclass))
                 return all_subclasses
 
-            for subcls in get_all_subclasses(QtGui.QWidget):
+            for subcls in get_all_subclasses(QtWidgets.QWidget):
                 if cconf['class'] == subcls.__name__:
                     subcls = subcls
                     if 'slots' in cconf:
@@ -909,7 +909,7 @@ class GuiViewer(QObject, BaseViewer):
             if hasattr(self.mGuiRootWidget, signalName):
                 # root widget's initialised.emit() signal passing {'viewer': self} to all defined QProcessSlots
                 getattr(self.mGuiRootWidget, signalName)[dict].emit({'viewer': self})
-                _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(QtCore.SIGNAL("initialised(PyQt_PyObject)"))))
+                _logger.info("emit {}.{}, # connected slots:{}".format(self.mGuiRootWidget.objectName(), signalName, self.mGuiRootWidget.receivers(getattr(self.mGuiRootWidget, signalName))))
 
 
 
@@ -930,7 +930,7 @@ class GuiViewer(QObject, BaseViewer):
             raise
 
     def show(self, scnRect):
-        if isinstance(self.mGuiRootWidget, QtGui.QWidget):
+        if isinstance(self.mGuiRootWidget, QtWidgets.QWidget):
             palette = QtGui.QPalette(self.mGuiRootWidget.palette())
             brush = QtGui.QBrush(QtGui.QColor(16, 55, 112))
             palette.setBrush(QtGui.QPalette.Window, brush)
@@ -942,19 +942,19 @@ class GuiViewer(QObject, BaseViewer):
             self.mGuiRootWidget.setGeometry(scnRect)
 
             # set the tabTitle widget so that the layout can then be calculated automatically.
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabTitle').setFixedHeight(int(scnRect.height() / 4))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').setFixedHeight(int(scnRect.height() / 16 * 9))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').setFixedHeight(int(scnRect.height() / 16 * 9))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').setFixedHeight(int(scnRect.height() / 16 * 9))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').setFixedHeight(int(scnRect.height() / 16 * 9))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabError').setFixedHeight(int(scnRect.height() / 16 * 9))
-            #self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabTitle').setFixedHeight(int(scnRect.height() / 4))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabOS').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabBoard').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabDisplay').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabStorage').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabInstall').setFixedHeight(int(scnRect.height() / 16 * 9))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabError').setFixedHeight(int(scnRect.height() / 16 * 9))
+            #self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabFooter').setFixedHeight(int(scnRect.height() / 16))
             # Set the geometry of the message box to slightly smaller than application geomtry
             dialogrect = QtCore.QRect(0, 0, scnRect.width(), scnRect.height())
-            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setGeometry(dialogrect)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabMsgBoxTitle').setFixedHeight(int(scnRect.height() / 4))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setFixedHeight(int(scnRect.height() / 16))
+            self.mGuiRootWidget.findChild(QtWidgets.QDialog, 'msgbox').setGeometry(dialogrect)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabMsgBoxTitle').setFixedHeight(int(scnRect.height() / 4))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'progressBarStatus').setFixedHeight(int(scnRect.height() / 16))
             self.mGuiRootWidget.show()
 
             # setup the icon size for QListWidgets
@@ -962,74 +962,74 @@ class GuiViewer(QObject, BaseViewer):
             d = w / 3.5 if (w / 3.5) > 50 else 50
             # 50x50 pixels are the icon default size
             iconsize = QtCore.QSize(d, d)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setSpacing(w / 14)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setSpacing(w / 14)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setSpacing(w / 14)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setIconSize(iconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setSpacing(w / 14)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtOS').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtOS').setSpacing(w / 14)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtBoard').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtBoard').setSpacing(w / 14)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtDisplay').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtDisplay').setSpacing(w / 14)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtStorage').setIconSize(iconsize)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtStorage').setSpacing(w / 14)
 
             # draw logo according to scale
-            sizeLogo = QtCore.QSize(self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').size())
+            sizeLogo = QtCore.QSize(self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblLogo').size())
             iconLogo = QtGui.QIcon(':res/images/tn_logo.svg').pixmap(QtCore.QSize(sizeLogo.width() * 4, sizeLogo.height() * 4)).scaled(QtCore.QSize(sizeLogo.width(), sizeLogo.height()), QtCore.Qt.KeepAspectRatio)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblLogo').setPixmap(iconLogo)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblLogo').setPixmap(iconLogo)
 
             # work out the proportion to the selection icons
-            sizeSelect = self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').size()
+            sizeSelect = self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtSelection').size()
             sh = int(sizeSelect.width() / 4 * 0.8)
             smalliconsize = QtCore.QSize(sh, sh)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtSelection').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'wgtFooterInfo').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtSelection').setIconSize(smalliconsize)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtSelection').setSpacing(smalliconsize.width()/24)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtSelection').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'wgtFooterInfo').hide()
 
             # set font size
-            fontsize = int(w/40) if int(w/40) > QtGui.QApplication.font().pointSize() else QtGui.QApplication.font().pointSize()
-            _logger.warning('fontsize = {} ({}>{})'.format(fontsize, int(w/40), QtGui.QApplication.font().pointSize()))
+            fontsize = int(w/40) if int(w/40) > QtWidgets.QApplication.font().pointSize() else QtWidgets.QApplication.font().pointSize()
+            _logger.warning('fontsize = {} ({}>{})'.format(fontsize, int(w/40), QtWidgets.QApplication.font().pointSize()))
             self.mGuiRootWidget.setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtOS').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtBoard').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtDisplay').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lstWgtStorage').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnSelOS').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnSelBaseboard').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnSelDisplay').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblProgramming').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblRemaining').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDownloadFlash').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblOSTxt').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblBoardTxt').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblDisplayTxt').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblStorageTxt').setFont(QtGui.QFont('Lato', fontsize + 2))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorMessages').setFont(QtGui.QFont('Lato', fontsize + 2))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorContent').setFont(QtGui.QFont('Lato', fontsize + 2))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorStatus').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorText1').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorText2').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorText3').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblErrorText4').setFont(QtGui.QFont('Lato', fontsize))
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorIcon').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorTitle').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'msgErrorQRcode').hide()
-            self.mGuiRootWidget.findChild(QtGui.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtOS').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtBoard').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtDisplay').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lstWgtStorage').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnFlash').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnAbort').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnSelOS').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnSelBaseboard').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnSelDisplay').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblProgramming').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblRemaining').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblDownloadFlash').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblOSTxt').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblBoardTxt').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblDisplayTxt').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblStorageTxt').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblErrorMessages').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'msgErrorContent').setFont(QtGui.QFont('Lato', fontsize + 2))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'msgErrorStatus').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblErrorText1').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblErrorText2').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblErrorText3').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblErrorText4').setFont(QtGui.QFont('Lato', fontsize))
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'msgErrorIcon').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'msgErrorTitle').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'msgErrorQRcode').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QDialog, 'msgbox').setFont(QtGui.QFont('Lato', fontsize + 2))
 
             # Show/Hide additional Widgets
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabOS').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabBoard').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabDisplay').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabStorage').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'lblStorage').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'progressBarStatus').setTextVisible(False)
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'wgtProgress').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabInstall').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnFlash').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'btnAbort').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'tabFooter').hide()
-            self.mGuiRootWidget.findChild(QtGui.QWidget, 'waitingIndicator').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabOS').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabBoard').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabDisplay').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabStorage').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'lblStorage').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'progressBarStatus').setTextVisible(False)
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'wgtProgress').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabInstall').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnFlash').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'btnAbort').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'tabFooter').hide()
+            self.mGuiRootWidget.findChild(QtWidgets.QWidget, 'waitingIndicator').hide()
 
     ###########################################################################
     # BaseViewer related
@@ -1114,7 +1114,7 @@ class GuiViewer(QObject, BaseViewer):
         self.mDispatchQ.append(MsgDispatcher(self, mgr, self.sender(), self.mCmd))
         return True
 
-    @QtCore.pyqtSlot(dict)
+    @pyqtSlot(dict)
     def request(self, arguments):
         """
         A slot called by QProcessSlot's signals to handles command requests which then goes to QtDBus
@@ -1137,7 +1137,7 @@ class GuiViewer(QObject, BaseViewer):
                         self._postExec()
         self._setEvent()
 
-    @QtCore.pyqtSlot(dict)
+    @pyqtSlot(dict)
     def response(self, result):
         """
         This slot handles all the dbus receive signal messages from QtDbus
@@ -1174,7 +1174,7 @@ class GuiViewer(QObject, BaseViewer):
 
 
 def guiview():
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     conf = sys.argv.pop(0) if sys.argv else None
     sighdl = SignalHandler(app)
     geo = app.desktop().screenGeometry()
