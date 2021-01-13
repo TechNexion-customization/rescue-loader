@@ -70,8 +70,8 @@ from defconfig import DefConfig, SetupLogging, IsATargetBoard
 from messenger import BaseMessenger, SerialMessenger
 from view import BaseViewer
 
-from PyQt4 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork
-from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5 import QtCore, QtDBus, QtGui, QtSvg, QtNetwork
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from threading import Event
 
 # get the handler to the current module, and setup logging options

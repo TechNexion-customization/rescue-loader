@@ -57,8 +57,8 @@ import math
 import socket
 import datetime
 from urllib.parse import urlparse
-from PyQt4 import QtGui, QtCore, QtSvg, QtNetwork
-from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5 import QtGui, QtCore, QtSvg, QtNetwork
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from threading import Event
 # import our resources.py with all the pretty images/icons
 import ui_res
@@ -256,7 +256,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
 #
 # QProcessSlot and subclasses
 #
-# In PyQt4, a slot is a callable method with a signature defined by
+# In PyQt5, a slot is a callable method with a signature defined by
 # qtCore.pyqtSLOT(args_types)
 #
 ###############################################################################

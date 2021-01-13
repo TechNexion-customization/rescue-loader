@@ -49,7 +49,7 @@
 
 from view import CliViewer
 from guiprocslot import QProcessSlot, QWaitingIndicator, QMessageDialog
-from PyQt4 import QtGui, QtCore, QtSvg
+from PyQt5 import QtGui, QtCore, QtSvg
 
 # import our resources.py with all the pretty images/icons
 import ui_res
