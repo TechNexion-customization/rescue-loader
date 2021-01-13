@@ -205,4 +205,4 @@ echo "QWS_DISPLAY: $QWS_DISPLAY"
 echo "QWS_MOUSE_PROTO: $QWS_MOUSE_PROTO"
 echo "QWS: $QWS"
 
-/usr/bin/python3 /usr/lib/python3.5/site-packages/rescue_loader/guiview.py $QWS
+/usr/bin/python3 /usr/lib/python3.7/site-packages/tsl/guiview.py $QWS
