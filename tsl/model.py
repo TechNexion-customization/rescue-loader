@@ -296,7 +296,7 @@ class BasicBlockActionModeller(BaseActionModeller):
             raise ValueError('mainAction: Invalid parameter values.')
 
         # close the block input/output device
-        _logger.warn('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
+        _logger.warning('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
         self.mIO._close()
         del self.mIO
         return ret
@@ -352,7 +352,7 @@ class CopyBlockActionModeller(BaseActionModeller):
             raise ValueError('preAction: Neither src nor tgt file specified')
 
         if len(self.mIOs) > 0 and all(isinstance(ioobj, BaseInputOutput) for ioobj in self.mIOs):
-            _logger.warn('self.mParam: {}'.format(self.mParam))
+            _logger.warning('self.mParam: {}'.format(self.mParam))
             return True
         return False
 
@@ -372,7 +372,7 @@ class CopyBlockActionModeller(BaseActionModeller):
                 self.mResult['total_size'] = totalbytes
                 # sector addresses of a very large file for looping
                 address = self.__chunks(srcstart, tgtstart, totalbytes, chunksize)
-                _logger.warn('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
+                _logger.warning('total_size: {} block_size: {} list of addresses {} to copy: {}'.format(totalbytes, blksize, len(address), [addr for addr in address]))
                 if len(address) > 1:
                     for (srcaddr, tgtaddr) in address:
                         if not self.checkInterruptAndExit():
@@ -390,7 +390,7 @@ class CopyBlockActionModeller(BaseActionModeller):
         finally:
             # close the block device
             for ioobj in self.mIOs:
-                _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+                _logger.warning('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
                 ioobj._close()
             del self.mIOs
         return ret
@@ -534,7 +534,7 @@ class QueryFileActionModeller(BaseActionModeller):
             ret = True
 
         # clear the mIO
-        _logger.warn('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
+        _logger.warning('close mIO: {} mHandle: {}'.format(self.mIO, self.mIO.mHandle))
         self.mIO._close()
         del self.mIO
         return ret
@@ -885,7 +885,7 @@ class WebDownloadActionModeller(BaseActionModeller):
         except Exception as ex:
             # close the block device
             for ioobj in self.mIOs:
-                _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+                _logger.warning('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
                 ioobj._close()
             del self.mIOs
             _logger.error('WebDownload main-action exception: {}'.format(ex))
@@ -910,7 +910,7 @@ class WebDownloadActionModeller(BaseActionModeller):
             ret = True
         # close the block device
         for ioobj in self.mIOs:
-            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+            _logger.warning('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
 
@@ -1655,7 +1655,7 @@ class CheckBlockActionModeller(BaseActionModeller):
 
         # close the block device again
         for ioobj in self.mIOs:
-            _logger.warn('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
+            _logger.warning('close mIO: {} mHandle: {}'.format(ioobj, ioobj.mHandle))
             ioobj._close()
         del self.mIOs
         return ret

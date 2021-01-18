@@ -236,7 +236,7 @@ class OpController(object):
         """
         Manage user interrupt from client/viewer
         """
-        _logger.warn("handler user interrupt: {}".format(param))
+        _logger.warning("handler user interrupt: {}".format(param))
         if 'cmd' in param and 'type' in param:
             if param['cmd'] == 'stop' and param['type'] == 'job':
                 # for stopping jobs, loop through worker threads to find all the running
@@ -245,7 +245,7 @@ class OpController(object):
                 for thrd in self.mThreads:
                     thWkrHdlr = thrd.getWorkerHandler()
                     if thWkrHdlr and callable(thWkrHdlr.updateUserResponse):
-                        _logger.warn("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
+                        _logger.warning("found handler: {} of {} to handle user_response/interrupt: {}".format(thWkrHdlr, thrd.name, param))
                         # call handler's updateUserResponse() api with param, and wait for handler to quit itself
                         thWkrHdlr.updateUserResponse(param)
             elif param['cmd'] in ['connect', 'disconnect'] and \

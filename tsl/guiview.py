@@ -643,13 +643,13 @@ class GuiViewer(QObject, BaseViewer):
         if type == 'serial':
             try:
                 if not IsATargetBoard():
-                    _logger.warn('add SerialMessager')
+                    _logger.warning('add SerialMessager')
                     self.mMsger.append(SerialMessenger(conf, self.response))
                     self.mMsger[-1].run()
             except Exception as ex:
                 _logger.error('Cannot start a serial messenger. Error:{}'.format(ex))
         elif type == 'dbus':
-            _logger.warn('add QtDbusMessenger')
+            _logger.warning('add QtDbusMessenger')
             self.mMsger.append(QtDbusMessenger(conf, self.mGuiRootWidget, self.response))
 
     def checkDbusConn(self):
@@ -1069,10 +1069,10 @@ class GuiViewer(QObject, BaseViewer):
             if isinstance(self.mCmd, dict):
                 mgr = self.mMsger[int(self.mCmd['msger_id'])]
                 if 'cmd' in self.mCmd and self.mCmd['cmd'] is 'stop':
-                    _logger.warn('user interrupt: {}'.format(self.mCmd))
+                    _logger.warning('user interrupt: {}'.format(self.mCmd))
                     # use interrupt
                     ret = mgr.setInterrupt(self.mCmd)
-                    _logger.warn('interrupt returns: {}'.format(ret))
+                    _logger.warning('interrupt returns: {}'.format(ret))
                     return False
                 return True
         except Exception as ex:
@@ -1178,11 +1178,11 @@ def guiview():
     conf = sys.argv.pop(0) if sys.argv else None
     sighdl = SignalHandler(app)
     geo = app.desktop().screenGeometry()
-    _logger.warn('Desktop Geometry: {}'.format(geo))
+    _logger.warning('Desktop Geometry: {}'.format(geo))
     orient = 'landscape' if geo.width() > geo.height() else 'portrait'
     if len(sys.argv) > 0 and 'touch' in sys.argv[-1]:
         app.setOverrideCursor(QtCore.Qt.BlankCursor)
-        _logger.warn('Hide Cursor: {}'.format(geo))
+        _logger.warning('Hide Cursor: {}'.format(geo))
     view = GuiViewer(conf, orient)
     sighdl.activate([signal.SIGINT, signal.SIGTERM, signal.SIGUSR1], view.stop)
     if IsATargetBoard():

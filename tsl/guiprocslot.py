@@ -70,7 +70,7 @@ _logger = logging.getLogger(__name__)
 def _printSignatures(qobj):
     metaobject = qobj.metaObject()
     for i in range(metaobject.methodCount()):
-        _logger.warn('{} metaobject signature: {}'.format(qobj, metaobject.method(i).signature()))
+        _logger.warning('{} metaobject signature: {}'.format(qobj, metaobject.method(i).signature()))
 
 def _prettySize(n,pow=0,b=1024,u='B',pre=['']+[p+'i'for p in'KMGTPEZY']):
     r,f=min(int(math.log(max(n*b**pow,1),b)),len(pre)-1),'{:,.%if} %s%s'
@@ -319,7 +319,7 @@ class QProcessSlot(QtGui.QWidget):
             self.mTotalReq += 1
             self.mCmds.append(cmd)
             self.mMsgs.append(dict(cmd))
-            _logger.warn('{}: queue cmd request: {} remaining cmds: {}'.format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
+            _logger.warning('{}: queue cmd request: {} remaining cmds: {}'.format(self.objectName(), self.mCmds[-1], len(self.mCmds)))
         self.mCmdEv.set()
         self.request.emit(cmd)
 
@@ -375,7 +375,7 @@ class QProcessSlot(QtGui.QWidget):
         _logger.debug('{}: hasSameCmd: {}, parse results: {}'.format(self.objectName(), ret, results))
         self.parseResult(results)
         if ret and len(self.mCmds) == 0:
-            _logger.warn('{}: Requests completed, emit finish signal to validate results'.format(self.objectName()))
+            _logger.warning('{}: Requests completed, emit finish signal to validate results'.format(self.objectName()))
             self.finish.emit()
 
     def parseResult(self, results):
@@ -419,7 +419,7 @@ class QProcessSlot(QtGui.QWidget):
                 ret = True
                 break
         if remove is not None:
-            _logger.warn('{}: remove returned request: {} status: {} remaining cmds: {}'.format(self.objectName(), self.mMsgs[remove], results['status'], len(self.mCmds) - 1))
+            _logger.warning('{}: remove returned request: {} status: {} remaining cmds: {}'.format(self.objectName(), self.mMsgs[remove], results['status'], len(self.mCmds) - 1))
             self.mTotalRemove += 1
             self.mCmdEv.wait(0)
             self.mCmdEv.clear()
@@ -530,7 +530,7 @@ class scanStorageSlot(QProcessSlot):
                 if len(listTarget):
                     for tgt in listTarget:
                         # 'name', 'node path', 'disk size'
-                        _logger.warn('{}: found target storage device: {}'.format(self.objectName(), tgt))
+                        _logger.warning('{}: found target storage device: {}'.format(self.objectName(), tgt))
                         self.mResults.append({'name': tgt[0], \
                                               'path': tgt[1]['device_node'], \
                                               'device_type': tgt[1]['device_type'], \
@@ -615,7 +615,7 @@ class mountStorageSlot(QProcessSlot):
                             # e.g. mmcblk2, mmcblk0 are found
                             if self.mDiskPath is None:
                                 self.mDiskPath = disk['path'][:]
-                                _logger.warn('{}: found disk: {}'.format(self.objectName(), self.mDiskPath))
+                                _logger.warning('{}: found disk: {}'.format(self.objectName(), self.mDiskPath))
                                 #self.sendError({'SerialMode': True, 'ask': 'serial'})
                                 # bypass asking for serial communication mode here on Target Device
                                 # leave asking for after download failures
@@ -623,7 +623,7 @@ class mountStorageSlot(QProcessSlot):
                                 self.finish.emit()
                             else:
                                 # already found last time, so finish emit and continue
-                                _logger.warn('{}: already found disk: {}'.format(self.objectName(), self.mDiskPath))
+                                _logger.warning('{}: already found disk: {}'.format(self.objectName(), self.mDiskPath))
                                 self.finish.emit()
                         else:
                             if 'conntype' in disk and disk['conntype'] == 'serial':
@@ -666,7 +666,7 @@ class mountStorageSlot(QProcessSlot):
         self.mResults.update(results)
 
     def validateResult(self):
-        _logger.warn('{}: validate results: {}'.format(self.objectName(), self.mResults))
+        _logger.warning('{}: validate results: {}'.format(self.objectName(), self.mResults))
         # flow comes here (gets called) after self.finish.emit()
         # Check for available storage disk in the self.mResult list
         if 'cmd' in self.mResults and self.mResults['cmd'] == 'connect' and 'status' in self.mResults:
@@ -785,7 +785,7 @@ class detectDeviceSlot(QProcessSlot):
                     # imx6/7/6ul with multiple displays
                     dictDisp = dict(zip(results['interface'].split('|'), results['virtual_size'].split('|')))
                     touch = results['input'].lower()
-                    _logger.warn('{}: dictDisp:{} touch:{}'.format(self.objectName(), dictDisp, touch))
+                    _logger.warning('{}: dictDisp:{} touch:{}'.format(self.objectName(), dictDisp, touch))
                     for k, v in dictDisp.items():
                         if 'lcd' in k:
                             iface = 'ttl'
@@ -811,10 +811,10 @@ class detectDeviceSlot(QProcessSlot):
                         elif 'p80h60' in touch:
                             inch = '15'
                     self.mDisplay = '{}-{}-{}x{}'.format(iface, inch, resoln[0], resoln[1])
-                _logger.warn('{}: display: {}'.format(self.objectName(), self.mDisplay))
+                _logger.warning('{}: display: {}'.format(self.objectName(), self.mDisplay))
 
     def validateResult(self):
-        _logger.warn('{} validate result: cpu:{} form:{} baseboard:{} display:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
+        _logger.warning('{} validate result: cpu:{} form:{} baseboard:{} display:{}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
         # flow comes here (gets called) after self.finish.emit()
         # Check for available cpu, form factor, and baseboard
         # if found matching CPU form and Board, emit success to scanStorage/scanPartition
@@ -829,7 +829,7 @@ class detectDeviceSlot(QProcessSlot):
             self._findChildWidget('lblDispConf').setText(self.mDisplay)
             # tell the processError to display with no icons specified, i.e. hide
             if not self.mSentFlag:
-                _logger.warn('{}: Success and emit: {} {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
+                _logger.warning('{}: Success and emit: {} {} {} {}'.format(self.objectName(), self.mCpu, self.mForm, self.mBaseboard, self.mDisplay))
                 self.success.emit({'cpu': self.mCpu, 'form': self.mForm, 'board':self.mBaseboard, 'display': self.mDisplay})
                 self.mSentFlag = True
                 # successfully detect a technexion rescue server
@@ -875,7 +875,7 @@ class scanPartitionSlot(QProcessSlot):
                     self.mResults.update({k: v})
 
     def validateResult(self):
-        _logger.warn('{} validate results: {}'.format(self.objectName(), self.mResults))
+        _logger.warning('{} validate results: {}'.format(self.objectName(), self.mResults))
         # flow comes here (gets called) after self.finish.emit()
         # Signal available partitions in the self.mResults dictionary
         if isinstance(self.mResults, dict):
@@ -947,7 +947,7 @@ class crawlLocalfsSlot(QProcessSlot):
                             ver, extra = other, ''
                         self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': size, 'url': url, 'extra': extra})
                 except:
-                    _logger.warn('{}: skip parsing {} to extract form, cpu, board, display, os, and version info.'.format(self.objectName(), fname))
+                    _logger.warning('{}: skip parsing {} to extract form, cpu, board, display, os, and version info.'.format(self.objectName(), fname))
 
     def validateResult(self):
         # flow comes here (gets called) after self.finish.emit()
@@ -1007,7 +1007,7 @@ class scanNetworkSlot(QProcessSlot):
                 self.mRepeatFlag = False
                 self.mNetErr.pop('Repeat', None)
                 self.mNetErr.pop('Show', None)
-                _logger.warn('{}: sendError: re-direct errors to crawlWeb/downloadImage: {}'.format(self.objectName(), self.mNetErr))
+                _logger.warning('{}: sendError: re-direct errors to crawlWeb/downloadImage: {}'.format(self.objectName(), self.mNetErr))
                 self.success.emit(list(self.mNetErr.items()))
 
     def process(self, inputs = None):
@@ -1059,16 +1059,16 @@ class scanNetworkSlot(QProcessSlot):
 
                             for k, v in self.mLocalIPs.items():
                                 if k.startswith('eth') or k.startswith('enp'):
-                                    _logger.warn('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
+                                    _logger.warning('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
                                     self.mNICNames.update({k: {'ip':v}})
                                 elif v not in ['unknown', '127.0.0.1', '0.0.0.0']:
-                                    _logger.warn('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
+                                    _logger.warning('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
                                     self.mNICNames.update({k: {'ip':v}})
 
                             self.mNetErr.update({'NoNIC': False})
                         else:
                             self.mNetErr.update({'NoNIC': True})
-                        _logger.warn('{}: 1. ifconf: found NICS:{}'.format(self.objectName(), self.mNICNames))
+                        _logger.warning('{}: 1. ifconf: found NICS:{}'.format(self.objectName(), self.mNICNames))
                         self.sendError(self.mNetErr)
                         # redo the check NIC, to continue to 3b.
                         if self.mNICNames != {}:
@@ -1077,7 +1077,7 @@ class scanNetworkSlot(QProcessSlot):
 
                 # results from I/F check and Cable check, i.e. ifflags
                 elif results['config_id'] == 'ifflags' and results['status'] == 'success':
-                    _logger.warn('{}: found ifname: {} state: {}'.format(self.objectName(), results['target'], results['state']))
+                    _logger.warning('{}: found ifname: {} state: {}'.format(self.objectName(), results['target'], results['state']))
                     if 'state' in results and 'flags' in results:
                         # 3b-1. Check whether NIC hardware available (do we have mac?)
                         #if 'LOWER_UP' in results['state']:
@@ -1085,7 +1085,7 @@ class scanNetworkSlot(QProcessSlot):
                         for name, value in self.mNICNames.items():
                             if name == results['target']:
                                 value.update({'state': results['state']})
-                        _logger.warn('{}: 2. ifflags: updated NICs: {}'.format(self.objectName(), self.mNICNames))
+                        _logger.warning('{}: 2. ifflags: updated NICs: {}'.format(self.objectName(), self.mNICNames))
                         if all('state' in v for v in self.mNICNames.values()):
                             QtCore.QTimer.singleShot(1000, self.__checkDNS)
 
@@ -1095,7 +1095,7 @@ class scanNetworkSlot(QProcessSlot):
                         if isinstance(host, dict):
                             if host['name'] == results['target'] and 'host_ip' in results.keys():
                                 host.update({'host_ip': results['host_ip']})
-                    _logger.warn('{}: 3b. dns: updated hosts: {}'.format(self.objectName(), self.mHosts))
+                    _logger.warning('{}: 3b. dns: updated hosts: {}'.format(self.objectName(), self.mHosts))
                     if all('host_ip' in host for host in self.mHosts):
                         QtCore.QTimer.singleShot(1000, self.__checkNetAccess)
 
@@ -1106,13 +1106,13 @@ class scanNetworkSlot(QProcessSlot):
                     for k, v in self.mLocalIPs.items():
                         if k == results['target']:
                             if v == results['ip']:
-                                _logger.warn('Found matched ip:{} on NIC iface: {}'.format(v, k))
+                                _logger.warning('Found matched ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                                 self.sendError(self.mNetErr)
                                 # check 6. connectivity to TN server
                                 QtCore.QTimer.singleShot(1000, self.__checkTNServer)
                             elif v == 'unknown':
-                                _logger.warn('Found ip:{} on NIC iface: {}'.format(v, k))
+                                _logger.warning('Found ip:{} on NIC iface: {}'.format(v, k))
                                 self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                                 self.sendError(self.mNetErr)
                                 # check 6. connectivity to TN server
@@ -1134,10 +1134,10 @@ class scanNetworkSlot(QProcessSlot):
                             # get the list of nics and figure out NIC ifs for both target device and host pc
                             for k, v in results['iflist'].items():
                                 if k == 'eth0':
-                                    _logger.warn('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
+                                    _logger.warning('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
                                     self.mTgtNICs.update({k: {'ip':v}})
                                 elif v not in ['unknown', '127.0.0.1', '0.0.0.0']:
-                                    _logger.warn('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
+                                    _logger.warning('{}: found ifname:{} ip:{}'.format(self.objectName(), k, v))
                                     self.mTgtNICs.update({k: {'ip':v}})
 
                         if self.mTgtNICs != {}:
@@ -1152,10 +1152,10 @@ class scanNetworkSlot(QProcessSlot):
                     # serial messenger returns target nic mac
                     if 'hwaddr' in results and len(results['hwaddr']) > 0:
                         self.mTgtNICs.update({results['target']: {'macaddr': results['hwaddr'][:]}})
-                    _logger.warn('{}: found target board NICs: {}'.format(self.objectName(), self.mTgtNICs))
+                    _logger.warning('{}: found target board NICs: {}'.format(self.objectName(), self.mTgtNICs))
 
     def validateResult(self):
-        _logger.warn('{}: validate results: mHosts:{}'.format(self.objectName(), self.mHosts))
+        _logger.warning('{}: validate results: mHosts:{}'.format(self.objectName(), self.mHosts))
         # flow comes here (gets called) after self.finish.emit()
         # tell the processError to display with no icons specified, i.e. hide
         if all(('alive' in host) for host in self.mHosts):
@@ -1166,7 +1166,7 @@ class scanNetworkSlot(QProcessSlot):
                 # the system cannot connect to all our rescue servers, retry from user
                 self.mNetErr.update({'NoServer': True})
             # emit the hosts information gathered
-            _logger.warn('{}: alive rescue servers: {}'.format(self.objectName(), self.mHosts))
+            _logger.warning('{}: alive rescue servers: {}'.format(self.objectName(), self.mHosts))
             self.success.emit(self.mHosts)
             self.sendError(self.mNetErr)
             # finish all network checks, set repeat check flag for checking
@@ -1174,7 +1174,7 @@ class scanNetworkSlot(QProcessSlot):
             QtCore.QTimer.singleShot(10000, self.__checkTNServer) # 10s
             # nic/net check every 2 minutes to update the alive list
             if self.mRepeatTimerId is None:
-                _logger.warn('{}: start timer at 2m interval'.format(self.objectName()))
+                _logger.warning('{}: start timer at 2m interval'.format(self.objectName()))
                 self.mRepeatTimerId = self.startTimer(120000)
                 # DIRTY-HACK: send/re-direct 1st set of list of errors to crawlWeb
                 self.mNetErr.update({'Repeat': True})
@@ -1182,7 +1182,7 @@ class scanNetworkSlot(QProcessSlot):
 
     def timerEvent(self, event):
         # start checking network again
-        _logger.warn('{}: timed up, re-check network'.format(self.objectName()))
+        _logger.warning('{}: timed up, re-check network'.format(self.objectName()))
         self.mConnectCounter = 0
         self.mRepeatFlag = True
         self.mNICNames.clear()
@@ -1196,10 +1196,10 @@ class scanNetworkSlot(QProcessSlot):
         # send request to installerd.service to request for network status.
         if self.mNICNames == {}:
             # 3a. didn't get nic iface name, so query ifconfig first,
-            _logger.warn('{}: __checkNIC: 1. issue ifconfig for all local nic interfaces...'.format(self.objectName()))
+            _logger.warning('{}: __checkNIC: 1. issue ifconfig for all local nic interfaces...'.format(self.objectName()))
             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifconf', 'config_action': 'get', 'target': 'any'})
         else:
-            _logger.warn('{}: __checkNIC: 2. issue ifflags on found local nic interface: {}...'.format(self.objectName(), self.mNICNames))
+            _logger.warning('{}: __checkNIC: 2. issue ifflags on found local nic interface: {}...'.format(self.objectName(), self.mNICNames))
             # 3b. check ifflags on local nic interfaces
             for name, ip in self.mNICNames.items():
                 self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ifflags', 'config_action': 'get', 'target': name})
@@ -1221,10 +1221,10 @@ class scanNetworkSlot(QProcessSlot):
                 else:
                     value.update({'NoIface': True})
                     #self.mNetErr.update({'NoIface': True})
-            _logger.warn('{}: __checkDNS: 3a. check all states: updated NICs: {}'.format(self.objectName(), self.mNICNames))
+            _logger.warning('{}: __checkDNS: 3a. check all states: updated NICs: {}'.format(self.objectName(), self.mNICNames))
         if all(('NoIface' in v and 'NoCable' in v) for v in self.mNICNames.values()):
             if any((v['NoIface'] is False and v['NoCable'] is False) for v in self.mNICNames.values()):
-                _logger.warn('{}: __checkDNS: 3b. issue getHostByName to check for DNS for NICs with detected iface/cable...'.format(self.objectName()))
+                _logger.warning('{}: __checkDNS: 3b. issue getHostByName to check for DNS for NICs with detected iface/cable...'.format(self.objectName()))
                 # if any nic i/f is up and running, carry on to check host by name
                 self.mNetErr.update({'NoIface': False, 'NoCable': False})
                 self.sendError(self.mNetErr)
@@ -1239,7 +1239,7 @@ class scanNetworkSlot(QProcessSlot):
                 if all(v['NoCable'] is True for v in self.mNICNames.values()):
                     self.mNetErr.update({'NoCable': True})
                 # retry check 3. for NIC if failed
-                _logger.warn('{}: __checkDNS: 3c. check all states with some iface/cable, re-check NICs...'.format(self.objectName()))
+                _logger.warning('{}: __checkDNS: 3c. check all states with some iface/cable, re-check NICs...'.format(self.objectName()))
                 self.sendError(self.mNetErr)
                 QtCore.QTimer.singleShot(1000, self.__checkNIC)
 
@@ -1248,7 +1248,7 @@ class scanNetworkSlot(QProcessSlot):
             if all(host['host_ip'] is 'None' for host in self.mHosts):
                 self.mNetErr.update({'NoDNS': True})
                 self.sendError(self.mNetErr)
-                _logger.warn('{}: 4a. __checkNetAccess: NoDNS: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
+                _logger.warning('{}: 4a. __checkNetAccess: NoDNS: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
                 # check 4b. all host ip are 'None', means cannot resolve hostnames
                 for nicname in self.mNICNames:
                     self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': nicname})
@@ -1256,19 +1256,19 @@ class scanNetworkSlot(QProcessSlot):
                 if all(v['ip'] is 'unknown' for n, v in self.mNICNames.items() if n.startswith('e')):
                     self.mNetErr.update({'NoIP': True})
                     self.sendError(self.mNetErr)
-                    _logger.warn('{}: 4b. __checkNetAccess: NoIP in NICs: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
+                    _logger.warning('{}: 4b. __checkNetAccess: NoIP in NICs: issue socket.connect to 8.8.8.8 to get own IP and set DNS server to /etc/hosts...'.format(self.objectName()))
                     for n, v in self.mNICNames.items():
                         if n.startswith('e'):
                             self.sendCommand({'cmd': 'config', 'subcmd': 'nic', 'config_id': 'ip', 'config_action': 'get', 'target': n})
                 else:
                     self.mNetErr.update({'NoIP': False, 'NoDNS': False})
                     self.sendError(self.mNetErr)
-                    _logger.warn('{}: with DNS and NetAccess: {}'.format(self.objectName(), self.mNICNames))
+                    _logger.warning('{}: with DNS and NetAccess: {}'.format(self.objectName(), self.mNICNames))
                     QtCore.QTimer.singleShot(1000, self.__checkTNServer)
 
     def __checkTNServer(self):
         # check connectivity to TechNexion server
-        _logger.warn('{}: 5. __checkTNServer: check servers alive: servers:{} sockets:{}'.format(self.objectName(), self.mHosts, self.mSockets))
+        _logger.warning('{}: 5. __checkTNServer: check servers alive: servers:{} sockets:{}'.format(self.objectName(), self.mHosts, self.mSockets))
         self.mTimeStamp = QtCore.QDateTime.currentMSecsSinceEpoch()
         for host in self.mHosts:
             if host['name'] not in self.mSockets:
@@ -1281,7 +1281,7 @@ class scanNetworkSlot(QProcessSlot):
             self.mSockets[host['name']].connectToHost(host['name'], host['port'])
 
     def _socketError(self):
-        _logger.warn('{}: QTcpSocket Error on {}: {}'.format(self.objectName(), self.sender().peerName(), self.sender().errorString()))
+        _logger.warning('{}: QTcpSocket Error on {}: {}'.format(self.objectName(), self.sender().peerName(), self.sender().errorString()))
         for host in self.mHosts:
             # flag false as not reachable for probed host url
             if self.sender().peerName() in host['name']:
@@ -1295,7 +1295,7 @@ class scanNetworkSlot(QProcessSlot):
             self.finish.emit()
 
     def _socketConnected(self):
-        _logger.warn('{}: QTcpSocket Connected to: {}'.format(self.objectName(), self.sender().peerName()))
+        _logger.warning('{}: QTcpSocket Connected to: {}'.format(self.objectName(), self.sender().peerName()))
         for host in self.mHosts:
             # flag true as connectable for probed host url
             if self.sender().peerName() in host['name']:
@@ -1304,7 +1304,7 @@ class scanNetworkSlot(QProcessSlot):
         self._findChildWidget('lblCloud').setText('Cloud: {:04d}ms'.format(int(QtCore.QDateTime.currentMSecsSinceEpoch() - self.mTimeStamp)))
 
     def _socketDisconnected(self):
-        _logger.warn('{}: QTcpSocket Disconnected from: {}'.format(self.objectName(), self.sender().peerName()))
+        _logger.warning('{}: QTcpSocket Disconnected from: {}'.format(self.objectName(), self.sender().peerName()))
         self.sender().close()
         self.mNetErr.update({'Repeat': True} if self.mRepeatFlag else {})
         self.mConnectCounter += 1
@@ -1395,7 +1395,7 @@ class crawlWebSlot(QProcessSlot):
             if not self.mStartCrawlFlag: # StartCrawlFlag not set, parse second+ set of errors
                 if all(v is False for v in self.mDetects.values()):
                     # mDetects are errors passed in from scanNetwork, so start crawling if all NIC/NET valid
-                    _logger.warn('{}: Alive servers, Not started crawling, No NIC/NET errors, start crawling... mHosts:{}'.format(self.objectName(), self.mHosts))
+                    _logger.warning('{}: Alive servers, Not started crawling, No NIC/NET errors, start crawling... mHosts:{}'.format(self.objectName(), self.mHosts))
                     self.mHostName = None
                     self.mRemoteDir = None
                     for host in self.mHosts:
@@ -1413,7 +1413,7 @@ class crawlWebSlot(QProcessSlot):
                         if any(('available' in host and host['available']) for host in self.mHosts):
                             # ignore any further error messages from scanNetwork
                             # as we have available files on server.
-                            _logger.warn('{}: Alive and available servers, Started crawl, No NIC/NET errors, so ignore... mHosts:{}'.format(self.objectName(), self.mHosts))
+                            _logger.warning('{}: Alive and available servers, Started crawl, No NIC/NET errors, so ignore... mHosts:{}'.format(self.objectName(), self.mHosts))
                             pass
                         elif all(('available' in host and not host['available']) for host in self.mHosts):
                             # Alive servers but NONE has available files
@@ -1558,7 +1558,7 @@ class crawlWebSlot(QProcessSlot):
                 # rescue server with location directory un-available, possibly
                 # due to incorrect location or port or server failure, so flag
                 # false and wait for time out to check another alive server
-                _logger.warn('{} parse mHostName:{} and mRemoteDir:{} failed, set host un-available.'.format(self.objectName(), results['target'], results['location']))
+                _logger.warning('{} parse mHostName:{} and mRemoteDir:{} failed, set host un-available.'.format(self.objectName(), results['target'], results['location']))
                 for host in self.mHosts:
                     if host['name'] in results['target']:
                         host.update({'available': False})
@@ -2364,7 +2364,7 @@ class chooseSelectionSlot(QChooseSlot):
             # disable the clicked/selected item from the lstWgtSelection
             for item in self.mLstWgtSelection.findItems('.*', QtCore.Qt.MatchRegExp):
                 if 'os' in item.data(QtCore.Qt.UserRole):
-                    _logger.warn('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
+                    _logger.warning('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
                     # if selection item has an disabled existing item, remove it
                     if item.flags() & QtCore.Qt.ItemIsEnabled:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
@@ -2386,7 +2386,7 @@ class chooseSelectionSlot(QChooseSlot):
             # disable the clicked/selected item from the lstWgtSelection
             for item in self.mLstWgtSelection.findItems('.*', QtCore.Qt.MatchRegExp):
                 if 'board' in item.data(QtCore.Qt.UserRole):
-                    _logger.warn('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
+                    _logger.warning('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
                     # if selection item has an disabled existing item, remove it
                     if item.flags() & QtCore.Qt.ItemIsEnabled:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
@@ -2408,7 +2408,7 @@ class chooseSelectionSlot(QChooseSlot):
             # disable the clicked/selected item from the lstWgtSelection
             for item in self.mLstWgtSelection.findItems('.*', QtCore.Qt.MatchRegExp):
                 if 'display' in item.data(QtCore.Qt.UserRole):
-                    _logger.warn('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
+                    _logger.warning('found matching item from lstWgtSelection: {}'.format(item.data(QtCore.Qt.UserRole)))
                     # if selection item has an disabled existing item, remove it
                     if item.flags() & QtCore.Qt.ItemIsEnabled:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
@@ -2589,7 +2589,7 @@ class downloadImageSlot(QProcessSlot):
                 # this will issue query results to all the different messengers
                 res = self.mViewer.queryResult('dbus')
             except:
-                _logger.warn('{}: query result from DBus Server Failed... Recover Rescue System...'.format(self.objectName()))
+                _logger.warning('{}: query result from DBus Server Failed... Recover Rescue System...'.format(self.objectName()))
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
                 if self.mTimerId:
@@ -2735,13 +2735,13 @@ class downloadImageSlot(QProcessSlot):
 
         if self.sender().objectName() == 'processError':
             if isinstance(inputs, dict) and 'alternative' in inputs.keys():
-                _logger.warn('{}: ask:alternative dialog response from processError: alternative:{}'.format(self.objectName(), inputs['alternative']))
+                _logger.warning('{}: ask:alternative dialog response from processError: alternative:{}'.format(self.objectName(), inputs['alternative']))
                 self.mAlternativeFlag = inputs['alternative']
                 # Queue the retry on alternative server in 1s
                 self.__retryAlternativeServer()
 
             if isinstance(inputs, dict) and 'alternative' in inputs.keys() and 'accept' in inputs.keys() and 'reject' in inputs.keys():
-                _logger.warn('{}: ask:serial dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
+                _logger.warning('{}: ask:serial dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
                 if inputs('accept'):
                     self.__mountStorage()
                 else:
@@ -2749,7 +2749,7 @@ class downloadImageSlot(QProcessSlot):
                     self.__retryAlternativeServer()
 
             if isinstance(inputs, dict) and 'Interrupt' in inputs.keys() and 'reject' in inputs.keys() and inputs['reject']:
-                _logger.warn('{}: ask:interrupt dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
+                _logger.warning('{}: ask:interrupt dialog response from processError: accept:{} reject:{}'.format(self.objectName(), inputs['accept'], inputs['reject']))
                 if self.mTimerId:
                     self.killTimer(self.mTimerId)
                 self.sendCommand({'cmd': 'stop', 'type': 'job'})
@@ -2763,7 +2763,7 @@ class downloadImageSlot(QProcessSlot):
             # step 6: make up the command to download and flash and execute it
             # Need to grab or keep the chooses from file list selection and target list selection
             if self.sender().objectName() == 'chooseSelection':
-                _logger.warn('{}: selected choices: {}'.format(self.objectName(), inputs))
+                _logger.warning('{}: selected choices: {}'.format(self.objectName(), inputs))
                 self.mPick.update(inputs)
                 # extract URL and Target
                 self.__getUrlStorageFromPick(inputs)
@@ -2824,7 +2824,7 @@ class downloadImageSlot(QProcessSlot):
                     break
 
         self.mTgtStorage = pick['storage'][:]
-        _logger.warn('{}: found URL: {}, STORAGE: {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
+        _logger.warning('{}: found URL: {}, STORAGE: {}'.format(self.objectName(), self.mFileUrl, self.mTgtStorage))
 
     def parseResult(self, results):
 
@@ -2967,7 +2967,7 @@ class postDownloadSlot(QProcessSlot):
             try:
                 res = self.mViewer.queryResult(self.mConnType)
             except Exception as ex:
-                _logger.warn('Viewer QueryResult exception: {}'.format(ex))
+                _logger.warning('Viewer QueryResult exception: {}'.format(ex))
                 # cannot query installerd dbus server anymore, something wrong.
                 # stop the timer, and recover the rescue system
                 if self.mTimerId:
@@ -3028,7 +3028,7 @@ class postDownloadSlot(QProcessSlot):
             if 'flashed' in self.mPick:
                 if self.mPick['flashed']:
                     # flash succeeded
-                    _logger.warn('{}: download and flash success: generate qrcode from from URL {}, STORAGE {}'.format(self.objectName(), self.mPick['url'], self.mPick['storage']))
+                    _logger.warning('{}: download and flash success: generate qrcode from from URL {}, STORAGE {}'.format(self.objectName(), self.mPick['url'], self.mPick['storage']))
                     self.sendCommand({'cmd': 'qrcode', 'dl_url': self.mPick['url'], 'tgt_filename': self.mPick['storage'], 'img_filename': '/tmp/qrcode.svg'})
                 else:
                     # flash failed
@@ -3040,7 +3040,7 @@ class postDownloadSlot(QProcessSlot):
                 self.mConnType = inputs['conntype']
             # parse the available storage for checking
             self.mDisks = [d for d in inputs if 'size' in d and d['size'] > 0]
-            _logger.warn('{}: disks: {}'.format(self.objectName(), self.mDisks))
+            _logger.warning('{}: disks: {}'.format(self.objectName(), self.mDisks))
 
     def parseResult(self, results):
         self.mResults.clear()
@@ -3050,7 +3050,7 @@ class postDownloadSlot(QProcessSlot):
         if results['cmd'] == 'qrcode' and results['msger_type'] == 'dbus' and results['status'] == 'success':
             self.mQRIcon = True if 'svg_buffer' in results else False
             # do checksum
-            _logger.warn('{}: qrcode success: do checksum for mPick: {}'.format(self.objectName(), self.mPick))
+            _logger.warning('{}: qrcode success: do checksum for mPick: {}'.format(self.objectName(), self.mPick))
             self.sendCommand({'cmd': 'check', 'src_filename': '{}.md5.txt'.format(self.mPick['url'].rstrip('.xz')), 'tgt_filename': self.mPick['storage'], 'total_sectors': str(int(self.mPick['bytes_written']/512))})
 
         # for target board
@@ -3062,7 +3062,7 @@ class postDownloadSlot(QProcessSlot):
                         md5url = v[:]
                     if k in self.mPick['storage']:
                         md5dsk = v[:]
-                _logger.warn('{}: url md5:{} disk md5:{}'.format(self.objectName(), md5url, md5dsk))
+                _logger.warning('{}: url md5:{} disk md5:{}'.format(self.objectName(), md5url, md5dsk))
                 if md5url == md5dsk:
                     self.mCheckSumFlag = True
                 else:
@@ -3080,7 +3080,7 @@ class postDownloadSlot(QProcessSlot):
                 if self._isTargetEMMC(self.mPick['storage']):
                     # 1. disable mmc boot partition 1 boot option
                     # {'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', 'config_action': 'disable', 'boot_part_no': '1', 'target': self.mTgtStorage]}
-                    _logger.warn('{}: issue command to enable emmc:{} boot partition with write access'.format(self.objectName(), self.mPick['storage']))
+                    _logger.warning('{}: issue command to enable emmc:{} boot partition with write access'.format(self.objectName(), self.mPick['storage']))
                     self.sendCommand({'cmd': 'config', 'subcmd': 'mmc', 'config_id': 'readonly', \
                                       'config_action': 'disable', 'boot_part_no': '1', 'send_ack':'1', 'target': self.mPick['storage']})
                 else:
@@ -3100,7 +3100,7 @@ class postDownloadSlot(QProcessSlot):
                 else:
                     # 2. clear the mmc boot partition
                     # {'cmd': 'flash', 'src_filename': '/dev/zero', 'tgt_filename': self.mPick['storage'] + 'boot0'}
-                    _logger.warn('issue command to clear {} boot partition'.format(self.mPick['storage']))
+                    _logger.warning('issue command to clear {} boot partition'.format(self.mPick['storage']))
                     self._findChildWidget('wgtProgress').show()
                     self.mLblProgramming.setText("We are now clearing the eMMC boot partition for your evaluation kit\nPlease standby\n")
                     self.mLblRemain.setText('--:--(s) remaining')
@@ -3117,7 +3117,7 @@ class postDownloadSlot(QProcessSlot):
         # flashed either zero, rescue, or androidthing uboot.imx into emmc boot part
         if results['cmd'] == 'flash':
             if results['status'] == 'processing':
-                _logger.warn('{}: start timer to update progressbar'.format(self.objectName()))
+                _logger.warning('{}: start timer to update progressbar'.format(self.objectName()))
                 if self.mTimerId is None:
                     self.mTimerId = self.startTimer(1000) # 1000 ms
                 self.mFlashFlag = True
@@ -3246,21 +3246,21 @@ class processErrorSlot(QProcessSlot):
             _logger.error('{}: Network Scan Errors: {} Retrying...'.format(self.objectName(), self.mErrors))
         if 'NoNetwork' in self.mErrors:
             self.mMsgBox.setMessage('NoNetwork')
-            _logger.warn('{}: No Network connection or No Servers available...'.format(self.objectName()))
+            _logger.warning('{}: No Network connection or No Servers available...'.format(self.objectName()))
         if 'NoSerial' in self.mErrors:
             self.mMsgBox.setMessage('NoSerial')
-            _logger.warn('{}: No serial connection available...'.format(self.objectName()))
+            _logger.warning('{}: No serial connection available...'.format(self.objectName()))
         if 'NoDLFile' in self.mErrors:
             self.mMsgBox.setMessage('NoDLFile')
-            _logger.warn('{}: No matching file from TechNexion Rescue Server.'.format(self.objectName()))
+            _logger.warning('{}: No matching file from TechNexion Rescue Server.'.format(self.objectName()))
         if 'NoCrawl' in self.mErrors:
             self.mMsgBox.setMessage('NoCrawl')
-            _logger.warn('{}: Not all crawling of the TechNexion Rescue Service succeeded.'.format(self.objectName()))
+            _logger.warning('{}: Not all crawling of the TechNexion Rescue Service succeeded.'.format(self.objectName()))
         if 'NoLocal' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoLocal')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.warn('{}: No Programmable File from Local Storage.'.format(self.objectName()))
+            _logger.warning('{}: No Programmable File from Local Storage.'.format(self.objectName()))
             self.mMsgBox.display(False)
             return
         if 'NoStorage' in self.mErrors:
@@ -3272,7 +3272,7 @@ class processErrorSlot(QProcessSlot):
             # not critical, ignore
             self.mMsgBox.setMessage('NoPartition')
             self.mMsgBox.setCheckFlags(self.mErrors)
-            _logger.warn('{}: No Mounted Partition Found.'.format(self.objectName()))
+            _logger.warning('{}: No Mounted Partition Found.'.format(self.objectName()))
             self.mMsgBox.display(False)
             return
         if 'NoResource' in self.mErrors:
@@ -3285,50 +3285,50 @@ class processErrorSlot(QProcessSlot):
         if 'NoDownload' in self.mErrors:
             # critical, but continue
             self.mMsgBox.setMessage('NoDownload')
-            _logger.warn('{}: Downloading and Flashing failed!!! Retry with another server or Continue to restore Bootable Rescue System...'.format(self.objectName()))
+            _logger.warning('{}: Downloading and Flashing failed!!! Retry with another server or Continue to restore Bootable Rescue System...'.format(self.objectName()))
         if 'NoAlternative' in self.mErrors:
             self.mMsgBox.setMessage('NoAlternative')
-            _logger.warn('{}: No other connectable servers for download and flash...'.format(self.objectName()))
+            _logger.warning('{}: No other connectable servers for download and flash...'.format(self.objectName()))
         if 'NoFlash' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoFlash')
-            _logger.warn('{}: Flashing failed!!! Restore Bootable Rescue System...'.format(self.objectName()))
+            _logger.warning('{}: Flashing failed!!! Restore Bootable Rescue System...'.format(self.objectName()))
         if 'NoChecksum' in self.mErrors:
             self.mMsgBox.setMessage('NoChecksum')
-            _logger.warn('{}: Checksum failed!!!'.format(self.objectName()))
+            _logger.warning('{}: Checksum failed!!!'.format(self.objectName()))
         if 'NoInterrupt' in self.mErrors:
             # not critical, ignore
             self.mMsgBox.setMessage('NoInterrupt')
-            _logger.warn('{}: Flashing in progress. Ignore all user inputs'.format(self.objectName()))
+            _logger.warning('{}: Flashing in progress. Ignore all user inputs'.format(self.objectName()))
         if 'NoEmmcWrite' in self.mErrors:
             # emmc boot partition option error, not critical.
             self.mMsgBox.setMessage('NoEmmcWrite')
-            _logger.warn('{}: Unable to set writable to emmc boot partition!!! continue...'.format(self.objectName()))
+            _logger.warning('{}: Unable to set writable to emmc boot partition!!! continue...'.format(self.objectName()))
         if 'NoEmmcBoot' in self.mErrors:
             # emmc boot partition option error, not critical.
             self.mMsgBox.setMessage('NoEmmcBoot')
-            _logger.warn('{}: Unable to set emmc boot options!!! continue...'.format(self.objectName()))
+            _logger.warning('{}: Unable to set emmc boot options!!! continue...'.format(self.objectName()))
         if 'NoTgtEmmcCheck' in self.mErrors:
             # emmc boot partition option error, not critical.
             self.mMsgBox.setMessage('Complete')
-            _logger.warn('{}: Flash complete, ignore checking target storage for emmc failed...'.format(self.objectName()))
+            _logger.warning('{}: Flash complete, ignore checking target storage for emmc failed...'.format(self.objectName()))
         if 'NoTgtEmmc' in self.mErrors:
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
-            _logger.warn('{}: Flash complete, ignore target storage not emmc...'.format(self.objectName()))
+            _logger.warning('{}: Flash complete, ignore target storage not emmc...'.format(self.objectName()))
         if 'Update' in self.mErrors:
             self.mMsgBox.setMessage('Update')
-            _logger.warn('{}: New Rescue Loader Release, please update your rescue loader...'.format(self.objectName()))
+            _logger.warning('{}: New Rescue Loader Release, please update your rescue loader...'.format(self.objectName()))
         if 'Restore' in self.mErrors:
             self.mMsgBox.setMessage('Restore')
-            _logger.warn('{}: Restore complete, reboot the system into Rescue...'.format(self.objectName()))
+            _logger.warning('{}: Restore complete, reboot the system into Rescue...'.format(self.objectName()))
         if 'Complete' in self.mErrors:
             # target is not emmc.
             self.mMsgBox.setMessage('Complete')
-            _logger.warn('{}: Flash complete, reboot the system into new OS...'.format(self.objectName()))
+            _logger.warning('{}: Flash complete, reboot the system into new OS...'.format(self.objectName()))
         if 'Interrupt' in self.mErrors:
             self.mMsgBox.setMessage('Interrupt')
-            _logger.warn('{}: Flashing in progress. Interrupt from user inputs'.format(self.objectName()))
+            _logger.warning('{}: Flashing in progress. Interrupt from user inputs'.format(self.objectName()))
         if 'SerialMode' in self.mErrors:
             self.mMsgBox.setMessage('SerialMode')
             _logger.warning('{}: Set to SerialMode for PC-Host version...'.format(self.objectName()))
@@ -3337,7 +3337,7 @@ class processErrorSlot(QProcessSlot):
             _logger.warning('{}: Established serial connections to PC-Host version of rescue loader...'.format(self.objectName()))
         if 'QRCode' in self.mErrors:
             self.mMsgBox.setMessage('QRCode')
-            _logger.warn('{}: Set QRCode for the download files.'.format(self.objectName()))
+            _logger.warning('{}: Set QRCode for the download files.'.format(self.objectName()))
 
         # Handles prompt for user response in the dialogue box
         if self.mAsk:
