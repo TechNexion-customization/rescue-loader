@@ -4,26 +4,29 @@ detect_touch () {
 for i in /sys/class/input/input?
 do
   inputname=$(cat ${i}/name)
+  eventid=$(ls ${i} | grep event[0-9])
   case "$inputname" in
   EP000*|EP079*|EP082*|EP085*|EP0510*|EP0512*)
-    eventid=$(ls ${i} | grep event[0-9])
     export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
     export QWS="-touch -qws"
+    inputevent="/dev/input/$eventid"
     return
     ;;
   *EXC3146*|*EXC3160*|*P80H60*|*P80H100*)
-    eventid=$(ls ${i} | grep event[0-9])
     export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
     export QWS="-touch -qws"
+    inputevent="/dev/input/$eventid"
     return
     ;;
   *Usb*Mouse|*USB*Mouse)
-    eventid=$(ls ${i} | grep event[0-9])
     export QWS_MOUSE_PROTO="linuxinput:/dev/input/$eventid"
     export QWS="-qws"
+    inputevent="/dev/input/$eventid"
     ;;
   *)
     export QWS="-qws"
+    inputevent="/dev/input/$eventid"
+    return
     ;;
   esac
 done
@@ -133,6 +136,8 @@ setup_transform () {
     if [ $W -lt $H ]; then
       fbsetting="${fbsetting}Transformed:rot270:"
       portraight=${fb}
+      rotate="-90"
+      inputevent="${inputevent}:rotate=270"
     fi
 
     #
@@ -143,6 +148,8 @@ setup_transform () {
       case "$inch" in
       5)
         dimension="mmWidth195:mmHeight110:" # 720x1280
+        ww="275"
+        hh="172"
         ;;
       8)
         dimension="mmWidth275:mmHeight172:" # 1200,1920
@@ -199,10 +206,16 @@ setup_transform
 setup_display
 
 qwsdisp=$(echo "${fbsetting}" | xargs)
-export QWS_DISPLAY="$qwsdisp"
+echo "DISPLAY: ${qwsdisp}"
+echo "INPUT: ${inputevent}"
 
-echo "QWS_DISPLAY: $QWS_DISPLAY"
-echo "QWS_MOUSE_PROTO: $QWS_MOUSE_PROTO"
-echo "QWS: $QWS"
+if ! grep -q "wayland" <<< $QT_QPA_PLATFORM; then
+  export QT_QPA_PLATFORM="eglfs"
+  export QT_QPA_EGLFS_INTEGRATION="eglfs_viv"
+  export QT_QPA_EGLFS_ROTATION="${rotate}"
+  export QT_QPA_EGLFS_PHYSICAL_WIDTH="${ww}"
+  export QT_QPA_EGLFS_PHYSICAL_HEIGHT="${hh}"
+  export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS="${inputevent}"
+fi
 
-/usr/bin/python3 /usr/lib/python3.7/site-packages/tsl/guiview.py $QWS
+/usr/bin/python3 /usr/lib/python3.7/site-packages/tsl/guiview.py
