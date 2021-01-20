@@ -3943,15 +3943,9 @@ class QMessageDialog(QtWidgets.QDialog):
         self.clearBackgroundIcons()
         self.clearButtons()
 
-    def exit(self):
-        self.close()
-
     def display(self, show=True):
-        self.raise_()
-
         if not show:
-            if self.isVisible():
-                self.exit()
+            self.close()
         else:
             if self.mShowChecking:
                 self.mWgtErrorDialog.hide()
@@ -3962,6 +3956,7 @@ class QMessageDialog(QtWidgets.QDialog):
 
             if self.isModal():
                 _logger.debug('exec Modal')
+                self.raise_()
                 ret = self.exec_()
                 return ret
             else:
@@ -3971,3 +3966,4 @@ class QMessageDialog(QtWidgets.QDialog):
                 else:
                     _logger.debug('update non-Modal')
                     self.update()
+                self.raise_()
