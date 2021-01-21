@@ -3498,9 +3498,7 @@ class QMessageDialog(QtWidgets.QDialog):
         QtWidgets.QDialog.__init__(self, parent, QtCore.Qt.SplashScreen) # QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
 
         # set background to transparent
-        palette = QtGui.QPalette(self.palette())
-        palette.setColor(palette.Background, QtCore.Qt.transparent)
-        self.setPalette(palette)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
 
         # sets fonts
         #font = QtGui.QFont('Lato', QtWidgets.QApplication.font().pointSize() * 2, QtGui.QFont.Normal)
