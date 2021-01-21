@@ -4,7 +4,8 @@ After=dbus.service dbus-sess.service installerd.service network-online.target sy
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/guiclientd.sh
+EnvironmentFile=@ENV_FILE@
+ExecStart=@EXEC_START@
 
 [Install]
 WantedBy=multi-user.target
