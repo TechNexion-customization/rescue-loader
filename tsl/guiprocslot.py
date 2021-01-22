@@ -756,7 +756,7 @@ class detectDeviceSlot(QProcessSlot):
                     # e.g. ili9881c-dsi, i.mx8-hdp (hdmi),
                     if 'panel-simple-dsi' in results['interface'] and 'uevent' in results:
                         iface = results['uevent']
-                    elif 'hdp' in results['interface'] and 'i.mx8' in results['interface']:
+                    elif 'hdp' in results['interface'] and 'mx' in results['interface']:
                         iface = 'hdmi'
                     elif 'lcd' in results['interface']:
                         iface = 'ttl'
