@@ -724,7 +724,7 @@ class detectDeviceSlot(QProcessSlot):
                     for i, w in enumerate(lstWords):
                         # get CPU and FORM
                         if '-' in w and 'imx' in w.lower():
-                            self.mCpu = w.split('-')[1]
+                            self.mCpu = w.split('-')[-1]
                             self.mForm = w.split('-')[0]
                         # get PANEL
                         if '-' in w and 'inch' in w.lower():
