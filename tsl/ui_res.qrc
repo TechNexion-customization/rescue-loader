@@ -16,6 +16,7 @@
     <file>images/display_dsi.svg</file>
     <file>images/display_dpi.svg</file>
     <file>images/display_vga.svg</file>
+    <file>images/board.svg</file>
     <file>images/board_dwarf.svg</file>
     <file>images/board_hobbit.svg</file>
     <file>images/board_nymph.svg</file>
@@ -26,6 +27,7 @@
     <file>images/board_wizard.svg</file>
     <file>images/board_tek.svg</file>
     <file>images/board_tep.svg</file>
+    <file>images/board_wb.svg</file>
     <file>images/os_android.svg</file>
     <file>images/os_androidthings.svg</file>
     <file>images/os_tux.svg</file>

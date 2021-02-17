@@ -34,14 +34,14 @@
      id="namedview39"
      showgrid="false"
      inkscape:zoom="5.8044244"
-     inkscape:cx="-33.075012"
+     inkscape:cx="21.687746"
      inkscape:cy="68.764346"
-     inkscape:window-x="65"
+     inkscape:window-x="1985"
      inkscape:window-y="24"
      inkscape:window-maximized="1"
      inkscape:current-layer="Selected_Items" /><g
      id="g4169"
-     transform="matrix(0.3493416,0,0,0.3493416,2.7864828,46.454105)"><path
+     transform="matrix(0.3493416,0,0,0.3493416,2.7864828,54.454105)"><path
        style="clip-rule:evenodd;fill:#006600;fill-rule:evenodd"
        inkscape:connector-curvature="0"
        id="path3"
@@ -111,15 +111,4 @@
          rdf:about="http://creativecommons.org/publicdomain/zero/1.0/"><cc:permits
            rdf:resource="http://creativecommons.org/ns#Reproduction" /><cc:permits
            rdf:resource="http://creativecommons.org/ns#Distribution" /><cc:permits
-           rdf:resource="http://creativecommons.org/ns#DerivativeWorks" /></cc:License></rdf:RDF></metadata><text
-     xml:space="preserve"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:125%;font-family:'Noto Sans Mono CJK JP';-inkscape-font-specification:'Noto Sans Mono CJK JP, Normal';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-     x="50.349998"
-     y="99.760002"
-     id="text4188"
-     sodipodi:linespacing="125%"><tspan
-       sodipodi:role="line"
-       id="tspan4190"
-       x="50.349998"
-       y="99.760002">VERSION</tspan></text>
-</svg>
+           rdf:resource="http://creativecommons.org/ns#DerivativeWorks" /></cc:License></rdf:RDF></metadata></svg>

@@ -125,7 +125,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                 elif 'board' in row:
                     # could update the VERSION within the svg resource byte array, and draw the svg
                     if row['board'] is not None:
-                        for bd in ['dwarf', 'nymph', 'hobbit', 'pi', 'fairy', 'gnome', 'tep', 'tek', 'toucan', 'wizard']:
+                        for bd in ['dwarf', 'nymph', 'hobbit', 'pi', 'fairy', 'gnome', 'tep', 'tek', 'toucan', 'wizard', 'wb']:
                             if bd in row['board']:
                                 resName = ":/res/images/board_{}.svg".format(bd)
                                 break
