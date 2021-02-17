@@ -1614,10 +1614,13 @@ class crawlWebSlot(QProcessSlot):
         return False
 
     def __parseSOMInfo(self, path):
-        p = re.compile('\/(\w+)[_|-](\w+)\/(\w+)-(\w+)\/(.+)\.xz', re.IGNORECASE)
-        m = p.match(path)
-        if m:
-            return m.groups()
+        urls = path.split('/')
+        cpu = urls[1].split('-')[-1]
+        form = urls[1].rstrip('-{}'.format(cpu))
+        board = urls[2].split('-')[0]
+        disp = urls[2].split('-')[-1]
+        fname = urls[-1] if urls[-1].endswith('.xz') else ''
+        return cpu, form, board, disp, fname
 
     def __parseFilename(self, fname):
         if ('-' in fname):
