@@ -3858,7 +3858,7 @@ class QMessageDialog(QtWidgets.QDialog):
             self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxCritical')))
             self.setTitle("Program Check")
             self.setContent("Download and flash failed. You could\n1. retry with another server,\n2. continue to restore rescue,\n3. program with uuu method.")
-            self.setStatus("uuu info: https://www.technexion.com/support/\nknowledgebase/using-uuu-to-flash-emmc/")
+            self.setStatus("uuu info: https://developer.technexion.com/mediawiki/\nRecover-to-factory-settings")
         elif msgtype == 'NoAlternative':
             self.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, 'SP_MessageBoxWarning')))
             self.setTitle("Warning")
