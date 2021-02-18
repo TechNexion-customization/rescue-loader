@@ -822,6 +822,14 @@ class WebDownloadActionModeller(BaseActionModeller):
             return True
         return False
 
+    def __calcBlockSize(self, maxbs):
+        bssize = maxbs
+        while bssize % 512 == 0 and bssize <= 512:
+            if self.mResult['total_uncompressed'] % bssize == 0:
+                return bssize
+            bssize = bssize / 2
+        return 512
+
     def _mainAction(self):
         # copy specified address range from downloaded src file to target file
         ret = False
@@ -831,7 +839,9 @@ class WebDownloadActionModeller(BaseActionModeller):
             # if free mem available > 671088640: # 640 * 1024 * 1024 bytes
             if not self.mUseDD: # not dd-able (plenty of free memory)
                 # python lzma method
-                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 65536 # 64K
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else self.__calcBlockSize(65536) # 64Kb to 512b
+                if ('chunk_size' not in self.mParam):
+                    self.mParam['chunk_size'] = chunksize
                 srcstart = self.mParam['src_start_sector'] * 512
                 tgtstart = srcstart
                 totalbytes = self.mIOs[0].getFileSize()
@@ -851,7 +861,9 @@ class WebDownloadActionModeller(BaseActionModeller):
                     ret = True
             else:
                 # otherwise use shell subprocess Popen to dd
-                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else 4096 # 4K
+                chunksize = self.mParam['chunk_size'] if ('chunk_size' in self.mParam) else self.__calcBlockSize(4096) # 4K
+                if ('chunk_size' not in self.mParam):
+                    self.mParam['chunk_size'] = chunksize
                 skipstart = (self.mParam['src_start_sector'] * 512) // chunksize
                 seekstart = skipstart
                 if 'src_total_sectors' in self.mParam and self.mParam['src_total_sectors'] > 0:
@@ -929,8 +941,8 @@ class WebDownloadActionModeller(BaseActionModeller):
             _logger.debug('parseProgress: i/o records: {}'.format(m.groups()))
             if pid == self.__pddpid:
                 recin, partin, recout, partout = m.groups()
-                self.mResult['bytes_read'] = int(recin) * 4096 + self.mPartRead
-                self.mResult['bytes_written'] = int(recout) * 4096 + self.mPartWritten
+                self.mResult['bytes_read'] = int(recin) * self.mParam['chunk_size'] + self.mPartRead
+                self.mResult['bytes_written'] = int(recout) * self.mParam['chunk_size'] + self.mPartWritten
             else:
                 percent, read, eta = m.groups()
                 self.mResult['bytes_read'] = read
