@@ -83,7 +83,7 @@
                     <item row="0" column="4" colspan="4">
                       <widget class="QLabel" name="lblVersion">
                         <property name="text">
-                          <string>TSL 20.12.a</string>
+                          <string>TSL 21.02.a</string>
                         </property>
                         <property name="alignment">
                           <set>Qt::AlignRight|Qt::AlignBottom
