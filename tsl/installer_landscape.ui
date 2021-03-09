@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>diaWidget_landscape</class>
+ <class>diaWidget</class>
  <widget class="QDialog" name="diaWidget">
   <property name="geometry">
    <rect>
@@ -20,13 +20,13 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>TechNexion Rescue System</string>
+   <string>TechNexion Software Loader</string>
   </property>
   <layout class="QGridLayout" name="gridLayoutMain">
    <item row="0" column="0" colspan="5">
     <widget class="QWidget" name="tabTitle" native="true">
-     <layout class="QGridLayout" name="GridLayoutTitle">
-      <item row="0" column="0" colspan="2">
+     <layout class="QGridLayout" name="gridLayoutTitle">
+      <item row="0" column="0" rowspan="2" colspan="3">
        <widget class="QLabel" name="lblLogo">
         <property name="styleSheet">
          <string notr="true">background: transparent</string>
@@ -36,14 +36,384 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="2">
+      <item row="0" column="3" rowspan="2">
        <widget class="QFrame" name="frameEmpty">
         <property name="frameShape">
          <enum>QFrame::NoFrame</enum>
         </property>
        </widget>
       </item>
-      <item row="0" column="3" colspan="3">
+      <item row="0" column="4" colspan="4">
+       <widget class="QLabel" name="lblVersion">
+        <property name="text">
+         <string>TSL 21.02.a</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4" colspan="4">
+       <widget class="QLabel" name="lblCloud"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="tabBoard" native="true">
+     <layout class="QGridLayout" name="gridLayoutBoard">
+      <item row="0" column="0">
+       <widget class="QListWidget" name="lstWgtBoard">
+        <property name="styleSheet">
+         <string notr="true">background: white</string>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="showDropIndicator" stdset="0">
+         <bool>false</bool>
+        </property>
+        <property name="dragDropMode">
+         <enum>QAbstractItemView::NoDragDrop</enum>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>100</width>
+          <height>100</height>
+         </size>
+        </property>
+        <property name="movement">
+         <enum>QListView::Static</enum>
+        </property>
+        <property name="viewMode">
+         <enum>QListView::IconMode</enum>
+        </property>
+        <property name="uniformItemSizes">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="tabStorage" native="true">
+     <layout class="QGridLayout" name="gridLayoutStorage">
+      <item row="0" column="0">
+       <widget class="QListWidget" name="lstWgtStorage">
+        <property name="styleSheet">
+         <string notr="true">background: white</string>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="showDropIndicator" stdset="0">
+         <bool>false</bool>
+        </property>
+        <property name="dragDropMode">
+         <enum>QAbstractItemView::NoDragDrop</enum>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>100</width>
+          <height>100</height>
+         </size>
+        </property>
+        <property name="movement">
+         <enum>QListView::Static</enum>
+        </property>
+        <property name="viewMode">
+         <enum>QListView::IconMode</enum>
+        </property>
+        <property name="uniformItemSizes">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="tabOS" native="true">
+     <layout class="QGridLayout" name="gridLayoutOS">
+      <item row="0" column="0">
+       <widget class="QListWidget" name="lstWgtOS">
+        <property name="styleSheet">
+         <string notr="true">background: white</string>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="showDropIndicator" stdset="0">
+         <bool>false</bool>
+        </property>
+        <property name="dragDropMode">
+         <enum>QAbstractItemView::NoDragDrop</enum>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>100</width>
+          <height>100</height>
+         </size>
+        </property>
+        <property name="movement">
+         <enum>QListView::Static</enum>
+        </property>
+        <property name="viewMode">
+         <enum>QListView::IconMode</enum>
+        </property>
+        <property name="uniformItemSizes">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="tabDisplay" native="true">
+     <layout class="QGridLayout" name="gridLayoutDisplay">
+      <item row="0" column="0">
+       <widget class="QListWidget" name="lstWgtDisplay">
+        <property name="styleSheet">
+         <string notr="true">background: white</string>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="showDropIndicator" stdset="0">
+         <bool>false</bool>
+        </property>
+        <property name="dragDropMode">
+         <enum>QAbstractItemView::NoDragDrop</enum>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>100</width>
+          <height>100</height>
+         </size>
+        </property>
+        <property name="movement">
+         <enum>QListView::Static</enum>
+        </property>
+        <property name="viewMode">
+         <enum>QListView::IconMode</enum>
+        </property>
+        <property name="uniformItemSizes">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="tabInstall" native="true">
+     <layout class="QGridLayout" name="gridLayoutInstall">
+      <item row="0" column="0">
+       <widget class="QWidget" name="wgtOutput" native="true">
+        <layout class="QGridLayout" name="gridLayoutOutput">
+         <item row="0" column="0" colspan="3">
+          <widget class="QWidget" name="wgtGroupOutput" native="true">
+           <property name="styleSheet">
+            <string notr="true">background: white</string>
+           </property>
+           <layout class="QHBoxLayout" name="hboxLayoutGroupOutput">
+            <item>
+             <widget class="QWidget" name="vbOS" native="true">
+              <layout class="QVBoxLayout" name="vboxLayoutOS">
+               <item>
+                <widget class="QPushButton" name="lblOS">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lblOSTxt">
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="vbBoard" native="true">
+              <layout class="QVBoxLayout" name="vboxLayoutBoard">
+               <item>
+                <widget class="QPushButton" name="lblBoard">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lblBoardTxt">
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="vbDisplay" native="true">
+              <layout class="QVBoxLayout" name="vboxLayoutDisplay">
+               <item>
+                <widget class="QPushButton" name="lblDisplay">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255); color: white;
+                                              border-style:solid; border-width:1px; border-color:rgb(255, 255, 255);
+                                            </string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lblDisplayTxt">
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="0" column="4">
+          <widget class="QWidget" name="vbStorage" native="true">
+           <layout class="QVBoxLayout" name="vboxLayoutStorage">
+            <item>
+             <widget class="QLabel" name="lblStorage">
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="lblStorageTxt">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background: transparent; color: white; border-style:solid;
+                                        border-width:1px; border-color:rgb(16, 55, 112); padding: 5px</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QWidget" name="wgtProgress" native="true">
+        <layout class="QGridLayout" name="gridLayoutProgress">
+         <item row="0" column="0" rowspan="2">
+          <widget class="QLabel" name="lblProgramming">
+           <property name="text">
+            <string>Retrieving selected software image from the TechNexion Cloud and configuring
+                                  your evaluation kit.</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QProgressBar" name="progressBarStatus">
+           <property name="styleSheet">
+            <string notr="true">color: black</string>
+           </property>
+           <property name="value">
+            <number>0</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="lblRemaining">
+           <property name="styleSheet">
+            <string notr="true">background: transparent; padding: 1px</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="lblDownloadFlash">
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="5">
+    <widget class="QWidget" name="tabFooter" native="true">
+     <layout class="QGridLayout" name="gridLayoutFooter">
+      <item row="0" column="0">
        <widget class="QListWidget" name="lstWgtSelection">
         <property name="layoutDirection">
          <enum>Qt::RightToLeft</enum>
@@ -83,404 +453,204 @@
         </property>
        </widget>
       </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="5">
-    <widget class="QWidget" name="tabSpace" native="true">
-     <layout class="QHBoxLayout" name="hboxLayoutSpace">
-      <item>
-       <widget class="QFrame" name="frameSpace">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" rowspan="3" colspan="5">
-    <widget class="QWidget" name="tabBoard" native="true">
-     <layout class="QGridLayout" name="gridLayoutBoard">
       <item row="0" column="0">
-       <widget class="QListWidget" name="lstWgtBoard">
-        <property name="styleSheet">
-         <string notr="true">background: transparent</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="editTriggers">
-         <set>QAbstractItemView::NoEditTriggers</set>
-        </property>
-        <property name="showDropIndicator" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="dragDropMode">
-         <enum>QAbstractItemView::NoDragDrop</enum>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>100</width>
-          <height>100</height>
-         </size>
-        </property>
-        <property name="movement">
-         <enum>QListView::Static</enum>
-        </property>
-        <property name="viewMode">
-         <enum>QListView::IconMode</enum>
-        </property>
-        <property name="uniformItemSizes">
-         <bool>true</bool>
-        </property>
-        <property name="sortingEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" rowspan="3" colspan="5">
-    <widget class="QWidget" name="tabStorage" native="true">
-     <layout class="QGridLayout" name="gridLayoutStorage">
-      <item row="0" column="0">
-       <widget class="QListWidget" name="lstWgtStorage">
-        <property name="styleSheet">
-         <string notr="true">background: transparent</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="editTriggers">
-         <set>QAbstractItemView::NoEditTriggers</set>
-        </property>
-        <property name="showDropIndicator" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="dragDropMode">
-         <enum>QAbstractItemView::NoDragDrop</enum>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>100</width>
-          <height>100</height>
-         </size>
-        </property>
-        <property name="movement">
-         <enum>QListView::Static</enum>
-        </property>
-        <property name="viewMode">
-         <enum>QListView::IconMode</enum>
-        </property>
-        <property name="uniformItemSizes">
-         <bool>true</bool>
-        </property>
-        <property name="sortingEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" rowspan="3" colspan="5">
-    <widget class="QWidget" name="tabOS" native="true">
-     <layout class="QGridLayout" name="gridLayoutOS">
-      <item row="0" column="0">
-       <widget class="QListWidget" name="lstWgtOS">
-        <property name="styleSheet">
-         <string notr="true">background: transparent</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="editTriggers">
-         <set>QAbstractItemView::NoEditTriggers</set>
-        </property>
-        <property name="showDropIndicator" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="dragDropMode">
-         <enum>QAbstractItemView::NoDragDrop</enum>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>100</width>
-          <height>100</height>
-         </size>
-        </property>
-        <property name="movement">
-         <enum>QListView::Static</enum>
-        </property>
-        <property name="viewMode">
-         <enum>QListView::IconMode</enum>
-        </property>
-        <property name="uniformItemSizes">
-         <bool>true</bool>
-        </property>
-        <property name="sortingEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" rowspan="3" colspan="5">
-    <widget class="QWidget" name="tabDisplay" native="true">
-     <layout class="QGridLayout" name="gridLayoutDisplay">
-      <item row="0" column="0">
-       <widget class="QListWidget" name="lstWgtDisplay">
-        <property name="styleSheet">
-         <string notr="true">background: transparent</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="editTriggers">
-         <set>QAbstractItemView::NoEditTriggers</set>
-        </property>
-        <property name="showDropIndicator" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="dragDropMode">
-         <enum>QAbstractItemView::NoDragDrop</enum>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>100</width>
-          <height>100</height>
-         </size>
-        </property>
-        <property name="movement">
-         <enum>QListView::Static</enum>
-        </property>
-        <property name="viewMode">
-         <enum>QListView::IconMode</enum>
-        </property>
-        <property name="uniformItemSizes">
-         <bool>true</bool>
-        </property>
-        <property name="sortingEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" rowspan="3" colspan="5">
-    <widget class="QWidget" name="tabInstall" native="true">
-     <layout class="QGridLayout" name="gridLayoutInstall">
-      <item row="0" column="0" rowspan="4" colspan="5">
-       <widget class="QWidget" name="wgtOutput" native="true">
-        <layout class="QHBoxLayout" name="hboxLayoutOutput">
-         <item>
-          <widget class="QWidget" name="vbOS" native="true">
-           <layout class="QVBoxLayout" name="vboxLayoutOS">
-            <item>
-             <widget class="QLabel" name="lblOS">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+       <widget class="QWidget" name="wgtFooterMenu" native="true">
+        <layout class="QGridLayout" name="gridLayoutFooterMenu">
+         <item row="0" column="0">
+          <widget class="QWidget" name="wgtFooterSoftwareMenu" native="true">
+           <layout class="QGridLayout" name="gridLayoutFooterSoftwareMenu">
+            <item row="0" column="0" colspan="2">
+             <widget class="QPushButton" name="btnSelOS">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+              </property>
+              <property name="text">
+               <string>Software</string>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QLabel" name="lblOSTxt">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+            <item row="0" column="2">
+             <widget class="QPushButton" name="btnSelOSIcon">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
+                                      </string>
               </property>
              </widget>
             </item>
            </layout>
           </widget>
          </item>
-         <item>
-          <widget class="QWidget" name="vbBoard" native="true">
-           <layout class="QVBoxLayout" name="vboxLayoutBoard">
-            <item>
-             <widget class="QLabel" name="lblBoard">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+         <item row="0" column="1">
+          <widget class="QWidget" name="wgtFooterDisplayMenu" native="true">
+           <layout class="QGridLayout" name="gridLayoutFooterDisplayMenu">
+            <item row="0" column="0" colspan="2">
+             <widget class="QPushButton" name="btnSelBaseboard">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+              </property>
+              <property name="text">
+               <string>Baseboard</string>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QLabel" name="lblBoardTxt">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+            <item row="0" column="2">
+             <widget class="QPushButton" name="btnSelBaseboardIcon">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
+                                      </string>
               </property>
              </widget>
             </item>
            </layout>
           </widget>
          </item>
-         <item>
-          <widget class="QWidget" name="vbDisplay" native="true">
-           <layout class="QVBoxLayout" name="vboxLayoutDisplay">
-            <item>
-             <widget class="QLabel" name="lblDisplay">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+         <item row="0" column="2">
+          <widget class="QWidget" name="wgtFooterBaseboardMenu" native="true">
+           <layout class="QGridLayout" name="gridLayoutFooterBaseboardMenu">
+            <item row="0" column="0" colspan="2">
+             <widget class="QPushButton" name="btnSelDisplay">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+              </property>
+              <property name="text">
+               <string>Display</string>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QLabel" name="lblDisplayTxt">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+            <item row="0" column="2">
+             <widget class="QPushButton" name="btnSelDisplayIcon">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112);
+                                      </string>
               </property>
              </widget>
             </item>
            </layout>
           </widget>
          </item>
+         <item row="0" column="3">
+          <widget class="QWidget" name="wgtFooterButtonMenu" native="true">
+           <layout class="QGridLayout" name="gridLayoutFooterButtonMenu">
+            <item row="0" column="0">
+             <widget class="QPushButton" name="btnFlash">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+              </property>
+              <property name="text">
+               <string>INSTALL</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="0">
+             <widget class="QPushButton" name="btnAbort">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(16, 55, 112); color: white;
+                                        border-style:solid; border-width:1px; border-color:rgb(16, 55, 112); padding:
+                                        4px;
+                                      </string>
+              </property>
+              <property name="text">
+               <string>ABORT</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QWidget" name="wgtFooterInfo" native="true">
+        <layout class="QHBoxLayout" name="hboxLayoutFooterInfo">
          <item>
-          <widget class="QLabel" name="lblArrow">
-           <property name="pixmap">
-            <pixmap resource="resource.qrc">:/res/images/tn_arrow.svg</pixmap>
-           </property>
+          <widget class="QLabel" name="lblCpu">
            <property name="alignment">
             <set>Qt::AlignCenter</set>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QWidget" name="vbStorage" native="true">
-           <layout class="QVBoxLayout" name="vboxLayoutStorage">
-            <item>
-             <widget class="QLabel" name="lblStorage">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lblStorageTxt">
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-             </widget>
-            </item>
-           </layout>
+          <widget class="QLabel" name="lblForm">
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
           </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lblBaseboard">
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lblDispConf"/>
          </item>
         </layout>
-       </widget>
-      </item>
-      <item row="4" column="0" colspan="5">
-       <widget class="QWidget" name="wgtProgress" native="true">
-        <layout class="QGridLayout" name="gridayoutProgress">
-         <item row="0" column="0" rowspan="2" colspan="5">
-          <widget class="QPushButton" name="btnFlash">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="font">
-            <font>
-             <family>Lato</family>
-             <pointsize>32</pointsize>
-             <weight>75</weight>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(184, 28, 34); color: white; border-style:outset; border-width:5px; border-radius:15px; border-color:black; padding: 4px;</string>
-           </property>
-           <property name="text">
-            <string>Program Me!</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0" colspan="5">
-          <widget class="QProgressBar" name="progressBarStatus">
-           <property name="value">
-            <number>0</number>
-           </property>
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="3" colspan="2">
-          <widget class="QLabel" name="lblRemaining">
-           <property name="text">
-            <string>Remaining Time</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignBottom|Qt::AlignRight|Qt::AlignTrailing</set>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0" colspan="3">
-          <widget class="QLabel" name="lblDownloadFlash">
-           <property name="alignment">
-            <set>Qt::AlignBottom|Qt::AlignHCenter</set>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="5" column="0" colspan="5">
-    <widget class="QWidget" name="tabFooter" native="true">
-     <layout class="QHBoxLayout" name="hboxLayoutFooter">
-      <item>
-       <widget class="QLabel" name="lblInstruction">
-        <property name="text">
-         <string/>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lblCpu">
-        <property name="text">
-         <string>No CPU</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lblForm">
-        <property name="text">
-         <string>No Form Factor</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lblBaseboard">
-        <property name="text">
-         <string>No Baseboard</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lblVersion">
-        <property name="text">
-         <string>Ver 2018.06.30.1</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
        </widget>
       </item>
      </layout>
@@ -490,8 +660,8 @@
   <widget class="QMessageDialog" name="msgbox">
    <property name="geometry">
     <rect>
-     <x>0</x>
-     <y>0</y>
+     <x>782</x>
+     <y>362</y>
      <width>400</width>
      <height>300</height>
     </rect>
@@ -500,146 +670,198 @@
     <bool>false</bool>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0">
-     <widget class="QLabel" name="msgIcon">
-      <property name="styleSheet">
-       <string notr="true">background: transparent</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
+    <item row="0" column="0" colspan="5">
+     <widget class="QWidget" name="tabMsgBoxTitle" native="true">
+      <layout class="QGridLayout" name="gridLayoutMsgBoxTitle">
+       <item row="0" column="0">
+        <widget class="QLabel" name="lblMsgBoxTitleBar">
+         <property name="styleSheet">
+          <string notr="true">background: transparent</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
-    <item row="0" column="1" colspan="4">
-     <widget class="QLabel" name="msgTitle">
+    <item row="1" column="0" rowspan="4" colspan="5">
+     <widget class="QWidget" name="tabError" native="true">
       <property name="styleSheet">
-       <string notr="true">background: transparent</string>
+       <string notr="true">background-color: rgb(16, 55, 112);</string>
       </property>
-      <property name="alignment">
-       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-      </property>
-      <property name="wordWrap">
-       <bool>true</bool>
-      </property>
+      <layout class="QGridLayout" name="gridLayoutError">
+       <item row="0" column="0">
+        <widget class="QWidget" name="wgtErrorDialog" native="true">
+         <layout class="QGridLayout" name="msgErrorDialogLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="msgErrorIcon">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white
+                                  </string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="5">
+           <widget class="QLabel" name="msgErrorTitle">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white
+                                  </string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="6">
+           <widget class="QLabel" name="msgErrorQRcode">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white
+                                  </string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" rowspan="3" colspan="6">
+           <widget class="QLabel" name="msgErrorContent">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white
+                                  </string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="6">
+           <widget class="QLabel" name="msgErrorStatus">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white
+                                  </string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QWidget" name="wgtErrorChecking" native="true">
+         <layout class="QGridLayout" name="msgErrorCheckingLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblErrorTickBox1">
+            <property name="styleSheet">
+             <string notr="true">background: transparent
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="3">
+           <widget class="QLabel" name="lblErrorText1">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white;
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblErrorTickBox2">
+            <property name="styleSheet">
+             <string notr="true">background: transparent
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1" colspan="3">
+           <widget class="QLabel" name="lblErrorText2">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white;
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="lblErrorTickBox3">
+            <property name="styleSheet">
+             <string notr="true">background: transparent
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1" colspan="3">
+           <widget class="QLabel" name="lblErrorText3">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white;
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="lblErrorTickBox4">
+            <property name="styleSheet">
+             <string notr="true">background: transparent
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1" colspan="3">
+           <widget class="QLabel" name="lblErrorText4">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white;
+                                  </string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="5" rowspan="4" colspan="4">
+           <widget class="QLabel" name="lblErrorMessages">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 5px solid white; color: white;
+                                    padding: 5px
+                                  </string>
+            </property>
+            <property name="frameShape">
+             <enum>QFrame::Box</enum>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
-    <item row="1" column="0" rowspan="3" colspan="5">
-     <widget class="QWidget" name="wgtContent" native="true">
-      <layout class="QGridLayout" name="msgContentLayout">
-       <item row="0" rowspan="3" column="0">
-        <widget class="QLabel" name="msgItem0">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="0">
-        <widget class="QLabel" name="msgItem0_OL">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="1">
-        <widget class="QLabel" name="msgItem1">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="1">
-        <widget class="QLabel" name="msgItem1_OL">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="2">
-        <widget class="QLabel" name="msgItem2">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="2">
-        <widget class="QLabel" name="msgItem2_OL">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="3">
-        <widget class="QLabel" name="msgItem3">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="3">
-        <widget class="QLabel" name="msgItem3_OL">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="0">
-        <widget class="QLabel" name="msgQRcode">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="0" rowspan="3" column="1" colspan="3">
-        <widget class="QLabel" name="msgContent">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-         <property name="wordWrap">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0" colspan="4">
-        <widget class="QLabel" name="msgStatus">
-         <property name="styleSheet">
-          <string notr="true">background: transparent</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-         <property name="wordWrap">
-          <bool>true</bool>
-         </property>
+    <item row="5" column="0" colspan="5">
+     <widget class="QWidget" name="wgtMsgBoxFooter" native="true">
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(16, 55, 112);</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayoutMsgBoxFooter">
+       <item row="0" column="0">
+        <widget class="QWidget" name="wgtMsgBoxFooterBar" native="true">
+         <layout class="QGridLayout" name="gridLayoutMsgBoxFooterBar">
+          <item row="0" column="0" colspan="2">
+           <widget class="QLabel" name="msgBoxFooterStatus">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; color: white;
+                                  </string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
       </layout>
@@ -843,1032 +1065,1224 @@
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="resource.qrc"/>
+  <include location="ui_res.qrc"/>
  </resources>
  <connections>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>detectDevice</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>scanStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>97</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>scanStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>mountStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>97</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>scanNetwork</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>detectDevice</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>97</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>scanPartition</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>scanNetwork</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>97</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>mountStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>scanPartition</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>97</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>crawlWeb</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>crawlWeb</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>crawlLocalfs</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>crawlLocalfs</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>97</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>downloadImage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>38</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>diaWidget</sender>
-    <signal>initialised()</signal>
-    <receiver>postDownload</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>diaWidget</sender>
+   <signal>initialised()</signal>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>496</x>
-      <y>338</y>
+     <x>496</x>
+     <y>338</y>
     </hint>
     <hint type="destinationlabel">
-      <x>29</x>
-      <y>38</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>detectDevice</sender>
-    <signal>success()</signal>
-    <receiver>scanStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanStorage</sender>
+   <signal>success()</signal>
+   <receiver>mountStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>46</x>
-      <y>200</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>detectDevice</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanStorage</sender>
+   <signal>success()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>46</x>
-      <y>200</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanStorage</sender>
-    <signal>success()</signal>
-    <receiver>mountStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanStorage</sender>
+   <signal>success()</signal>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanStorage</sender>
-    <signal>success()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanStorage</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanStorage</sender>
-    <signal>success()</signal>
-    <receiver>postDownload</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>mountStorage</sender>
+   <signal>success()</signal>
+   <receiver>detectDevice</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>125</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanStorage</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>mountStorage</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>mountStorage</sender>
-    <signal>success()</signal>
-    <receiver>scanPartition</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>detectDevice</sender>
+   <signal>success()</signal>
+   <receiver>scanPartition</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>46</x>
-      <y>200</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>mountStorage</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>detectDevice</sender>
+   <signal>success()</signal>
+   <receiver>scanNetwork</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanPartition</sender>
-    <signal>success()</signal>
-    <receiver>crawlLocalfs</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>detectDevice</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanPartition</sender>
-    <signal>success()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanPartition</sender>
+   <signal>success()</signal>
+   <receiver>crawlLocalfs</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanPartition</sender>
-    <signal>success()</signal>
-    <receiver>postDownload</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanPartition</sender>
+   <signal>success()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanPartition</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanPartition</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>success()</signal>
-    <receiver>scanNetwork</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlLocalfs</sender>
+   <signal>success()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>success()</signal>
-    <receiver>downloadImage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlLocalfs</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlLocalfs</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanNetwork</sender>
+   <signal>success()</signal>
+   <receiver>crawlWeb</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>46</x>
-      <y>200</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanNetwork</sender>
-    <signal>success()</signal>
-    <receiver>crawlWeb</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanNetwork</sender>
+   <signal>success()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>scanNetwork</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>scanNetwork</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlWeb</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlWeb</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlWeb</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlWeb</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlWeb</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlWeb</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlWeb</sender>
-    <signal>success()</signal>
-    <receiver>downloadImage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlWeb</sender>
+   <signal>success()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>crawlWeb</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>crawlWeb</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>97</y>
+     <x>125</x>
+     <y>97</y>
     </hint>
     <hint type="destinationlabel">
-      <x>46</x>
-      <y>200</y>
+     <x>46</x>
+     <y>200</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>downloadImage</sender>
-    <signal>success()</signal>
-    <receiver>postDownload</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>downloadImage</sender>
+   <signal>success()</signal>
+   <receiver>scanNetwork</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>29</x>
-      <y>38</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>781</x>
-      <y>420</y>
+     <x>781</x>
+     <y>420</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>downloadImage</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>downloadImage</sender>
+   <signal>success()</signal>
+   <receiver>postDownload</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>38</y>
+     <x>29</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>781</x>
+     <y>420</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>postDownload</sender>
-    <signal>fail()</signal>
-    <receiver>processError</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>downloadImage</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>125</x>
-      <y>38</y>
+     <x>125</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>48</x>
-      <y>239</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseOS</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>postDownload</sender>
+   <signal>fail()</signal>
+   <receiver>processError</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>125</x>
+     <y>38</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>48</x>
+     <y>239</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseOS</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseOS</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseOS</sender>
-    <signal>success()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseOS</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseOS</sender>
-    <signal>success()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseOS</sender>
+   <signal>success()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseBoard</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseOS</sender>
+   <signal>success()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseBoard</sender>
-    <signal>success()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseBoard</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseBoard</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseBoard</sender>
+   <signal>success()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseBoard</sender>
-    <signal>success()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseBoard</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseDisplay</sender>
-    <signal>success()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseBoard</sender>
+   <signal>success()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseDisplay</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseDisplay</sender>
+   <signal>success()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseDisplay</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseDisplay</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseDisplay</sender>
-    <signal>success()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseDisplay</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseStorage</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseDisplay</sender>
+   <signal>success()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseStorage</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseStorage</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseStorage</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseStorage</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseStorage</sender>
-    <signal>success()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseStorage</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>lstWgtOS</sender>
-    <signal>itemClicked()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseStorage</sender>
+   <signal>success()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>719</x>
-      <y>453</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>lstWgtBoard</sender>
-    <signal>itemClicked()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>lstWgtOS</sender>
+   <signal>itemClicked()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processItem()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>719</x>
-      <y>453</y>
+     <x>719</x>
+     <y>453</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>lstWgtDisplay</sender>
-    <signal>itemClicked()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>lstWgtBoard</sender>
+   <signal>itemClicked()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processItem()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>719</x>
-      <y>453</y>
+     <x>719</x>
+     <y>453</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>lstWgtStorage</sender>
-    <signal>itemClicked()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>lstWgtDisplay</sender>
+   <signal>itemClicked()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processItem()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>719</x>
-      <y>453</y>
+     <x>719</x>
+     <y>453</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>lstWgtSelection</sender>
-    <signal>itemClicked()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>lstWgtStorage</sender>
+   <signal>itemClicked()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processItem()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>719</x>
-      <y>453</y>
+     <x>719</x>
+     <y>453</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseSelection</sender>
-    <signal>success()</signal>
-    <receiver>chooseOS</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>lstWgtSelection</sender>
+   <signal>itemClicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processItem()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>719</x>
+     <y>453</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseSelection</sender>
-    <signal>success()</signal>
-    <receiver>chooseBoard</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseSelection</sender>
+   <signal>success()</signal>
+   <receiver>chooseOS</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseSelection</sender>
-    <signal>success()</signal>
-    <receiver>chooseDisplay</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseSelection</sender>
+   <signal>success()</signal>
+   <receiver>chooseBoard</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseSelection</sender>
-    <signal>success()</signal>
-    <receiver>chooseStorage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseSelection</sender>
+   <signal>success()</signal>
+   <receiver>chooseDisplay</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>chooseSelection</sender>
-    <signal>chosen()</signal>
-    <receiver>downloadImage</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseSelection</sender>
+   <signal>success()</signal>
+   <receiver>chooseStorage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
   </connection>
   <connection>
-    <sender>btnFlash</sender>
-    <signal>clicked()</signal>
-    <receiver>chooseSelection</receiver>
-    <slot>processSlot()</slot>
-    <hints>
+   <sender>chooseSelection</sender>
+   <signal>chosen()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
     <hint type="sourcelabel">
-      <x>790</x>
-      <y>470</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
     <hint type="destinationlabel">
-      <x>49</x>
-      <y>14</y>
+     <x>49</x>
+     <y>14</y>
     </hint>
-    </hints>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnFlash</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnAbort</sender>
+   <signal>clicked()</signal>
+   <receiver>downloadImage</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelOS</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelOSIcon</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelBaseboard</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelBaseboardIcon</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelDisplay</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnSelDisplayIcon</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lblOS</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lblBoard</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lblDisplay</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lblStorageTxt</sender>
+   <signal>clicked()</signal>
+   <receiver>chooseSelection</receiver>
+   <slot>processSlot()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>790</x>
+     <y>470</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>49</x>
+     <y>14</y>
+    </hint>
+   </hints>
   </connection>
  </connections>
  <slots>
