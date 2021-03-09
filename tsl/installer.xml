@@ -941,7 +941,7 @@
                       <item row="0" column="0">
                         <widget class="QWidget" name="wgtMsgBoxFooterBar" native="true">
                           <layout class="QGridLayout" name="gridLayoutMsgBoxFooterBar">
-                            <item row="0" columns="0" colspan="2">
+                            <item row="0" column="0" colspan="2">
                               <widget class="QLabel" name="msgBoxFooterStatus">
                                 <property name="styleSheet">
                                   <string notr="true">background: transparent; color: white;
