@@ -112,7 +112,7 @@ def _insertToContainer(lstResult, qContainer, qSignal):
                             resName = ":/res/images/storage_sd.svg"
                     item.setToolTip(row['name'].lower())
                 elif 'os' in row:
-                    if row['os'] in ['rescue', 'android', '3p_emteria', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                    if row['os'] in ['rescue', 'android', 'partner_emteria', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
                         resName = ":/res/images/os_{}.svg".format(row['os'].lower())
                     elif row['os'] in ['linux', 'debian', 'redhat']:
                         resName = ":/res/images/os_tux.svg"
@@ -1528,7 +1528,7 @@ class crawlWebSlot(QProcessSlot):
                 # make up the XZ file URL
                 url = results['target'] + results['location']
                 # add {cpu, form, board, display, os, ver, size(uncompsize), url, extra}
-                if os in ['rescue', 'android', '3p_emteria', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
+                if os in ['rescue', 'android', 'partner_emteria', 'ubuntu', 'boot2qt', 'yocto', 'androidthings']:
                     _logger.debug('{}: append result: {} {} {} {} {} {} {} {} {}'.format(self.objectName(), cpu, form, board, display, os, ver, uncompsize, url, extra))
                     self.mResults.append({'cpu': cpu, 'form': form, 'board': board, 'display': display, 'os': os, 'ver': ver, 'size': uncompsize, 'url': url, 'extra': extra})
                     for host in self.mHosts:
